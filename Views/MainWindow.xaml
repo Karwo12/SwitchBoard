@@ -119,6 +119,9 @@
 
                     <Grid Grid.Row="2">
                         <ListBox ItemsSource="{Binding Categories}"
+                                 controls:ListBoxDragDrop.DragKind="Category"
+                                 controls:ListBoxDragDrop.AcceptKinds="Category,Profile"
+                                 controls:ListBoxDragDrop.DropCommand="{Binding ReorderDropCommand}"
                                  SelectedItem="{Binding SelectedCategory, Mode=TwoWay}">
                             <ListBox.ItemTemplate>
                                 <DataTemplate>
@@ -208,6 +211,10 @@
 
                     <Grid Grid.Row="2">
                         <ListBox ItemsSource="{Binding Profiles}"
+                                 controls:ListBoxDragDrop.DragKind="Profile"
+                                 controls:ListBoxDragDrop.AcceptKinds="Profile"
+                                 controls:ListBoxDragDrop.DropCommand="{Binding ReorderDropCommand}"
+                                 controls:ListBoxDragDrop.TargetParentId="{Binding SelectedCategory.Id}"
                                  SelectedItem="{Binding SelectedProfile, Mode=TwoWay}">
                             <ListBox.ItemTemplate>
                                 <DataTemplate>

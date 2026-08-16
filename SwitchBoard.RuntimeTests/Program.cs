@@ -529,6 +529,72 @@ try
               item.Actions.Any(action => action.Id == originalActionId)),
         "category/profile/action Save snapshot is restart-safe", failures);
 
+    var dragCategoryA = new CategoryDefinition { Name = "Drag A", SortOrder = 0 };
+    var dragCategoryB = new CategoryDefinition { Name = "Drag B", SortOrder = 1 };
+    var dragProfileA1 = new ProfileDefinition
+    {
+        CategoryId = dragCategoryA.Id, Name = "A1", SortOrder = 0,
+        Actions =
+        [
+            Action(ActionTypeIds.Delay, new JsonObject { [ActionParameterNames.DelaySeconds] = 1 }),
+            Action(ActionTypeIds.Delay, new JsonObject { [ActionParameterNames.DelaySeconds] = 2 })
+        ]
+    };
+    dragProfileA1.Actions[0].SortOrder = 0;
+    dragProfileA1.Actions[1].SortOrder = 1;
+    var dragProfileA2 = new ProfileDefinition { CategoryId = dragCategoryA.Id, Name = "A2", SortOrder = 1 };
+    var dragProfileB1 = new ProfileDefinition { CategoryId = dragCategoryB.Id, Name = "B1", SortOrder = 0 };
+    var dragCatalog = new SwitchBoardCatalog
+    {
+        Categories = [dragCategoryA, dragCategoryB],
+        Profiles = [dragProfileA1, dragProfileA2, dragProfileB1]
+    };
+    var dragCatalogService = new TestCatalogService();
+    var dragMain = new MainWindowViewModel(dragCatalogService, new TestDialogService(), dragCatalog,
+        new TestThemeManager(), testLocalization, new TestSettingsRepository(),
+        new UserSettings { ThemeId = ThemeIds.Graphite, LanguageId = "en" }, runner,
+        new ProfileRestoreRunner(registry, sessionRepository), sessionRepository,
+        new TestCompletionBehavior(), new TestDisplayManager(new("", "", "", 1, 1, 1, 32, 0, 0, 0, 0)),
+        new TestCustomThemeEditorService());
+
+    await dragMain.ApplyReorderAsync(new(ReorderItemKind.Category, dragMain.Categories[0],
+        dragMain.Categories[1], 2));
+    Check(dragMain.Categories.Select(item => item.Id).SequenceEqual([dragCategoryB.Id, dragCategoryA.Id]) &&
+          dragCatalogService.Saved.Categories.OrderBy(item => item.SortOrder).Select(item => item.Id)
+              .SequenceEqual([dragCategoryB.Id, dragCategoryA.Id]) && !dragMain.HasUnsavedChanges,
+        "category drag reorder is immediately persisted", failures);
+
+    dragMain.SelectedCategory = dragMain.Categories.Single(item => item.Id == dragCategoryA.Id);
+    var draggedA1 = dragMain.Profiles.Single(item => item.Id == dragProfileA1.Id);
+    await dragMain.ApplyReorderAsync(new(ReorderItemKind.Profile, draggedA1,
+        dragMain.Profiles.Single(item => item.Id == dragProfileA2.Id), 2, dragCategoryA.Id));
+    Check(dragMain.Profiles.Select(item => item.Id).SequenceEqual([dragProfileA2.Id, dragProfileA1.Id]) &&
+          dragCatalogService.Saved.Profiles.Where(item => item.CategoryId == dragCategoryA.Id)
+              .OrderBy(item => item.SortOrder).Select(item => item.Id).SequenceEqual([dragProfileA2.Id, dragProfileA1.Id]),
+        "profile drag reorder within category is immediately persisted", failures);
+
+    var targetCategory = dragMain.Categories.Single(item => item.Id == dragCategoryB.Id);
+    await dragMain.ApplyReorderAsync(new(ReorderItemKind.Profile, draggedA1, targetCategory,
+        dragMain.Categories.Count));
+    Check(dragMain.SelectedCategory?.Id == dragCategoryB.Id && dragMain.SelectedProfile?.Id == dragProfileA1.Id &&
+          dragCatalogService.Saved.Profiles.Single(item => item.Id == dragProfileA1.Id).CategoryId == dragCategoryB.Id &&
+          dragCatalogService.Saved.Profiles.Where(item => item.CategoryId == dragCategoryB.Id)
+              .OrderBy(item => item.SortOrder).Select(item => item.Id).SequenceEqual([dragProfileB1.Id, dragProfileA1.Id]),
+        "profile drag to another category is immediately persisted", failures);
+
+    var draggedAction = dragMain.SelectedProfile!.Actions[0];
+    var secondDraggedActionId = dragMain.SelectedProfile.Actions[1].Id;
+    await dragMain.ApplyReorderAsync(new(ReorderItemKind.Action, draggedAction,
+        dragMain.SelectedProfile.Actions[1], 2, dragMain.SelectedProfile.Id));
+    Check(dragMain.SelectedProfile.Actions.Select(item => item.Id).SequenceEqual([secondDraggedActionId, draggedAction.Id]) &&
+          dragCatalogService.Saved.Profiles.Single(item => item.Id == dragProfileA1.Id).Actions
+              .OrderBy(item => item.SortOrder).Select(item => item.Id).SequenceEqual([secondDraggedActionId, draggedAction.Id]) &&
+          dragCatalogService.SaveCount >= 4,
+        "action drag reorder is immediately persisted", failures);
+    dragMain.UndoCommand.Execute(null);
+    Check(dragMain.SelectedProfile!.Actions[0].Id == draggedAction.Id && dragMain.HasUnsavedChanges,
+        "drag reorder participates in the existing Undo stack", failures);
+
     var addCancelCount = editableSettings.CustomThemes.Count;
     var savesBeforeCancelledAdd = themeSettingsRepository.SaveCount;
     themeEditor.EditActions.Enqueue(request =>
@@ -1309,9 +1375,11 @@ sealed class TestLocalizationService : ILocalizationService
 sealed class TestCatalogService : IProfileCatalogService
 {
     public SwitchBoardCatalog Saved { get; private set; } = SwitchBoardCatalog.Empty();
+    public int SaveCount { get; private set; }
     public Task<SwitchBoardCatalog> LoadAsync(CancellationToken cancellationToken = default) => Task.FromResult(Saved);
     public Task SaveAsync(SwitchBoardCatalog catalog, CancellationToken cancellationToken = default)
     {
+        SaveCount++;
         Saved = JsonSerializer.Deserialize<SwitchBoardCatalog>(JsonSerializer.Serialize(catalog))!;
         return Task.CompletedTask;
     }

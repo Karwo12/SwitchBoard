@@ -140,6 +140,8 @@ public sealed class MainWindowViewModel : ObservableObject
         DeleteActionCommand = new RelayCommand<ActionItemViewModel>(DeleteAction, action => action is not null);
         MoveActionUpCommand = new RelayCommand<ActionItemViewModel>(MoveActionUp, CanMoveActionUp);
         MoveActionDownCommand = new RelayCommand<ActionItemViewModel>(MoveActionDown, CanMoveActionDown);
+        ReorderDropCommand = new AsyncRelayCommand<ReorderDropRequest>(ApplyReorderAsync,
+            request => request is not null && !HasCriticalOperation);
         BeginCategoryRenameCommand = new RelayCommand<CategoryItemViewModel>(category => category?.BeginEdit());
         CommitCategoryRenameCommand = new RelayCommand<CategoryItemViewModel>(category => category?.CommitEdit());
         CancelCategoryRenameCommand = new RelayCommand<CategoryItemViewModel>(category => category?.CancelEdit());
@@ -395,6 +397,8 @@ public sealed class MainWindowViewModel : ObservableObject
 
     public RelayCommand<ActionItemViewModel> MoveActionDownCommand { get; }
 
+    public AsyncRelayCommand<ReorderDropRequest> ReorderDropCommand { get; }
+
     public RelayCommand<CategoryItemViewModel> BeginCategoryRenameCommand { get; }
 
     public RelayCommand<CategoryItemViewModel> CommitCategoryRenameCommand { get; }
@@ -630,6 +634,105 @@ public sealed class MainWindowViewModel : ObservableObject
         SelectedProfile.Actions.IndexOf(action) is var index &&
         index >= 0 &&
         index < SelectedProfile.Actions.Count - 1;
+
+    public async Task ApplyReorderAsync(ReorderDropRequest? request)
+    {
+        if (request is null || HasCriticalOperation) return;
+        var changed = request.Kind switch
+        {
+            ReorderItemKind.Category => ReorderCategory(request),
+            ReorderItemKind.Profile => ReorderProfile(request),
+            ReorderItemKind.Action => ReorderAction(request),
+            _ => false
+        };
+        if (!changed) return;
+
+        NormalizeSortOrders();
+        NotifyActionCommandStates();
+        await SaveAsync();
+    }
+
+    private bool ReorderCategory(ReorderDropRequest request)
+    {
+        if (request.Item is not CategoryItemViewModel category) return false;
+        var oldIndex = Categories.IndexOf(category);
+        if (oldIndex < 0) return false;
+        var insertionIndex = Math.Clamp(request.TargetIndex, 0, Categories.Count);
+        var newIndex = insertionIndex > oldIndex ? insertionIndex - 1 : insertionIndex;
+        newIndex = Math.Clamp(newIndex, 0, Categories.Count - 1);
+        if (newIndex == oldIndex) return false;
+
+        RecordStructuralUndo("drag-category");
+        Categories.Move(oldIndex, newIndex);
+        MarkDirty(_localizationService.GetString("Status.CategoryOrderChanged"));
+        return true;
+    }
+
+    private bool ReorderProfile(ReorderDropRequest request)
+    {
+        if (request.Item is not ProfileItemViewModel profile || !_allProfiles.Contains(profile)) return false;
+        var sourceCategoryId = profile.CategoryId;
+        Guid? targetCategoryId = request.TargetItem switch
+        {
+            CategoryItemViewModel category => category.Id,
+            ProfileItemViewModel targetProfile => targetProfile.CategoryId,
+            _ => request.TargetParentId
+        };
+        if (targetCategoryId is null || Categories.All(category => category.Id != targetCategoryId.Value)) return false;
+
+        var sourceProfiles = _allProfiles.Where(item => item.CategoryId == sourceCategoryId)
+            .OrderBy(item => item.SortOrder).ToList();
+        var oldIndex = sourceProfiles.IndexOf(profile);
+        if (oldIndex < 0) return false;
+
+        var targetProfiles = sourceCategoryId == targetCategoryId.Value
+            ? sourceProfiles
+            : _allProfiles.Where(item => item.CategoryId == targetCategoryId.Value)
+                .OrderBy(item => item.SortOrder).ToList();
+        var insertionIndex = request.TargetItem is CategoryItemViewModel
+            ? targetProfiles.Count
+            : Math.Clamp(request.TargetIndex, 0, targetProfiles.Count);
+        if (ReferenceEquals(sourceProfiles, targetProfiles) && insertionIndex > oldIndex) insertionIndex--;
+        insertionIndex = Math.Clamp(insertionIndex, 0, Math.Max(0, targetProfiles.Count -
+            (ReferenceEquals(sourceProfiles, targetProfiles) ? 1 : 0)));
+        if (sourceCategoryId == targetCategoryId.Value && insertionIndex == oldIndex) return false;
+
+        RecordStructuralUndo(sourceCategoryId == targetCategoryId.Value ? "drag-profile" : "drag-profile-category");
+        sourceProfiles.Remove(profile);
+        if (!ReferenceEquals(sourceProfiles, targetProfiles)) targetProfiles.Remove(profile);
+        insertionIndex = Math.Clamp(insertionIndex, 0, targetProfiles.Count);
+        targetProfiles.Insert(insertionIndex, profile);
+        profile.MoveToCategory(targetCategoryId.Value);
+        for (var index = 0; index < sourceProfiles.Count; index++) sourceProfiles[index].SortOrder = index;
+        for (var index = 0; index < targetProfiles.Count; index++) targetProfiles[index].SortOrder = index;
+
+        var targetCategory = Categories.First(category => category.Id == targetCategoryId.Value);
+        if (!ReferenceEquals(SelectedCategory, targetCategory)) SelectedCategory = targetCategory;
+        else RefreshProfiles();
+        SelectedProfile = Profiles.FirstOrDefault(item => item.Id == profile.Id) ?? Profiles.FirstOrDefault();
+        MarkDirty(_localizationService.GetString(sourceCategoryId == targetCategoryId.Value
+            ? "Status.ProfileOrderChanged"
+            : "Status.ProfileCategoryChanged"));
+        return true;
+    }
+
+    private bool ReorderAction(ReorderDropRequest request)
+    {
+        if (SelectedProfile is null || request.Item is not ActionItemViewModel action) return false;
+        var actions = SelectedProfile.Actions;
+        var oldIndex = actions.IndexOf(action);
+        if (oldIndex < 0) return false;
+        var insertionIndex = Math.Clamp(request.TargetIndex, 0, actions.Count);
+        var newIndex = insertionIndex > oldIndex ? insertionIndex - 1 : insertionIndex;
+        newIndex = Math.Clamp(newIndex, 0, actions.Count - 1);
+        if (newIndex == oldIndex) return false;
+
+        RecordStructuralUndo("drag-action");
+        actions.Move(oldIndex, newIndex);
+        SelectedAction = action;
+        MarkDirty(_localizationService.GetString("Status.ActionOrderChanged"));
+        return true;
+    }
 
     private async Task SaveAsync()
     {

@@ -323,6 +323,9 @@
     <system:String x:Key="Status.ActionAdded">Action definition added — no system operation will be executed</system:String>
     <system:String x:Key="Status.ActionRemoved">Action removed — remember to save</system:String>
     <system:String x:Key="Status.ActionOrderChanged">Action order changed — remember to save</system:String>
+    <system:String x:Key="Status.CategoryOrderChanged">Category order changed</system:String>
+    <system:String x:Key="Status.ProfileOrderChanged">Profile order changed</system:String>
+    <system:String x:Key="Status.ProfileCategoryChanged">Profile moved to another category</system:String>
     <system:String x:Key="Status.Saved">Saved at {0}</system:String>
     <system:String x:Key="Status.SaveFailed">Save failed: {0}</system:String>
     <system:String x:Key="Status.InvalidCatalog">Cannot save: category and profile names must be filled in and relationships must be valid.</system:String>

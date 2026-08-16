@@ -27,7 +27,7 @@ public sealed class ProfileItemViewModel : ObservableObject
 
     public Guid Id { get; }
 
-    public Guid CategoryId { get; }
+    public Guid CategoryId { get; private set; }
 
     public string Name
     {
@@ -56,6 +56,8 @@ public sealed class ProfileItemViewModel : ObservableObject
     }
 
     public ObservableCollection<ActionItemViewModel> Actions { get; }
+
+    public void MoveToCategory(Guid categoryId) => CategoryId = categoryId;
 
     public void BeginEdit()
     {

@@ -323,6 +323,9 @@
     <system:String x:Key="Status.ActionAdded">Dodano definicję akcji — żadna operacja systemowa nie zostanie wykonana</system:String>
     <system:String x:Key="Status.ActionRemoved">Usunięto akcję — pamiętaj o zapisaniu</system:String>
     <system:String x:Key="Status.ActionOrderChanged">Zmieniono kolejność akcji — pamiętaj o zapisaniu</system:String>
+    <system:String x:Key="Status.CategoryOrderChanged">Zmieniono kolejność kategorii</system:String>
+    <system:String x:Key="Status.ProfileOrderChanged">Zmieniono kolejność profili</system:String>
+    <system:String x:Key="Status.ProfileCategoryChanged">Przeniesiono profil do innej kategorii</system:String>
     <system:String x:Key="Status.Saved">Zapisano o {0}</system:String>
     <system:String x:Key="Status.SaveFailed">Błąd zapisu: {0}</system:String>
     <system:String x:Key="Status.InvalidCatalog">Nie można zapisać: nazwy kategorii i profili muszą być uzupełnione, a powiązania prawidłowe.</system:String>
