@@ -148,8 +148,6 @@
                                                 <ColumnDefinition Width="*" />
                                                 <ColumnDefinition Width="Auto" />
                                                 <ColumnDefinition Width="Auto" />
-                                                <ColumnDefinition Width="Auto" />
-                                                <ColumnDefinition Width="Auto" />
                                             </Grid.ColumnDefinitions>
                                             <CheckBox Margin="0,0,13,0"
                                                       IsChecked="{Binding IsEnabled}"
@@ -199,20 +197,6 @@
                                             </Button>
                                             <Button Grid.Column="3"
                                                     Margin="8,0,0,0"
-                                                    Command="{Binding DataContext.MoveActionUpCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                    CommandParameter="{Binding}"
-                                                    Content="&#x2191;"
-                                                    ToolTip="{DynamicResource Tooltip.MoveUp}"
-                                                    Style="{StaticResource GhostIconButton}" />
-                                            <Button Grid.Column="4"
-                                                    Margin="4,0,0,0"
-                                                    Command="{Binding DataContext.MoveActionDownCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                    CommandParameter="{Binding}"
-                                                    Content="&#x2193;"
-                                                    ToolTip="{DynamicResource Tooltip.MoveDown}"
-                                                    Style="{StaticResource GhostIconButton}" />
-                                            <Button Grid.Column="5"
-                                                    Margin="4,0,0,0"
                                                     Command="{Binding DataContext.DeleteActionCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                     CommandParameter="{Binding}"
                                                     Content="&#x00D7;"

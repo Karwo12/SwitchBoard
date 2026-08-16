@@ -12,6 +12,9 @@
             <converters:NullToVisibilityConverter x:Key="NotNullToVisibilityConverter" />
             <converters:NullToVisibilityConverter x:Key="NullToVisibilityConverter" Inverse="True" />
             <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+            <Style TargetType="Window">
+                <Setter Property="Icon" Value="/Assets/switchboard.ico" />
+            </Style>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

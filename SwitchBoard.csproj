@@ -6,10 +6,12 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+    <ApplicationIcon>Assets\switchboard.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
     <Compile Remove="SwitchBoard.RuntimeTests\**\*.cs" />
+    <Resource Include="Assets\switchboard.ico" />
   </ItemGroup>
 
 </Project>
