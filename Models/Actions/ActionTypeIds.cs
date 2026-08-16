@@ -4,7 +4,6 @@ public static class ActionTypeIds
 {
     public const string ProcessSetState = "process.setState";
     public const string ProgramRun = "program.run";
-    public const string SteamLaunch = "steam.launch";
     public const string ServiceSetState = "service.setState";
     public const string DisplayConfigure = "display.configure";
     public const string PowerSetPlan = "power.setPlan";
@@ -15,7 +14,6 @@ public static class ActionTypeIds
     [
         ProcessSetState,
         ProgramRun,
-        SteamLaunch,
         ServiceSetState,
         DisplayConfigure,
         PowerSetPlan,

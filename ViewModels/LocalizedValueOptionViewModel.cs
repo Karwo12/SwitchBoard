@@ -2,14 +2,14 @@ using SwitchBoard.Localization;
 
 namespace SwitchBoard.ViewModels;
 
-public sealed class ActionTypeOption(
-    string typeId,
+public sealed class LocalizedValueOptionViewModel(
+    string value,
     string displayNameResourceKey,
     ILocalizationService localizationService) : ObservableObject
 {
     private string _displayName = localizationService.GetString(displayNameResourceKey);
 
-    public string TypeId { get; } = typeId;
+    public string Value { get; } = value;
 
     public string DisplayName
     {

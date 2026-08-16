@@ -1,11 +1,16 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:system="clr-namespace:System;assembly=System.Runtime">
-    <system:String x:Key="App.Tagline">Profile automatyzacji na Twoich zasadach</system:String>
     <system:String x:Key="Common.SaveChanges">Zapisz zmiany</system:String>
     <system:String x:Key="Common.AllChangesSaved">Wszystkie zmiany zapisane</system:String>
     <system:String x:Key="Common.UnsavedChanges">Niezapisane zmiany</system:String>
     <system:String x:Key="Common.ActionsLower">akcji</system:String>
+    <system:String x:Key="Common.Search">Szukaj</system:String>
+    <system:String x:Key="Common.Refresh">Odśwież</system:String>
+    <system:String x:Key="Common.Cancel">Anuluj</system:String>
+    <system:String x:Key="Common.Select">Wybierz</system:String>
+    <system:String x:Key="Common.Cancelled">Anulowano</system:String>
+    <system:String x:Key="Common.Unavailable">Niedostępne</system:String>
 
     <system:String x:Key="Panel.Categories">Kategorie</system:String>
     <system:String x:Key="Panel.CategoriesSubtitle">Twoje grupy robocze</system:String>
@@ -17,6 +22,39 @@
     <system:String x:Key="Editor.ProfileName">NAZWA PROFILU</system:String>
     <system:String x:Key="Editor.NewActionType">NOWY TYP AKCJI</system:String>
     <system:String x:Key="Editor.AddAction">+ Dodaj akcję</system:String>
+    <system:String x:Key="Editor.CloseAfterProfile">Zamknij SwitchBoard po zakończeniu profilu</system:String>
+    <system:String x:Key="ActionEditor.FriendlyName">PRZYJAZNA NAZWA</system:String>
+    <system:String x:Key="ActionEditor.Target">CEL / ŚCIEŻKA PROGRAMU LUB URI</system:String>
+    <system:String x:Key="ActionEditor.Browse">Przeglądaj...</system:String>
+    <system:String x:Key="ActionEditor.FindProgram">Znajdź program</system:String>
+    <system:String x:Key="ActionEditor.SelectProcess">Wybierz proces</system:String>
+    <system:String x:Key="ActionEditor.Arguments">ARGUMENTY</system:String>
+    <system:String x:Key="ActionEditor.WorkingDirectory">KATALOG ROBOCZY</system:String>
+    <system:String x:Key="ActionEditor.StartOnlyIfNotRunning">Uruchom tylko jeśli program jeszcze nie działa</system:String>
+    <system:String x:Key="ActionEditor.ProcessName">NAZWA PROCESU</system:String>
+    <system:String x:Key="ActionEditor.ExecutablePath">OPCJONALNA ŚCIEŻKA EXE</system:String>
+    <system:String x:Key="ActionEditor.DesiredState">STAN DOCELOWY</system:String>
+    <system:String x:Key="ActionEditor.DelayDuration">CZAS OPÓŹNIENIA (SEKUNDY, 0-3600)</system:String>
+    <system:String x:Key="ActionEditor.NotImplemented">Ta akcja nie jest jeszcze obsługiwana.</system:String>
+    <system:String x:Key="ActionSummary.RunProgram">Uruchom program • {0}</system:String>
+    <system:String x:Key="ActionSummary.StopProcess">Zatrzymaj proces • {0}</system:String>
+    <system:String x:Key="ActionSummary.ProcessUnchanged">Bez zmian • {0}</system:String>
+    <system:String x:Key="ActionSummary.Delay">{0} s</system:String>
+    <system:String x:Key="ActionSummary.NotConfigured">Nie skonfigurowano</system:String>
+
+    <system:String x:Key="ProcessState.Stopped">Zatrzymany</system:String>
+    <system:String x:Key="ProcessState.Unchanged">Bez zmian</system:String>
+
+    <system:String x:Key="Execution.RunProfile">Uruchom profil</system:String>
+    <system:String x:Key="Execution.RunningButton">Uruchamianie...</system:String>
+    <system:String x:Key="Execution.Cancel">Anuluj</system:String>
+    <system:String x:Key="Execution.StatusPrefix">Status:</system:String>
+    <system:String x:Key="Execution.Status.Pending">Oczekuje</system:String>
+    <system:String x:Key="Execution.Status.Running">W toku</system:String>
+    <system:String x:Key="Execution.Status.Success">Sukces</system:String>
+    <system:String x:Key="Execution.Status.Skipped">Pominięto</system:String>
+    <system:String x:Key="Execution.Status.Failed">Błąd</system:String>
+    <system:String x:Key="Execution.Status.Cancelled">Anulowano</system:String>
 
     <system:String x:Key="Empty.CreateFirstCategory">Utwórz pierwszą kategorię</system:String>
     <system:String x:Key="Empty.NoProfiles">Brak profili w tej kategorii</system:String>
@@ -41,17 +79,14 @@
     <system:String x:Key="Settings.Appearance">Wygląd</system:String>
     <system:String x:Key="Settings.Theme">Motyw</system:String>
     <system:String x:Key="Settings.Language">Język</system:String>
-    <system:String x:Key="Settings.Behavior">Zachowanie</system:String>
-    <system:String x:Key="Settings.CloseAfterProfile">Zamknij SwitchBoard po zakończeniu profilu</system:String>
 
     <system:String x:Key="Language.English">English</system:String>
     <system:String x:Key="Language.Polish">Polski</system:String>
 
     <system:String x:Key="Action.ProcessState">Stan procesu</system:String>
     <system:String x:Key="Action.RunProgram">Uruchom program</system:String>
-    <system:String x:Key="Action.LaunchSteamGame">Uruchom grę Steam</system:String>
     <system:String x:Key="Action.WindowsServiceState">Stan usługi Windows</system:String>
-    <system:String x:Key="Action.DisplayConfiguration">Konfiguracja ekranu</system:String>
+    <system:String x:Key="Action.DisplaySettings">Ustawienia ekranu</system:String>
     <system:String x:Key="Action.PowerPlan">Plan zasilania</system:String>
     <system:String x:Key="Action.RunScript">Uruchom skrypt</system:String>
     <system:String x:Key="Action.Delay">Opóźnienie</system:String>
@@ -76,6 +111,30 @@
     <system:String x:Key="Dialog.DeleteProfileMessage">Usunąć „{0}”?</system:String>
     <system:String x:Key="Dialog.StartupErrorTitle">Błąd uruchamiania</system:String>
     <system:String x:Key="Dialog.StartupErrorMessage">Nie można uruchomić SwitchBoard.&#x0a;&#x0a;{0}</system:String>
+    <system:String x:Key="Dialog.SelectProgramTitle">Wybierz program lub skrót</system:String>
+    <system:String x:Key="Dialog.ProgramFileFilter">Programy i skróty (*.exe;*.lnk)|*.exe;*.lnk|Wszystkie pliki (*.*)|*.*</system:String>
+    <system:String x:Key="Dialog.FindProgramTitle">Znajdź program</system:String>
+    <system:String x:Key="Dialog.SelectProcessTitle">Wybierz działający proces</system:String>
+
+    <system:String x:Key="ProcessPicker.Heading">Wybierz działający proces</system:String>
+    <system:String x:Key="ProcessPicker.Description">Wybierz aplikację bez znajomości jej technicznej nazwy procesu.</system:String>
+    <system:String x:Key="ProcessPicker.SearchHint">Szukaj po nazwie, tytule, pliku wykonywalnym lub ścieżce</system:String>
+    <system:String x:Key="ProcessPicker.Loading">Pobieranie działających procesów...</system:String>
+    <system:String x:Key="ProcessPicker.ResultCount">Procesy: {0}</system:String>
+    <system:String x:Key="ProcessPicker.LoadFailed">Nie można pobrać procesów: {0}</system:String>
+
+    <system:String x:Key="ProgramPicker.Heading">Znajdź program</system:String>
+    <system:String x:Key="ProgramPicker.Description">Najpierw przeszukaj typowe lokalizacje aplikacji albo uruchom rozszerzone skanowanie dysku systemowego.</system:String>
+    <system:String x:Key="ProgramPicker.SearchHint">Szukaj po nazwie aplikacji, pliku wykonywalnym lub ścieżce</system:String>
+    <system:String x:Key="ProgramPicker.SearchCommon">Szukaj w typowych lokalizacjach</system:String>
+    <system:String x:Key="ProgramPicker.SearchDrive">Przeszukaj dysk C:</system:String>
+    <system:String x:Key="ProgramPicker.CancelScan">Anuluj skanowanie</system:String>
+    <system:String x:Key="ProgramPicker.Running">Uruchomiony</system:String>
+    <system:String x:Key="ProgramPicker.StartingSearch">Przygotowywanie wyszukiwania programów...</system:String>
+    <system:String x:Key="ProgramPicker.SearchProgress">Przeskanowano: {0} • Znaleziono: {1} • {2}</system:String>
+    <system:String x:Key="ProgramPicker.SearchCancelled">Anulowano wyszukiwanie • zachowano {0} wyników</system:String>
+    <system:String x:Key="ProgramPicker.ResultCount">Programy: {0}</system:String>
+    <system:String x:Key="ProgramPicker.SearchFailed">Wyszukiwanie programów nie powiodło się: {0}</system:String>
 
     <system:String x:Key="Status.Ready">Gotowe</system:String>
     <system:String x:Key="Status.CatalogLoaded">Katalog wczytany</system:String>
@@ -86,13 +145,14 @@
     <system:String x:Key="Status.ActionAdded">Dodano definicję akcji — żadna operacja systemowa nie zostanie wykonana</system:String>
     <system:String x:Key="Status.ActionRemoved">Usunięto akcję — pamiętaj o zapisaniu</system:String>
     <system:String x:Key="Status.ActionOrderChanged">Zmieniono kolejność akcji — pamiętaj o zapisaniu</system:String>
-    <system:String x:Key="Status.UnsavedChanges">Niezapisane zmiany</system:String>
     <system:String x:Key="Status.Saved">Zapisano o {0}</system:String>
     <system:String x:Key="Status.SaveFailed">Błąd zapisu: {0}</system:String>
     <system:String x:Key="Status.InvalidCatalog">Nie można zapisać: nazwy kategorii i profili muszą być uzupełnione, a powiązania prawidłowe.</system:String>
     <system:String x:Key="Status.ThemeChanged">Zmieniono motyw na {0}</system:String>
     <system:String x:Key="Status.LanguageChanged">Zmieniono język na {0}</system:String>
-    <system:String x:Key="Status.BehaviorEnabled">Włączono automatyczne zamykanie po pomyślnym zakończeniu profilu</system:String>
-    <system:String x:Key="Status.BehaviorDisabled">Wyłączono automatyczne zamykanie po zakończeniu profilu</system:String>
+    <system:String x:Key="Status.ProfileRunning">Profil jest uruchomiony</system:String>
+    <system:String x:Key="Status.ProfileCompleted">Profil zakończony pomyślnie</system:String>
+    <system:String x:Key="Status.ProfileCancelled">Anulowano wykonywanie profilu</system:String>
+    <system:String x:Key="Status.ProfileFailed">Wykonywanie profilu zakończyło się błędem</system:String>
     <system:String x:Key="Status.SettingsSaveFailed">Nie można zapisać ustawień: {0}</system:String>
 </ResourceDictionary>

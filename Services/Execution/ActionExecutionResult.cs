@@ -4,12 +4,16 @@ namespace SwitchBoard.Services.Execution;
 
 public sealed record ActionExecutionResult(
     bool IsSuccessful,
-    string? ErrorMessage = null,
+    bool IsSkipped = false,
+    string? Message = null,
     JsonObject? RestoreState = null)
 {
-    public static ActionExecutionResult Success(JsonObject? restoreState = null) =>
-        new(true, RestoreState: restoreState);
+    public static ActionExecutionResult Success(string? message = null, JsonObject? restoreState = null) =>
+        new(true, Message: message, RestoreState: restoreState);
+
+    public static ActionExecutionResult Skipped(string? message = null) =>
+        new(true, IsSkipped: true, Message: message);
 
     public static ActionExecutionResult Failure(string errorMessage) =>
-        new(false, errorMessage);
+        new(false, Message: errorMessage);
 }

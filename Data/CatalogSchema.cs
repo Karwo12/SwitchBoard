@@ -2,5 +2,5 @@ namespace SwitchBoard.Data;
 
 public static class CatalogSchema
 {
-    public const int CurrentVersion = 1;
+    public const int CurrentVersion = 3;
 }

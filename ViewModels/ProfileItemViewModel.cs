@@ -9,6 +9,7 @@ public sealed class ProfileItemViewModel : ObservableObject
     private string _name;
     private string _editName;
     private bool _isEditing;
+    private bool _closeSwitchBoardAfterSuccessfulCompletion;
 
     public ProfileItemViewModel(ProfileDefinition profile, ILocalizationService localizationService)
     {
@@ -16,9 +17,12 @@ public sealed class ProfileItemViewModel : ObservableObject
         CategoryId = profile.CategoryId;
         _name = profile.Name;
         _editName = profile.Name;
+        _closeSwitchBoardAfterSuccessfulCompletion = profile.CloseSwitchBoardAfterSuccessfulCompletion;
         SortOrder = profile.SortOrder;
         Actions = new ObservableCollection<ActionItemViewModel>(
-            profile.Actions.Select(action => new ActionItemViewModel(action, localizationService)));
+            profile.Actions
+                .OrderBy(action => action.SortOrder)
+                .Select(action => new ActionItemViewModel(action, localizationService)));
     }
 
     public Guid Id { get; }
@@ -44,6 +48,12 @@ public sealed class ProfileItemViewModel : ObservableObject
     }
 
     public int SortOrder { get; set; }
+
+    public bool CloseSwitchBoardAfterSuccessfulCompletion
+    {
+        get => _closeSwitchBoardAfterSuccessfulCompletion;
+        set => SetProperty(ref _closeSwitchBoardAfterSuccessfulCompletion, value);
+    }
 
     public ObservableCollection<ActionItemViewModel> Actions { get; }
 
@@ -85,6 +95,7 @@ public sealed class ProfileItemViewModel : ObservableObject
         CategoryId = CategoryId,
         Name = Name.Trim(),
         SortOrder = SortOrder,
+        CloseSwitchBoardAfterSuccessfulCompletion = CloseSwitchBoardAfterSuccessfulCompletion,
         Actions = Actions.Select(action => action.ToModel()).ToList()
     };
 }

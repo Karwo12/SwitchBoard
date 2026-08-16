@@ -6,11 +6,20 @@ namespace SwitchBoard.Services.Execution;
 
 public sealed class ProfileRunner(IActionRegistry actionRegistry)
 {
+    private int _isRunning;
+
+    public bool IsRunning => Volatile.Read(ref _isRunning) != 0;
+
     public async Task<ExecutionSession> RunAsync(
         ProfileDefinition profile,
+        IProgress<ProfileExecutionProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(profile);
+        if (Interlocked.CompareExchange(ref _isRunning, 1, 0) != 0)
+        {
+            throw new InvalidOperationException("Another profile is already running.");
+        }
 
         var session = new ExecutionSession
         {
@@ -18,10 +27,16 @@ public sealed class ProfileRunner(IActionRegistry actionRegistry)
             Status = ExecutionSessionStatus.Running
         };
         var context = new ActionExecutionContext(session.Id, profile.Id);
+        var orderedActions = profile.Actions.OrderBy(action => action.SortOrder).ToList();
+        var totalActiveActions = orderedActions.Count(action => action.IsEnabled);
+        var currentActiveAction = 0;
+        var hasFailures = false;
+        ActionJournalEntry? runningEntry = null;
+        ActionDefinition? runningAction = null;
 
         try
         {
-            foreach (var action in profile.Actions)
+            foreach (var action in orderedActions)
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
@@ -39,11 +54,29 @@ public sealed class ProfileRunner(IActionRegistry actionRegistry)
                     continue;
                 }
 
+                currentActiveAction++;
+                runningEntry = journalEntry;
+                runningAction = action;
+                journalEntry.Status = ActionJournalStatus.Running;
+                progress?.Report(new ProfileExecutionProgress(
+                    currentActiveAction,
+                    totalActiveActions,
+                    action,
+                    journalEntry));
+
                 if (!actionRegistry.TryGetHandler(action.Type, out var handler) || handler is null)
                 {
                     journalEntry.Status = ActionJournalStatus.Unsupported;
-                    journalEntry.ErrorMessage = $"No handler is registered for '{action.Type}'.";
+                    hasFailures = true;
+                    journalEntry.ErrorMessage = $"This action type is not implemented: {action.Type}";
                     journalEntry.CompletedAt = DateTimeOffset.UtcNow;
+                    progress?.Report(new ProfileExecutionProgress(
+                        currentActiveAction,
+                        totalActiveActions,
+                        action,
+                        journalEntry));
+                    runningEntry = null;
+                    runningAction = null;
 
                     if (action.FailurePolicy != ActionFailurePolicy.Continue)
                     {
@@ -55,26 +88,42 @@ public sealed class ProfileRunner(IActionRegistry actionRegistry)
                     continue;
                 }
 
-                journalEntry.Status = ActionJournalStatus.Running;
-                var result = await handler.ExecuteAsync(action, context, cancellationToken);
+                ActionExecutionResult result;
+                try
+                {
+                    result = await handler.ExecuteAsync(action, context, cancellationToken);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception exception)
+                {
+                    result = ActionExecutionResult.Failure(exception.Message);
+                }
+
                 journalEntry.CompletedAt = DateTimeOffset.UtcNow;
                 journalEntry.RestoreState = result.RestoreState;
-
-                if (result.IsSuccessful)
+                journalEntry.ErrorMessage = result.Message;
+                journalEntry.Status = result.IsSkipped
+                    ? ActionJournalStatus.Skipped
+                    : result.IsSuccessful
+                        ? ActionJournalStatus.Success
+                        : ActionJournalStatus.Failed;
+                if (!result.IsSuccessful)
                 {
-                    journalEntry.Status = ActionJournalStatus.Succeeded;
-                    continue;
+                    hasFailures = true;
                 }
 
-                journalEntry.Status = ActionJournalStatus.Failed;
-                journalEntry.ErrorMessage = result.ErrorMessage;
+                progress?.Report(new ProfileExecutionProgress(
+                    currentActiveAction,
+                    totalActiveActions,
+                    action,
+                    journalEntry));
+                runningEntry = null;
+                runningAction = null;
 
-                if (action.FailurePolicy == ActionFailurePolicy.StopAndRollback)
-                {
-                    await RestoreCompletedActionsAsync(profile, session, context, cancellationToken);
-                }
-
-                if (action.FailurePolicy != ActionFailurePolicy.Continue)
+                if (!result.IsSuccessful && action.FailurePolicy != ActionFailurePolicy.Continue)
                 {
                     session.Status = ExecutionSessionStatus.Failed;
                     session.CompletedAt = DateTimeOffset.UtcNow;
@@ -82,65 +131,33 @@ public sealed class ProfileRunner(IActionRegistry actionRegistry)
                 }
             }
 
-            session.Status = ExecutionSessionStatus.Active;
+            session.Status = hasFailures
+                ? ExecutionSessionStatus.Failed
+                : ExecutionSessionStatus.Completed;
+            session.CompletedAt = DateTimeOffset.UtcNow;
             return session;
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
+            if (runningEntry is not null && runningAction is not null)
+            {
+                runningEntry.Status = ActionJournalStatus.Cancelled;
+                runningEntry.CompletedAt = DateTimeOffset.UtcNow;
+                runningEntry.ErrorMessage = "Execution was cancelled.";
+                progress?.Report(new ProfileExecutionProgress(
+                    currentActiveAction,
+                    totalActiveActions,
+                    runningAction,
+                    runningEntry));
+            }
+
             session.Status = ExecutionSessionStatus.Cancelled;
             session.CompletedAt = DateTimeOffset.UtcNow;
             return session;
         }
-    }
-
-    public async Task StopAsync(
-        ProfileDefinition profile,
-        ExecutionSession session,
-        CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(profile);
-        ArgumentNullException.ThrowIfNull(session);
-
-        session.Status = ExecutionSessionStatus.Stopping;
-        var context = new ActionExecutionContext(session.Id, profile.Id);
-        await RestoreCompletedActionsAsync(profile, session, context, cancellationToken);
-        session.Status = ExecutionSessionStatus.Completed;
-        session.CompletedAt = DateTimeOffset.UtcNow;
-    }
-
-    private async Task RestoreCompletedActionsAsync(
-        ProfileDefinition profile,
-        ExecutionSession session,
-        ActionExecutionContext context,
-        CancellationToken cancellationToken)
-    {
-        var actionsById = profile.Actions.ToDictionary(action => action.Id);
-
-        foreach (var journalEntry in session.Journal.AsEnumerable().Reverse())
+        finally
         {
-            if (journalEntry.Status != ActionJournalStatus.Succeeded ||
-                journalEntry.RestoreState is null ||
-                !actionsById.TryGetValue(journalEntry.ActionId, out var action) ||
-                !actionRegistry.TryGetHandler(journalEntry.ActionType, out var handler) ||
-                handler is null)
-            {
-                continue;
-            }
-
-            try
-            {
-                await handler.RestoreAsync(
-                    action,
-                    journalEntry.RestoreState,
-                    context,
-                    cancellationToken);
-                journalEntry.Status = ActionJournalStatus.Restored;
-            }
-            catch (Exception exception) when (exception is not OperationCanceledException)
-            {
-                journalEntry.Status = ActionJournalStatus.RestoreFailed;
-                journalEntry.ErrorMessage = exception.Message;
-            }
+            Volatile.Write(ref _isRunning, 0);
         }
     }
 }

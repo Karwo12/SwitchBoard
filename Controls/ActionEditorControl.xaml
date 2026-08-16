@@ -27,15 +27,19 @@
             <Grid Visibility="{Binding SelectedProfile, Converter={StaticResource NotNullToVisibilityConverter}}">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
-                    <RowDefinition Height="24" />
+                    <RowDefinition Height="18" />
                     <RowDefinition Height="Auto" />
-                    <RowDefinition Height="20" />
+                    <RowDefinition Height="14" />
                     <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="10" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <StackPanel>
@@ -44,12 +48,26 @@
                                    Style="{StaticResource CaptionText}"
                                    Text="{DynamicResource Panel.ProfileEditorSubtitle}" />
                     </StackPanel>
-                    <Border Grid.Column="1"
+                    <Button Grid.Column="1"
+                            MinWidth="118"
+                            Command="{Binding RunProfileCommand}">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource AccentButton}">
+                                <Setter Property="Content" Value="{DynamicResource Execution.RunProfile}" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsProfileRunning}" Value="True">
+                                        <Setter Property="Content" Value="{DynamicResource Execution.RunningButton}" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+                    <Border Grid.Column="3"
                             Padding="10,5"
                             VerticalAlignment="Center"
                             Style="{StaticResource GlassCard}">
                         <TextBlock Style="{StaticResource CaptionText}">
-                            <Run Text="{Binding SelectedProfile.Actions.Count}" />
+                            <Run Text="{Binding SelectedProfile.Actions.Count, Mode=OneWay}" />
                             <Run Text=" " />
                             <Run Text="{DynamicResource Common.ActionsLower}" />
                         </TextBlock>
@@ -86,7 +104,8 @@
                 </Grid>
 
                 <Grid Grid.Row="4">
-                    <ListBox ItemsSource="{Binding SelectedProfile.Actions}">
+                    <ListBox ItemsSource="{Binding SelectedProfile.Actions}"
+                             SelectedItem="{Binding SelectedAction, Mode=TwoWay}">
                         <ListBox.ItemContainerStyle>
                             <Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
                                 <Setter Property="MinHeight" Value="0" />
@@ -96,45 +115,267 @@
                         <ListBox.ItemTemplate>
                             <DataTemplate>
                                 <Border Padding="14" Style="{StaticResource GlassCard}">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto" />
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="Auto" />
-                                            <ColumnDefinition Width="Auto" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
-                                        <CheckBox Margin="0,0,13,0"
-                                                  IsChecked="{Binding IsEnabled}"
-                                                  ToolTip="{DynamicResource Tooltip.EnableAction}" />
-                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                            <TextBlock FontWeight="SemiBold" Text="{Binding DisplayName}" />
-                                            <TextBlock Margin="0,3,0,0"
-                                                       Style="{StaticResource CaptionText}"
-                                                       Text="{Binding Type}" />
-                                        </StackPanel>
-                                        <Button Grid.Column="2"
-                                                Margin="8,0,0,0"
-                                                Command="{Binding DataContext.MoveActionUpCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                CommandParameter="{Binding}"
-                                                Content="↑"
-                                                ToolTip="{DynamicResource Tooltip.MoveUp}"
-                                                Style="{StaticResource GhostIconButton}" />
-                                        <Button Grid.Column="3"
-                                                Margin="4,0,0,0"
-                                                Command="{Binding DataContext.MoveActionDownCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                CommandParameter="{Binding}"
-                                                Content="↓"
-                                                ToolTip="{DynamicResource Tooltip.MoveDown}"
-                                                Style="{StaticResource GhostIconButton}" />
-                                        <Button Grid.Column="4"
-                                                Margin="4,0,0,0"
-                                                Command="{Binding DataContext.DeleteActionCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                CommandParameter="{Binding}"
-                                                Content="×"
-                                                ToolTip="{DynamicResource Tooltip.RemoveAction}"
-                                                Style="{StaticResource DangerIconButton}" />
-                                    </Grid>
+                                    <StackPanel>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <CheckBox Margin="0,0,13,0"
+                                                      IsChecked="{Binding IsEnabled}"
+                                                      ToolTip="{DynamicResource Tooltip.EnableAction}" />
+                                            <Button Grid.Column="1"
+                                                    Padding="0"
+                                                    HorizontalContentAlignment="Stretch"
+                                                    VerticalContentAlignment="Center"
+                                                    Background="Transparent"
+                                                    BorderThickness="0"
+                                                    Command="{Binding DataContext.ToggleActionExpandedCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                    CommandParameter="{Binding}"
+                                                    Cursor="Hand"
+                                                    AutomationProperties.Name="{Binding DisplayName}"
+                                                    AutomationProperties.ItemStatus="{Binding IsExpanded}"
+                                                    ToolTip="{Binding Type}">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <StackPanel VerticalAlignment="Center">
+                                                        <TextBlock FontWeight="SemiBold" Text="{Binding DisplayName}" />
+                                                        <TextBlock Margin="0,3,0,0"
+                                                                   Style="{StaticResource CaptionText}"
+                                                                   Text="{Binding Summary}" />
+                                                    </StackPanel>
+                                                    <TextBlock Grid.Column="1"
+                                                               Margin="12,0,5,0"
+                                                               VerticalAlignment="Center"
+                                                               FontSize="18"
+                                                               Foreground="{DynamicResource TextTertiaryBrush}">
+                                                        <TextBlock.Style>
+                                                            <Style TargetType="TextBlock">
+                                                                <Setter Property="Text" Value="&#x203A;" />
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding IsExpanded}" Value="True">
+                                                                        <Setter Property="Text" Value="&#x2304;" />
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBlock.Style>
+                                                    </TextBlock>
+                                                </Grid>
+                                            </Button>
+                                            <Button Grid.Column="3"
+                                                    Margin="8,0,0,0"
+                                                    Command="{Binding DataContext.MoveActionUpCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                    CommandParameter="{Binding}"
+                                                    Content="&#x2191;"
+                                                    ToolTip="{DynamicResource Tooltip.MoveUp}"
+                                                    Style="{StaticResource GhostIconButton}" />
+                                            <Button Grid.Column="4"
+                                                    Margin="4,0,0,0"
+                                                    Command="{Binding DataContext.MoveActionDownCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                    CommandParameter="{Binding}"
+                                                    Content="&#x2193;"
+                                                    ToolTip="{DynamicResource Tooltip.MoveDown}"
+                                                    Style="{StaticResource GhostIconButton}" />
+                                            <Button Grid.Column="5"
+                                                    Margin="4,0,0,0"
+                                                    Command="{Binding DataContext.DeleteActionCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                    CommandParameter="{Binding}"
+                                                    Content="&#x00D7;"
+                                                    ToolTip="{DynamicResource Tooltip.RemoveAction}"
+                                                    Style="{StaticResource DangerIconButton}" />                                        </Grid>
+
+                                        <Border Margin="31,13,0,0"
+                                                Padding="13"
+                                                Background="{DynamicResource InputBackgroundBrush}"
+                                                BorderBrush="{DynamicResource BorderBrush}"
+                                                BorderThickness="1"
+                                                CornerRadius="9">
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Setter Property="Opacity" Value="0" />
+                                                    <Setter Property="IsHitTestVisible" Value="False" />
+                                                    <Setter Property="MaxHeight" Value="0" />
+
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsExpanded}" Value="True">
+                                                            <Setter Property="IsHitTestVisible" Value="True" />
+                                                            <DataTrigger.EnterActions>
+                                                                <BeginStoryboard>
+                                                                    <Storyboard>
+                                                                        <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                                                         To="1"
+                                                                                         Duration="0:0:0.16" />
+                                                                        <DoubleAnimation Storyboard.TargetProperty="MaxHeight"
+                                                                                         From="0"
+                                                                                         To="600"
+                                                                                         Duration="0:0:0.16">
+                                                                            <DoubleAnimation.EasingFunction>
+                                                                                <CubicEase EasingMode="EaseOut" />
+                                                                            </DoubleAnimation.EasingFunction>
+                                                                        </DoubleAnimation>
+                                                                    </Storyboard>
+                                                                </BeginStoryboard>
+                                                            </DataTrigger.EnterActions>
+                                                            <DataTrigger.ExitActions>
+                                                                <BeginStoryboard>
+                                                                    <Storyboard>
+                                                                        <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                                                         To="0"
+                                                                                         Duration="0:0:0.14" />
+                                                                        <DoubleAnimation Storyboard.TargetProperty="MaxHeight"
+                                                                                         From="600"
+                                                                                         To="0"
+                                                                                         Duration="0:0:0.14">
+                                                                            <DoubleAnimation.EasingFunction>
+                                                                                <CubicEase EasingMode="EaseIn" />
+                                                                            </DoubleAnimation.EasingFunction>
+                                                                        </DoubleAnimation>
+                                                                    </Storyboard>
+                                                                </BeginStoryboard>
+                                                            </DataTrigger.ExitActions>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
+                                            <Grid>
+                                                <StackPanel>
+                                                    <StackPanel.Style>
+                                                        <Style TargetType="StackPanel">
+                                                            <Setter Property="Visibility" Value="Collapsed" />
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding Type}" Value="program.run">
+                                                                    <Setter Property="Visibility" Value="Visible" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </StackPanel.Style>
+                                                    <TextBlock Margin="0,0,0,6" Style="{StaticResource EyebrowText}" Text="{DynamicResource ActionEditor.FriendlyName}" />
+                                                    <TextBox Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" />
+                                                    <TextBlock Margin="0,11,0,6" Style="{StaticResource EyebrowText}" Text="{DynamicResource ActionEditor.Target}" />
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="8" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                            <ColumnDefinition Width="8" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBox Text="{Binding Target, UpdateSourceTrigger=PropertyChanged}" />
+                                                        <Button Grid.Column="2"
+                                                                Command="{Binding DataContext.BrowseProgramCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                                CommandParameter="{Binding}"
+                                                                Content="{DynamicResource ActionEditor.Browse}" />
+                                                        <Button Grid.Column="4"
+                                                                Command="{Binding DataContext.FindProgramCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                                CommandParameter="{Binding}"
+                                                                Content="{DynamicResource ActionEditor.FindProgram}" />
+                                                    </Grid>
+                                                    <Grid Margin="0,11,0,0">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="12" />
+                                                            <ColumnDefinition Width="*" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <StackPanel>
+                                                            <TextBlock Margin="0,0,0,6" Style="{StaticResource EyebrowText}" Text="{DynamicResource ActionEditor.Arguments}" />
+                                                            <TextBox Text="{Binding Arguments, UpdateSourceTrigger=PropertyChanged}" />
+                                                        </StackPanel>
+                                                        <StackPanel Grid.Column="2">
+                                                            <TextBlock Margin="0,0,0,6" Style="{StaticResource EyebrowText}" Text="{DynamicResource ActionEditor.WorkingDirectory}" />
+                                                            <TextBox Text="{Binding WorkingDirectory, UpdateSourceTrigger=PropertyChanged}" />
+                                                        </StackPanel>
+                                                    </Grid>
+                                                    <CheckBox Margin="0,12,0,0" IsChecked="{Binding StartOnlyIfNotAlreadyRunning, Mode=TwoWay}">
+                                                        <TextBlock Text="{DynamicResource ActionEditor.StartOnlyIfNotRunning}" TextWrapping="Wrap" />
+                                                    </CheckBox>
+                                                </StackPanel>
+
+                                                <StackPanel>
+                                                    <StackPanel.Style>
+                                                        <Style TargetType="StackPanel">
+                                                            <Setter Property="Visibility" Value="Collapsed" />
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding Type}" Value="process.setState">
+                                                                    <Setter Property="Visibility" Value="Visible" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </StackPanel.Style>
+                                                    <TextBlock Margin="0,0,0,6" Style="{StaticResource EyebrowText}" Text="{DynamicResource ActionEditor.FriendlyName}" />
+                                                    <TextBox Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" />
+                                                    <Button Margin="0,11,0,0"
+                                                            HorizontalAlignment="Left"
+                                                            Command="{Binding DataContext.SelectProcessCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                            CommandParameter="{Binding}"
+                                                            Content="{DynamicResource ActionEditor.SelectProcess}" />
+                                                    <Grid Margin="0,11,0,0">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="12" />
+                                                            <ColumnDefinition Width="*" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <StackPanel>
+                                                            <TextBlock Margin="0,0,0,6" Style="{StaticResource EyebrowText}" Text="{DynamicResource ActionEditor.ProcessName}" />
+                                                            <TextBox Text="{Binding ProcessName, UpdateSourceTrigger=PropertyChanged}" />
+                                                        </StackPanel>
+                                                        <StackPanel Grid.Column="2">
+                                                            <TextBlock Margin="0,0,0,6" Style="{StaticResource EyebrowText}" Text="{DynamicResource ActionEditor.ExecutablePath}" />
+                                                            <TextBox Text="{Binding ExecutablePath, UpdateSourceTrigger=PropertyChanged}" />
+                                                        </StackPanel>
+                                                    </Grid>
+                                                    <TextBlock Margin="0,11,0,6" Style="{StaticResource EyebrowText}" Text="{DynamicResource ActionEditor.DesiredState}" />
+                                                    <ComboBox ItemsSource="{Binding AvailableProcessStates}"
+                                                              DisplayMemberPath="DisplayName"
+                                                              SelectedValue="{Binding DesiredProcessState, Mode=TwoWay}"
+                                                              SelectedValuePath="Value" />
+                                                </StackPanel>
+
+                                                <StackPanel>
+                                                    <StackPanel.Style>
+                                                        <Style TargetType="StackPanel">
+                                                            <Setter Property="Visibility" Value="Collapsed" />
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding Type}" Value="delay">
+                                                                    <Setter Property="Visibility" Value="Visible" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </StackPanel.Style>
+                                                    <TextBlock Margin="0,0,0,6" Style="{StaticResource EyebrowText}" Text="{DynamicResource ActionEditor.FriendlyName}" />
+                                                    <TextBox Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" />
+                                                    <TextBlock Margin="0,11,0,6" Style="{StaticResource EyebrowText}" Text="{DynamicResource ActionEditor.DelayDuration}" />
+                                                    <TextBox Text="{Binding DelaySeconds, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}" />
+                                                </StackPanel>
+
+                                                <TextBlock Text="{DynamicResource ActionEditor.NotImplemented}"
+                                                           TextWrapping="Wrap">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
+                                                            <Setter Property="Visibility" Value="Visible" />
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding Type}" Value="program.run">
+                                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                                </DataTrigger>
+                                                                <DataTrigger Binding="{Binding Type}" Value="process.setState">
+                                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                                </DataTrigger>
+                                                                <DataTrigger Binding="{Binding Type}" Value="delay">
+                                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
+                                            </Grid>
+                                        </Border>
+                                    </StackPanel>
                                 </Border>
                             </DataTemplate>
                         </ListBox.ItemTemplate>
@@ -147,7 +388,7 @@
                             <Style TargetType="StackPanel">
                                 <Setter Property="Visibility" Value="Collapsed" />
                                 <Style.Triggers>
-                                    <DataTrigger Binding="{Binding SelectedProfile.Actions.Count}" Value="0">
+                                    <DataTrigger Binding="{Binding SelectedProfile.Actions.Count, Mode=OneWay}" Value="0">
                                         <Setter Property="Visibility" Value="Visible" />
                                     </DataTrigger>
                                 </Style.Triggers>
@@ -166,6 +407,56 @@
                                    Text="{DynamicResource Empty.NoActionsHint}" />
                     </StackPanel>
                 </Grid>
+
+                <Border Grid.Row="5" Margin="0,12,0,0" Padding="12">
+                    <Border.Style>
+                        <Style TargetType="Border" BasedOn="{StaticResource GlassCard}">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding HasExecutionStatus}" Value="True">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock FontWeight="SemiBold">
+                                <Run Text="[" />
+                                <Run Text="{Binding CurrentExecutionActionNumber, Mode=OneWay}" />
+                                <Run Text="/" />
+                                <Run Text="{Binding TotalExecutionActions, Mode=OneWay}" />
+                                <Run Text="] " />
+                                <Run Text="{Binding CurrentExecutionActionName, Mode=OneWay}" />
+                            </TextBlock>
+                            <TextBlock Margin="0,4,0,0" Style="{StaticResource CaptionText}">
+                                <Run Text="{DynamicResource Execution.StatusPrefix}" />
+                                <Run Text=" " />
+                                <Run Text="{Binding ExecutionStatusText, Mode=OneWay}" />
+                            </TextBlock>
+                            <TextBlock Margin="0,4,0,0"
+                                       Foreground="{DynamicResource DangerBrush}"
+                                       Text="{Binding ExecutionErrorMessage}"
+                                       TextWrapping="Wrap" />
+                        </StackPanel>
+                        <Button Grid.Column="1"
+                                Margin="12,0,0,0"
+                                VerticalAlignment="Center"
+                                Command="{Binding CancelProfileCommand}"
+                                Content="{DynamicResource Execution.Cancel}" />
+                    </Grid>
+                </Border>
+
+                <CheckBox Grid.Row="6"
+                          Margin="0,14,0,0"
+                          IsChecked="{Binding SelectedProfile.CloseSwitchBoardAfterSuccessfulCompletion, Mode=TwoWay}">
+                    <TextBlock Text="{DynamicResource Editor.CloseAfterProfile}"
+                               TextWrapping="Wrap" />
+                </CheckBox>
             </Grid>
         </Grid>
     </ContentControl>

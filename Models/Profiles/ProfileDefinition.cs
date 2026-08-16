@@ -12,5 +12,7 @@ public sealed class ProfileDefinition
 
     public int SortOrder { get; set; }
 
+    public bool CloseSwitchBoardAfterSuccessfulCompletion { get; set; }
+
     public List<ActionDefinition> Actions { get; set; } = [];
 }

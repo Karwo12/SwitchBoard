@@ -1,9 +1,13 @@
-﻿using System.Configuration;
+using System.Configuration;
 using System.Data;
 using System.Windows;
 using SwitchBoard.Data;
 using SwitchBoard.Localization;
 using SwitchBoard.Services;
+using SwitchBoard.Services.ApplicationLifecycle;
+using SwitchBoard.Services.Discovery;
+using SwitchBoard.Services.Execution;
+using SwitchBoard.Services.Execution.Handlers;
 using SwitchBoard.Services.Persistence;
 using SwitchBoard.Services.Profiles;
 using SwitchBoard.Themes;
@@ -40,14 +44,29 @@ public partial class App : Application
             await _settingsRepository.SaveAsync(settings);
             var catalogService = new ProfileCatalogService(_repository);
             var catalog = await catalogService.LoadAsync();
+            var actionRegistry = new ActionRegistry
+            ([
+                new ProgramRunActionHandler(),
+                new ProcessSetStateActionHandler(),
+                new DelayActionHandler()
+            ]);
+            var profileRunner = new ProfileRunner(actionRegistry);
+            var completionBehavior = new ProfileCompletionBehavior(new WpfApplicationLifetime());
+            var processDiscoveryService = new WindowsProcessDiscoveryService();
+            var programDiscoveryService = new WindowsProgramDiscoveryService();
             var viewModel = new MainWindowViewModel(
                 catalogService,
-                new WpfUserDialogService(),
+                new WpfUserDialogService(
+                    processDiscoveryService,
+                    programDiscoveryService,
+                    _localizationService),
                 catalog,
                 themeManager,
                 _localizationService,
                 _settingsRepository,
-                settings);
+                settings,
+                profileRunner,
+                completionBehavior);
 
             var window = new MainWindow(viewModel);
             MainWindow = window;

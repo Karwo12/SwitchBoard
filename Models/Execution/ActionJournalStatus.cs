@@ -4,9 +4,10 @@ public enum ActionJournalStatus
 {
     Pending,
     Running,
-    Succeeded,
+    Success,
     Failed,
     Skipped,
+    Cancelled,
     Unsupported,
     Restored,
     RestoreFailed

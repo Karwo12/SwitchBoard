@@ -10,6 +10,8 @@ public sealed class ActionDefinition
 
     public int ActionSchemaVersion { get; set; } = 1;
 
+    public int SortOrder { get; set; }
+
     public string? Name { get; set; }
 
     public bool IsEnabled { get; set; } = true;

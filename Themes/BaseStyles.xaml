@@ -131,7 +131,7 @@
                             <Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource FocusBrush}" />
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
-                            <Setter TargetName="Chrome" Property="Opacity" Value="0.4" />
+                            <Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}" />
                             <Setter Property="Cursor" Value="Arrow" />
                         </Trigger>
                     </ControlTemplate.Triggers>
@@ -141,9 +141,24 @@
     </Style>
 
     <Style x:Key="AccentButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-        <Setter Property="Foreground" Value="{DynamicResource AccentForegroundBrush}" />
-        <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
-        <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource PrimaryButtonForeground}" />
+        <Setter Property="Background" Value="{DynamicResource PrimaryButtonBackground}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource PrimaryButtonBackground}" />
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="{DynamicResource PrimaryButtonHoverBackground}" />
+                <Setter Property="BorderBrush" Value="{DynamicResource PrimaryButtonHoverBackground}" />
+            </Trigger>
+            <Trigger Property="IsPressed" Value="True">
+                <Setter Property="Background" Value="{DynamicResource PrimaryButtonPressedBackground}" />
+                <Setter Property="BorderBrush" Value="{DynamicResource PrimaryButtonPressedBackground}" />
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Foreground" Value="{DynamicResource PrimaryButtonDisabledForeground}" />
+                <Setter Property="Background" Value="{DynamicResource PrimaryButtonDisabledBackground}" />
+                <Setter Property="BorderBrush" Value="{DynamicResource PrimaryButtonDisabledBackground}" />
+            </Trigger>
+        </Style.Triggers>
     </Style>
 
     <Style x:Key="GhostIconButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">

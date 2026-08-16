@@ -22,12 +22,10 @@
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
-            <StackPanel VerticalAlignment="Center">
-                <TextBlock FontSize="21" FontWeight="Bold" Text="SwitchBoard" />
-                <TextBlock Margin="0,3,0,0"
-                           Style="{StaticResource CaptionText}"
-                           Text="{DynamicResource App.Tagline}" />
-            </StackPanel>
+            <TextBlock VerticalAlignment="Center"
+                       FontSize="21"
+                       FontWeight="Bold"
+                       Text="SwitchBoard" />
 
             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                 <StackPanel Margin="0,0,16,0" VerticalAlignment="Center">
@@ -127,7 +125,7 @@
                                 <Style TargetType="StackPanel">
                                     <Setter Property="Visibility" Value="Collapsed" />
                                     <Style.Triggers>
-                                        <DataTrigger Binding="{Binding Categories.Count}" Value="0">
+                                        <DataTrigger Binding="{Binding Categories.Count, Mode=OneWay}" Value="0">
                                             <Setter Property="Visibility" Value="Visible" />
                                         </DataTrigger>
                                     </Style.Triggers>
@@ -199,7 +197,7 @@
                                                 CancelEditCommand="{Binding DataContext.CancelProfileRenameCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                                 CommandParameter="{Binding}" />
                                             <TextBlock Grid.Row="1" Margin="9,-2,0,5" Style="{StaticResource CaptionText}">
-                                                <Run Text="{Binding Actions.Count}" />
+                                                <Run Text="{Binding Actions.Count, Mode=OneWay}" />
                                                 <Run Text=" " />
                                                 <Run Text="{DynamicResource Common.ActionsLower}" />
                                             </TextBlock>
@@ -226,7 +224,7 @@
                                 <Style TargetType="TextBlock">
                                     <Setter Property="Visibility" Value="Collapsed" />
                                     <Style.Triggers>
-                                        <DataTrigger Binding="{Binding Profiles.Count}" Value="0">
+                                        <DataTrigger Binding="{Binding Profiles.Count, Mode=OneWay}" Value="0">
                                             <Setter Property="Visibility" Value="Visible" />
                                         </DataTrigger>
                                     </Style.Triggers>
@@ -250,12 +248,23 @@
                     Height="38"
                     MinHeight="38"
                     Command="{Binding ToggleThemeMenuCommand}"
-                    Content="&#xE713;"
-                    FontFamily="Segoe MDL2 Assets"
-                    FontSize="16"
+                    AutomationProperties.Name="{DynamicResource Tooltip.Settings}"
                     Foreground="{DynamicResource IconPrimary}"
                     ToolTip="{DynamicResource Tooltip.Settings}"
-                    Style="{StaticResource GhostIconButton}" />
+                    Style="{StaticResource GhostIconButton}">
+                <Grid Width="18" Height="18">
+                    <Path Data="M 9,1 L 15,1 L 15.6,4.1 L 17.1,5 L 20,4 L 23,9.2 L 20.6,11.2 L 20.6,12.8 L 23,14.8 L 20,20 L 17.1,19 L 15.6,19.9 L 15,23 L 9,23 L 8.4,19.9 L 6.9,19 L 4,20 L 1,14.8 L 3.4,12.8 L 3.4,11.2 L 1,9.2 L 4,4 L 6.9,5 L 8.4,4.1 Z"
+                          Fill="Transparent"
+                          Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                          StrokeLineJoin="Round"
+                          StrokeThickness="1.6"
+                          Stretch="Uniform" />
+                    <Ellipse Width="6"
+                             Height="6"
+                             Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                             StrokeThickness="1.6" />
+                </Grid>
+            </Button>
 
             <Popup x:Name="SettingsPopup"
                    AllowsTransparency="True"
@@ -306,16 +315,6 @@
                                   DisplayMemberPath="DisplayName"
                                   SelectedItem="{Binding SelectedLanguageOption, Mode=TwoWay}" />
 
-                        <Border Height="1" Margin="0,18" Background="{DynamicResource BorderBrush}" />
-
-                        <TextBlock Margin="0,0,0,9"
-                                   Style="{StaticResource EyebrowText}"
-                                   Text="{DynamicResource Settings.Behavior}" />
-                        <CheckBox IsChecked="{Binding CloseSwitchBoardAfterProfileFinishes, Mode=TwoWay}">
-                            <TextBlock MaxWidth="235"
-                                       Text="{DynamicResource Settings.CloseAfterProfile}"
-                                       TextWrapping="Wrap" />
-                        </CheckBox>
                     </StackPanel>
                 </ContentControl>
             </Popup>
