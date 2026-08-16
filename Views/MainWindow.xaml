@@ -1,0 +1,324 @@
+<Window x:Class="SwitchBoard.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:controls="clr-namespace:SwitchBoard.Controls"
+        mc:Ignorable="d"
+        Title="SwitchBoard"
+        Width="1340"
+        Height="820"
+        MinWidth="1080"
+        MinHeight="680"
+        WindowStartupLocation="CenterScreen">
+    <Grid Background="{DynamicResource BackgroundBrush}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="82" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Grid Grid.Row="0" Margin="26,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel VerticalAlignment="Center">
+                <TextBlock FontSize="21" FontWeight="Bold" Text="SwitchBoard" />
+                <TextBlock Margin="0,3,0,0"
+                           Style="{StaticResource CaptionText}"
+                           Text="{DynamicResource App.Tagline}" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                <StackPanel Margin="0,0,16,0" VerticalAlignment="Center">
+                    <TextBlock HorizontalAlignment="Right"
+                               Style="{StaticResource CaptionText}"
+                               Text="{Binding StatusMessage}" />
+                    <TextBlock HorizontalAlignment="Right" FontSize="11">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}" />
+                                <Setter Property="Text" Value="{DynamicResource Common.AllChangesSaved}" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding HasUnsavedChanges}" Value="True">
+                                        <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+                                        <Setter Property="Text" Value="{DynamicResource Common.UnsavedChanges}" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                </StackPanel>
+                <Button MinWidth="116"
+                        Command="{Binding SaveCommand}"
+                        Content="{DynamicResource Common.SaveChanges}"
+                        Style="{StaticResource AccentButton}" />
+            </StackPanel>
+        </Grid>
+
+        <Grid Grid.Row="1" Margin="16,0,16,16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="258" />
+                <ColumnDefinition Width="8" />
+                <ColumnDefinition Width="334" />
+                <ColumnDefinition Width="8" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <ContentControl Grid.Column="0" Style="{StaticResource GlassPanel}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="18" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource SectionTitle}" Text="{DynamicResource Panel.Categories}" />
+                            <TextBlock Margin="0,4,0,0"
+                                       Style="{StaticResource CaptionText}"
+                                       Text="{DynamicResource Panel.CategoriesSubtitle}" />
+                        </StackPanel>
+                        <Button Grid.Column="1"
+                                Command="{Binding AddCategoryCommand}"
+                                Content="+"
+                                ToolTip="{DynamicResource Tooltip.AddCategory}"
+                                Style="{StaticResource GhostIconButton}" />
+                    </Grid>
+
+                    <Grid Grid.Row="2">
+                        <ListBox ItemsSource="{Binding Categories}"
+                                 SelectedItem="{Binding SelectedCategory, Mode=TwoWay}">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Margin="5,3">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <controls:RenamableListItemControl
+                                            Text="{Binding Name}"
+                                            EditText="{Binding EditName, Mode=TwoWay}"
+                                            IsEditing="{Binding IsEditing}"
+                                            BeginEditCommand="{Binding DataContext.BeginCategoryRenameCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                            CommitEditCommand="{Binding DataContext.CommitCategoryRenameCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                            CancelEditCommand="{Binding DataContext.CancelCategoryRenameCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                            CommandParameter="{Binding}" />
+                                        <Button Grid.Column="1"
+                                                Margin="5,0,0,0"
+                                                Command="{Binding DataContext.DeleteCategoryCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                CommandParameter="{Binding}"
+                                                Content="×"
+                                                ToolTip="{DynamicResource Tooltip.DeleteCategory}"
+                                                Style="{StaticResource DangerIconButton}" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+
+                        <StackPanel HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"
+                                    IsHitTestVisible="False">
+                            <StackPanel.Style>
+                                <Style TargetType="StackPanel">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Categories.Count}" Value="0">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </StackPanel.Style>
+                            <TextBlock HorizontalAlignment="Center"
+                                       FontSize="26"
+                                       Foreground="{DynamicResource IconMuted}"
+                                       Text="＋" />
+                            <TextBlock Margin="0,9,0,0"
+                                       Foreground="{DynamicResource TextSecondaryBrush}"
+                                       Text="{DynamicResource Empty.CreateFirstCategory}" />
+                        </StackPanel>
+                    </Grid>
+                </Grid>
+            </ContentControl>
+
+            <ContentControl Grid.Column="2" Style="{StaticResource GlassPanel}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="18" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource SectionTitle}" Text="{DynamicResource Panel.Profiles}" />
+                            <Grid Margin="0,4,0,0">
+                                <TextBlock Style="{StaticResource CaptionText}"
+                                           Text="{Binding SelectedCategory.Name}"
+                                           Visibility="{Binding SelectedCategory, Converter={StaticResource NotNullToVisibilityConverter}}" />
+                                <TextBlock Style="{StaticResource CaptionText}"
+                                           Text="{DynamicResource Panel.SelectCategory}"
+                                           Visibility="{Binding SelectedCategory, Converter={StaticResource NullToVisibilityConverter}}" />
+                            </Grid>
+                        </StackPanel>
+                        <Button Grid.Column="1"
+                                Command="{Binding AddProfileCommand}"
+                                Content="+"
+                                ToolTip="{DynamicResource Tooltip.AddProfile}"
+                                Style="{StaticResource GhostIconButton}" />
+                    </Grid>
+
+                    <Grid Grid.Row="2">
+                        <ListBox ItemsSource="{Binding Profiles}"
+                                 SelectedItem="{Binding SelectedProfile, Mode=TwoWay}">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Margin="5,3">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <Grid>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                            </Grid.RowDefinitions>
+                                            <controls:RenamableListItemControl
+                                                Text="{Binding Name}"
+                                                EditText="{Binding EditName, Mode=TwoWay}"
+                                                IsEditing="{Binding IsEditing}"
+                                                BeginEditCommand="{Binding DataContext.BeginProfileRenameCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                CommitEditCommand="{Binding DataContext.CommitProfileRenameCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                CancelEditCommand="{Binding DataContext.CancelProfileRenameCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                CommandParameter="{Binding}" />
+                                            <TextBlock Grid.Row="1" Margin="9,-2,0,5" Style="{StaticResource CaptionText}">
+                                                <Run Text="{Binding Actions.Count}" />
+                                                <Run Text=" " />
+                                                <Run Text="{DynamicResource Common.ActionsLower}" />
+                                            </TextBlock>
+                                        </Grid>
+                                        <Button Grid.Column="1"
+                                                Margin="5,0,0,0"
+                                                VerticalAlignment="Center"
+                                                Command="{Binding DataContext.DeleteProfileCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                CommandParameter="{Binding}"
+                                                Content="×"
+                                                ToolTip="{DynamicResource Tooltip.DeleteProfile}"
+                                                Style="{StaticResource DangerIconButton}" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+
+                        <TextBlock HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"
+                                   IsHitTestVisible="False"
+                                   Text="{DynamicResource Empty.NoProfiles}">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Profiles.Count}" Value="0">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </Grid>
+                </Grid>
+            </ContentControl>
+
+            <controls:ActionEditorControl Grid.Column="4" />
+        </Grid>
+
+        <Grid Grid.Row="1"
+              Margin="0,0,30,29"
+              HorizontalAlignment="Right"
+              VerticalAlignment="Bottom"
+              Panel.ZIndex="20">
+            <Button x:Name="SettingsButton"
+                    Width="38"
+                    Height="38"
+                    MinHeight="38"
+                    Command="{Binding ToggleThemeMenuCommand}"
+                    Content="&#xE713;"
+                    FontFamily="Segoe MDL2 Assets"
+                    FontSize="16"
+                    Foreground="{DynamicResource IconPrimary}"
+                    ToolTip="{DynamicResource Tooltip.Settings}"
+                    Style="{StaticResource GhostIconButton}" />
+
+            <Popup x:Name="SettingsPopup"
+                   AllowsTransparency="True"
+                   DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}"
+                   IsOpen="{Binding IsThemeMenuOpen, Mode=TwoWay}"
+                   Placement="Top"
+                   PlacementTarget="{Binding ElementName=SettingsButton}"
+                   PopupAnimation="Fade"
+                   StaysOpen="True">
+                <ContentControl Width="300"
+                                Margin="0,0,0,10"
+                                Padding="18"
+                                Style="{StaticResource GlassPanel}">
+                    <StackPanel>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource SectionTitle}" Text="{DynamicResource Settings.Title}" />
+                                <TextBlock Margin="0,3,0,17"
+                                           Style="{StaticResource CaptionText}"
+                                           Text="{DynamicResource Settings.Personalization}" />
+                            </StackPanel>
+                            <Button Grid.Column="1"
+                                    Margin="6,-4,-4,0"
+                                    VerticalAlignment="Top"
+                                    Command="{Binding ToggleThemeMenuCommand}"
+                                    Content="×"
+                                    ToolTip="{DynamicResource Tooltip.CloseSettings}"
+                                    Style="{StaticResource GhostIconButton}" />
+                        </Grid>
+
+                        <TextBlock Style="{StaticResource EyebrowText}" Text="{DynamicResource Settings.Appearance}" />
+                        <TextBlock Margin="0,7,0,6"
+                                   Style="{StaticResource CaptionText}"
+                                   Text="{DynamicResource Settings.Theme}" />
+                        <ComboBox ItemsSource="{Binding ThemeOptions}"
+                                  DisplayMemberPath="DisplayName"
+                                  SelectedItem="{Binding SelectedThemeOption, Mode=TwoWay}" />
+
+                        <Border Height="1" Margin="0,18" Background="{DynamicResource BorderBrush}" />
+
+                        <TextBlock Style="{StaticResource EyebrowText}" Text="{DynamicResource Settings.Language}" />
+                        <ComboBox Margin="0,7,0,0"
+                                  ItemsSource="{Binding LanguageOptions}"
+                                  DisplayMemberPath="DisplayName"
+                                  SelectedItem="{Binding SelectedLanguageOption, Mode=TwoWay}" />
+
+                        <Border Height="1" Margin="0,18" Background="{DynamicResource BorderBrush}" />
+
+                        <TextBlock Margin="0,0,0,9"
+                                   Style="{StaticResource EyebrowText}"
+                                   Text="{DynamicResource Settings.Behavior}" />
+                        <CheckBox IsChecked="{Binding CloseSwitchBoardAfterProfileFinishes, Mode=TwoWay}">
+                            <TextBlock MaxWidth="235"
+                                       Text="{DynamicResource Settings.CloseAfterProfile}"
+                                       TextWrapping="Wrap" />
+                        </CheckBox>
+                    </StackPanel>
+                </ContentControl>
+            </Popup>
+        </Grid>
+    </Grid>
+</Window>

@@ -1,0 +1,98 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:system="clr-namespace:System;assembly=System.Runtime">
+    <system:String x:Key="App.Tagline">Automation profiles, built your way</system:String>
+    <system:String x:Key="Common.SaveChanges">Save changes</system:String>
+    <system:String x:Key="Common.AllChangesSaved">All changes saved</system:String>
+    <system:String x:Key="Common.UnsavedChanges">Unsaved changes</system:String>
+    <system:String x:Key="Common.ActionsLower">actions</system:String>
+
+    <system:String x:Key="Panel.Categories">Categories</system:String>
+    <system:String x:Key="Panel.CategoriesSubtitle">Your workspace groups</system:String>
+    <system:String x:Key="Panel.Profiles">Profiles</system:String>
+    <system:String x:Key="Panel.SelectCategory">Select a category</system:String>
+    <system:String x:Key="Panel.ProfileEditor">Profile editor</system:String>
+    <system:String x:Key="Panel.ProfileEditorSubtitle">Name and ordered action definitions</system:String>
+
+    <system:String x:Key="Editor.ProfileName">PROFILE NAME</system:String>
+    <system:String x:Key="Editor.NewActionType">NEW ACTION TYPE</system:String>
+    <system:String x:Key="Editor.AddAction">+ Add Action</system:String>
+
+    <system:String x:Key="Empty.CreateFirstCategory">Create your first category</system:String>
+    <system:String x:Key="Empty.NoProfiles">No profiles in this category</system:String>
+    <system:String x:Key="Empty.SelectProfile">Select a profile</system:String>
+    <system:String x:Key="Empty.SelectProfileHint">Choose or create a profile to edit it</system:String>
+    <system:String x:Key="Empty.NoActions">No actions yet</system:String>
+    <system:String x:Key="Empty.NoActionsHint">Add definitions now; system execution remains disabled.</system:String>
+
+    <system:String x:Key="Tooltip.AddCategory">Add category</system:String>
+    <system:String x:Key="Tooltip.DeleteCategory">Delete category</system:String>
+    <system:String x:Key="Tooltip.AddProfile">Add profile</system:String>
+    <system:String x:Key="Tooltip.DeleteProfile">Delete profile</system:String>
+    <system:String x:Key="Tooltip.Settings">Settings and personalization</system:String>
+    <system:String x:Key="Tooltip.CloseSettings">Close settings</system:String>
+    <system:String x:Key="Tooltip.EnableAction">Enable action</system:String>
+    <system:String x:Key="Tooltip.MoveUp">Move up</system:String>
+    <system:String x:Key="Tooltip.MoveDown">Move down</system:String>
+    <system:String x:Key="Tooltip.RemoveAction">Remove action</system:String>
+
+    <system:String x:Key="Settings.Title">Settings</system:String>
+    <system:String x:Key="Settings.Personalization">Personalization</system:String>
+    <system:String x:Key="Settings.Appearance">Appearance</system:String>
+    <system:String x:Key="Settings.Theme">Theme</system:String>
+    <system:String x:Key="Settings.Language">Language</system:String>
+    <system:String x:Key="Settings.Behavior">Behavior</system:String>
+    <system:String x:Key="Settings.CloseAfterProfile">Close SwitchBoard after profile finishes</system:String>
+
+    <system:String x:Key="Language.English">English</system:String>
+    <system:String x:Key="Language.Polish">Polski</system:String>
+
+    <system:String x:Key="Action.ProcessState">Process state</system:String>
+    <system:String x:Key="Action.RunProgram">Run program</system:String>
+    <system:String x:Key="Action.LaunchSteamGame">Launch Steam game</system:String>
+    <system:String x:Key="Action.WindowsServiceState">Windows service state</system:String>
+    <system:String x:Key="Action.DisplayConfiguration">Display configuration</system:String>
+    <system:String x:Key="Action.PowerPlan">Power plan</system:String>
+    <system:String x:Key="Action.RunScript">Run script</system:String>
+    <system:String x:Key="Action.Delay">Delay</system:String>
+
+    <system:String x:Key="Theme.GraphiteGlass">Graphite Glass</system:String>
+    <system:String x:Key="Theme.Dark">Dark</system:String>
+    <system:String x:Key="Theme.DarkBlue">Dark Blue</system:String>
+    <system:String x:Key="Theme.Light">Light</system:String>
+    <system:String x:Key="Theme.MidnightTools">Midnight Tools</system:String>
+    <system:String x:Key="Theme.NordicFrost">Nordic Frost</system:String>
+    <system:String x:Key="Theme.VioletDusk">Violet Dusk</system:String>
+    <system:String x:Key="Theme.WarmAmber">Warm Amber</system:String>
+    <system:String x:Key="Theme.SolarDepths">Solar Depths</system:String>
+    <system:String x:Key="Theme.OledBlack">OLED Black</system:String>
+
+    <system:String x:Key="Default.NewCategory">New category</system:String>
+    <system:String x:Key="Default.NewProfile">New profile</system:String>
+
+    <system:String x:Key="Dialog.DeleteCategoryTitle">Delete category</system:String>
+    <system:String x:Key="Dialog.DeleteCategoryMessage">Delete '{0}' and all profiles inside it?</system:String>
+    <system:String x:Key="Dialog.DeleteProfileTitle">Delete profile</system:String>
+    <system:String x:Key="Dialog.DeleteProfileMessage">Delete '{0}'?</system:String>
+    <system:String x:Key="Dialog.StartupErrorTitle">Startup error</system:String>
+    <system:String x:Key="Dialog.StartupErrorMessage">SwitchBoard could not start.&#x0a;&#x0a;{0}</system:String>
+
+    <system:String x:Key="Status.Ready">Ready</system:String>
+    <system:String x:Key="Status.CatalogLoaded">Catalog loaded</system:String>
+    <system:String x:Key="Status.CategoryCreated">Category created — remember to save</system:String>
+    <system:String x:Key="Status.CategoryDeleted">Category deleted — remember to save</system:String>
+    <system:String x:Key="Status.ProfileCreated">Profile created — remember to save</system:String>
+    <system:String x:Key="Status.ProfileDeleted">Profile deleted — remember to save</system:String>
+    <system:String x:Key="Status.ActionAdded">Action definition added — no system operation will be executed</system:String>
+    <system:String x:Key="Status.ActionRemoved">Action removed — remember to save</system:String>
+    <system:String x:Key="Status.ActionOrderChanged">Action order changed — remember to save</system:String>
+    <system:String x:Key="Status.UnsavedChanges">Unsaved changes</system:String>
+    <system:String x:Key="Status.Saved">Saved at {0}</system:String>
+    <system:String x:Key="Status.SaveFailed">Save failed: {0}</system:String>
+    <system:String x:Key="Status.InvalidCatalog">Cannot save: category and profile names must be filled in and relationships must be valid.</system:String>
+    <system:String x:Key="Status.ThemeChanged">Theme changed to {0}</system:String>
+    <system:String x:Key="Status.LanguageChanged">Language changed to {0}</system:String>
+    <system:String x:Key="Status.BehaviorEnabled">Auto-close after successful profile completion enabled</system:String>
+    <system:String x:Key="Status.BehaviorDisabled">Auto-close after successful profile completion disabled</system:String>
+    <system:String x:Key="Status.SettingsSaveFailed">Settings could not be saved: {0}</system:String>
+</ResourceDictionary>

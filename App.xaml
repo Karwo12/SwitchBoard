@@ -1,9 +1,16 @@
 ﻿<Application x:Class="SwitchBoard.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:local="clr-namespace:SwitchBoard"
-             StartupUri="MainWindow.xaml">
+             xmlns:converters="clr-namespace:SwitchBoard.Converters">
     <Application.Resources>
-         
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Themes/GraphiteTheme.xaml" />
+                <ResourceDictionary Source="Localization/Strings.en.xaml" />
+                <ResourceDictionary Source="Themes/BaseStyles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+            <converters:NullToVisibilityConverter x:Key="NotNullToVisibilityConverter" />
+            <converters:NullToVisibilityConverter x:Key="NullToVisibilityConverter" Inverse="True" />
+        </ResourceDictionary>
     </Application.Resources>
 </Application>
