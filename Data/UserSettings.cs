@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using SwitchBoard.Themes;
 
 namespace SwitchBoard.Data;
@@ -10,5 +11,9 @@ public sealed class UserSettings
 
     public string? LanguageId { get; set; }
 
-    public CustomThemeSettings CustomTheme { get; set; } = CustomThemeSettings.CreateDefault();
+    public List<CustomThemeDefinition> CustomThemes { get; set; } = [];
+
+    // Schema 4 compatibility. Migrated once at startup and omitted from subsequent JSON.
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public CustomThemeSettings? CustomTheme { get; set; }
 }

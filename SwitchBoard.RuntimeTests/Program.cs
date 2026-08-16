@@ -21,6 +21,21 @@ using SwitchBoard.Services.Logging;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 
+if (args is ["--program-run-tree-helper", var childPidPath])
+{
+    var helperPowerShellPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows),
+        "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
+    var childInfo = new ProcessStartInfo(helperPowerShellPath) { UseShellExecute = false };
+    childInfo.ArgumentList.Add("-NoProfile");
+    childInfo.ArgumentList.Add("-Command");
+    childInfo.ArgumentList.Add("Start-Sleep -Seconds 60");
+    using var child = Process.Start(childInfo);
+    if (child is null) return 2;
+    await File.WriteAllTextAsync(childPidPath, child.Id.ToString(System.Globalization.CultureInfo.InvariantCulture));
+    await Task.Delay(1000);
+    return 0;
+}
+
 var failures = new List<string>();
 
 static ActionDefinition Action(string type, JsonObject parameters, ActionFailurePolicy failurePolicy = ActionFailurePolicy.Continue) =>
@@ -198,18 +213,43 @@ try
     Check(!File.Exists(oldPath), "session cleanup removes only old fully restored sessions", failures);
 
     var settingsRepository = new JsonSettingsRepository(new AppDataPaths(Path.Combine(testRoot, "settings-appdata")));
+    var persistedTheme = new CustomThemeDefinition { Name = "First custom theme" };
+    persistedTheme.Colors.Accent = "#FF123456";
+    persistedTheme.Colors.SecondaryButtonBackground = "#FF223344";
+    persistedTheme.Colors.MenuBackground = "#FF334455";
+    persistedTheme.Colors.MenuHoverBackground = "#FF445566";
+    persistedTheme.Colors.SurfaceOpacity = 0.72;
+    persistedTheme.Colors.CategoriesPanelOpacity = 0.51;
+    persistedTheme.Colors.ProfilesPanelOpacity = 0.63;
+    persistedTheme.Colors.ProfileEditorPanelOpacity = 0.84;
+    persistedTheme.Colors.BackgroundAssetFileName = "background-test.gif";
     var customSettings = new UserSettings
     {
-        ThemeId = ThemeIds.Custom, LanguageId = "pl",
-        CustomTheme = CustomThemeSettings.CreateDefault()
+        ThemeId = persistedTheme.Id, LanguageId = "pl", CustomThemes = [persistedTheme]
     };
-    customSettings.CustomTheme.Accent = "#FF123456";
-    customSettings.CustomTheme.BackgroundAssetFileName = "background-test.gif";
     await settingsRepository.SaveAsync(customSettings);
     var customReloaded = await settingsRepository.LoadAsync();
-    Check(customReloaded.ThemeId == ThemeIds.Custom && customReloaded.CustomTheme.Accent == "#FF123456" &&
-          customReloaded.CustomTheme.BackgroundAssetFileName == "background-test.gif",
-        "Custom Theme colors and local background asset persist", failures);
+    Check(customReloaded.ThemeId == persistedTheme.Id && customReloaded.CustomThemes.Count == 1 &&
+          customReloaded.CustomThemes[0].Name == "First custom theme" &&
+          customReloaded.CustomThemes[0].Colors.Accent == "#FF123456" &&
+          customReloaded.CustomThemes[0].Colors.SecondaryButtonBackground == "#FF223344" &&
+          customReloaded.CustomThemes[0].Colors.MenuBackground == "#FF334455" &&
+          customReloaded.CustomThemes[0].Colors.MenuHoverBackground == "#FF445566" &&
+          Math.Abs(customReloaded.CustomThemes[0].Colors.SurfaceOpacity - 0.72) < 0.001 &&
+          Math.Abs(customReloaded.CustomThemes[0].Colors.CategoriesPanelOpacity - 0.51) < 0.001 &&
+          Math.Abs(customReloaded.CustomThemes[0].Colors.ProfilesPanelOpacity - 0.63) < 0.001 &&
+          Math.Abs(customReloaded.CustomThemes[0].Colors.ProfileEditorPanelOpacity - 0.84) < 0.001 &&
+          customReloaded.CustomThemes[0].Colors.BackgroundAssetFileName == "background-test.gif" &&
+          customReloaded.CustomThemes[0].CreatedAt != default && customReloaded.CustomThemes[0].UpdatedAt != default,
+        "Custom Theme collection, metadata, colors, and background persist", failures);
+    var legacyOpacity = CustomThemeSettings.CreateDefault();
+    legacyOpacity.Panel = "#80223344";
+    legacyOpacity.MigrateSurfaceOpacityFromLegacyAlpha();
+    Check(Math.Abs(legacyOpacity.SurfaceOpacity - 128d / 255) < 0.001 &&
+          legacyOpacity.CategoriesPanelOpacity == legacyOpacity.SurfaceOpacity &&
+          legacyOpacity.ProfilesPanelOpacity == legacyOpacity.SurfaceOpacity &&
+          legacyOpacity.ProfileEditorPanelOpacity == legacyOpacity.SurfaceOpacity,
+        "legacy custom surface alpha migrates to all opacity controls", failures);
     settingsRepository.Dispose();
     var logPaths = new AppDataPaths(Path.Combine(testRoot, "logging-appdata"));
     var testLogger = new RollingFileLogger(logPaths);
@@ -227,17 +267,58 @@ try
             Directory.CreateDirectory(themePaths.CustomThemeDirectory);
             CreateTestImages(themePaths.CustomThemeDirectory);
             var manager = new ThemeManager(themePaths);
+            app.Resources.MergedDictionaries.Add(new System.Windows.ResourceDictionary
+            {
+                Source = new Uri("/SwitchBoard;component/Themes/BaseStyles.xaml", UriKind.Relative)
+            });
             foreach (var theme in manager.AvailableThemes.Where(item => item.Id != ThemeIds.Custom))
             {
                 manager.ApplyTheme(theme.Id);
                 var required = new[] { "BackgroundBrush", "SurfaceBrush", "CardSurfaceBrush", "ElevatedSurfaceBrush",
                     "BorderBrush", "TextPrimaryBrush", "TextSecondaryBrush", "PrimaryButtonBackground",
-                    "PrimaryButtonForeground", "IconPrimary", "IconAccent", "IconMuted" };
+                    "PrimaryButtonForeground", "PrimaryButtonHoverForeground", "PrimaryButtonPressedForeground",
+                    "PrimaryButtonDisabledForeground", "SecondaryButtonBackground", "SecondaryButtonForeground",
+                    "SecondaryButtonDisabledBackground", "SecondaryButtonDisabledForeground", "MenuBackground",
+                    "MenuForeground", "MenuHoverBackground", "MenuHoverForeground", "MenuDisabledForeground",
+                    "SelectionForeground", "HoverForeground", "DisabledInputBackground", "DisabledInputForeground",
+                    "CategoriesSurfaceBrush", "ProfilesSurfaceBrush", "ProfileEditorSurfaceBrush",
+                    "IconPrimary", "IconAccent", "IconMuted" };
                 var complete = required.All(key => app.TryFindResource(key) is Brush);
-                var readable = app.TryFindResource("PrimaryButtonBackground") is SolidColorBrush button &&
-                               app.TryFindResource("PrimaryButtonForeground") is SolidColorBrush text &&
-                               ContrastRatio(button.Color, text.Color) >= 3.0;
-                themeTestResults.Add((complete && readable, $"theme contract and primary button contrast: {theme.Id}"));
+                var readable = SemanticContrastIsAccessible(app);
+                var rendered = RenderedSemanticControlsAreAccessible(app);
+                var editable = manager.CreateEditableCopy(theme.Id);
+                var editableColors = new[] { editable.Background, editable.Panel, editable.Card, editable.Elevated,
+                    editable.Border, editable.PrimaryText, editable.SecondaryText, editable.Accent, editable.Hover,
+                    editable.Selection, editable.PrimaryButtonBackground, editable.IconForeground };
+                var canCopy = editableColors.All(value => CustomThemeColorItemViewModel.TryColor(value, out _));
+                themeTestResults.Add((complete && readable && rendered && canCopy,
+                    $"rendered theme contract and WCAG contrast: {theme.Id} " +
+                    $"[complete={complete}, resources={readable}, controls={rendered}, copy={canCopy}]"));
+            }
+            foreach (var buttonColor in new[]
+                     {
+                         "#FFFFFFFF", "#FFE8E8EA", "#FF000000", "#FF24262B",
+                         "#FF1473E6", "#FFFFE600", "#FFFFFF66", "#FF07101F"
+                     })
+            {
+                var custom = CustomThemeSettings.CreateDefault();
+                custom.Background = buttonColor;
+                custom.PrimaryText = buttonColor;
+                custom.SecondaryText = buttonColor;
+                custom.Elevated = buttonColor;
+                custom.PrimaryButtonBackground = buttonColor;
+                custom.SecondaryButtonBackground = buttonColor;
+                custom.MenuBackground = buttonColor;
+                custom.MenuHoverBackground = buttonColor;
+                custom.Hover = buttonColor;
+                custom.Selection = buttonColor;
+                custom.Accent = buttonColor;
+                manager.ApplyTheme($"contrast-{buttonColor[3..]}", custom);
+                var accentBackground = ((SolidColorBrush)app.TryFindResource("AccentBrush")!).Color;
+                var accentForeground = ((SolidColorBrush)app.TryFindResource("AccentForegroundBrush")!).Color;
+                themeTestResults.Add((SemanticContrastIsAccessible(app) &&
+                                      ContrastRatio(accentBackground, accentForeground) >= 4.5,
+                    $"WCAG semantic contrast matrix: {buttonColor}"));
             }
             foreach (var asset in new[] { "test.jpg", "test.png", "test.bmp", "test.gif" })
             {
@@ -248,9 +329,86 @@ try
                     Path.Combine(themePaths.CustomThemeDirectory, asset), StringComparison.OrdinalIgnoreCase),
                     $"Custom background resource: {Path.GetExtension(asset)}"));
             }
+            var transparentSurfaces = CustomThemeSettings.CreateDefault();
+            transparentSurfaces.Background = "#FF102030";
+            transparentSurfaces.Border = "#AAABCDEF";
+            transparentSurfaces.SurfaceOpacity = 0.70;
+            transparentSurfaces.CategoriesPanelOpacity = 0.25;
+            transparentSurfaces.ProfilesPanelOpacity = 0.50;
+            transparentSurfaces.ProfileEditorPanelOpacity = 0.85;
+            transparentSurfaces.BackgroundOpacity = 0.37;
+            manager.ApplyTheme("surface-opacity", transparentSurfaces);
+            themeTestResults.Add((
+                ((SolidColorBrush)app.TryFindResource("BackgroundBrush")!).Color == Color.FromArgb(255, 16, 32, 48) &&
+                ((SolidColorBrush)app.TryFindResource("SurfaceBrush")!).Color.A == 178 &&
+                ((SolidColorBrush)app.TryFindResource("CardSurfaceBrush")!).Color.A == 178 &&
+                ((SolidColorBrush)app.TryFindResource("ElevatedSurfaceBrush")!).Color.A == 178 &&
+                ((SolidColorBrush)app.TryFindResource("CategoriesSurfaceBrush")!).Color.A == 64 &&
+                ((SolidColorBrush)app.TryFindResource("ProfilesSurfaceBrush")!).Color.A == 128 &&
+                ((SolidColorBrush)app.TryFindResource("ProfileEditorSurfaceBrush")!).Color.A == 217 &&
+                ((SolidColorBrush)app.TryFindResource("BorderBrush")!).Color.A == 170 &&
+                Math.Abs((double)app.TryFindResource("CustomBackgroundOpacity")! - 0.37) < 0.001,
+                "surface opacity changes only surface alpha and supports three independent main blocks"));
             using var gifStream = File.OpenRead(Path.Combine(themePaths.CustomThemeDirectory, "test.gif"));
             var gifDecoder = new GifBitmapDecoder(gifStream, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad);
             themeTestResults.Add((gifDecoder.Frames.Count == 2, "animated GIF decodes and caches two frames"));
+
+            var extreme = CustomThemeSettings.CreateDefault();
+            extreme.Background = "#FFFFFFFF";
+            extreme.Panel = "#FFFFFFFF";
+            extreme.Card = "#FFFFFFFF";
+            extreme.PrimaryText = "#FFFFFFFF";
+            extreme.SecondaryText = "#FF000000";
+            var liveApplyCount = 0;
+            var editor = new SwitchBoard.Views.CustomThemeWindow(
+                new CustomThemeEditRequest(CustomThemeEditMode.Add, "Extreme", extreme, [], "draft-live",
+                    settings =>
+                    {
+                        liveApplyCount++;
+                        manager.ApplyTemporary("draft-live", settings);
+                    }),
+                themePaths, new TestLocalizationService());
+            var editorBackground = ((SolidColorBrush)editor.Resources["EditorBackgroundBrush"]).Color;
+            var editorText = ((SolidColorBrush)editor.Resources["EditorTextBrush"]).Color;
+            var editorInput = ((SolidColorBrush)editor.Resources["EditorInputBrush"]).Color;
+            themeTestResults.Add((ContrastRatio(editorBackground, editorText) >= 12 &&
+                                  ContrastRatio(editorInput, editorText) >= 10,
+                "Custom Theme editor keeps fixed high-contrast dark resources for extreme theme colors"));
+            editor.ViewModel.Colors.First(item => item.Key == "primaryText").Color = "#FF000000";
+            editor.ViewModel.Colors.First(item => item.Key == "background").Color = "#FF000000";
+            themeTestResults.Add((((SolidColorBrush)editor.Resources["EditorTextBrush"]).Color == editorText,
+                "white/black live theme extremes cannot mutate the editor form colors"));
+            themeTestResults.Add((liveApplyCount >= 2 && manager.CurrentThemeId == "draft-live" &&
+                                  ((SolidColorBrush)app.TryFindResource("BackgroundBrush")!).Color == Colors.Black,
+                "theme editor draft updates the real application resources live"));
+            editor.ViewModel.SurfaceOpacityPercent = 68;
+            editor.ViewModel.CategoriesPanelOpacityPercent = 31;
+            themeTestResults.Add((Math.Abs(editor.ViewModel.Settings.SurfaceOpacity - 0.68) < 0.001 &&
+                                  Math.Abs(editor.ViewModel.Settings.CategoriesPanelOpacity - 0.31) < 0.001 &&
+                                  Math.Abs(editor.ViewModel.Settings.ProfilesPanelOpacity - 0.68) < 0.001 &&
+                                  ((SolidColorBrush)app.TryFindResource("CategoriesSurfaceBrush")!).Color.A == 79 &&
+                                  ((SolidColorBrush)app.TryFindResource("ProfilesSurfaceBrush")!).Color.A == 173,
+                "global and per-column opacity sliders live-apply independently"));
+            var originalName = editor.ViewModel.Name;
+            editor.ViewModel.Colors.First(item => item.Key == "accent").Color = "#FFFF0000";
+            editor.ViewModel.Reset();
+            themeTestResults.Add((editor.ViewModel.Name == originalName &&
+                                  editor.ViewModel.Settings.Accent == extreme.Accent,
+                "Reset changes only the current editor form values and preserves its name"));
+            editor.Close();
+            var pickerEvents = new List<Color>();
+            var picker = new SwitchBoard.Views.ThemeColorPickerWindow(Colors.White, new TestLocalizationService(),
+                color => pickerEvents.Add(color));
+            var pickerBackground = ((SolidColorBrush)picker.Background).Color;
+            var pickerText = ((SolidColorBrush)picker.Foreground).Color;
+            themeTestResults.Add((ContrastRatio(pickerBackground, pickerText) >= 12,
+                "ARGB color picker has a fixed high-contrast dark appearance"));
+            ((System.Windows.Controls.Slider)picker.FindName("Red")).Value = 16;
+            var livePickerUpdate = pickerEvents.LastOrDefault().R == 16;
+            ((System.Windows.Controls.Button)picker.FindName("CancelButton")).RaiseEvent(
+                new System.Windows.RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+            themeTestResults.Add((livePickerUpdate && pickerEvents.LastOrDefault() == Colors.White,
+                "ARGB picker live-applies slider changes and Cancel restores its color snapshot"));
         }
         finally { app.Shutdown(); }
     });
@@ -286,12 +444,16 @@ try
     var originalActionId = configurationCatalog.Profiles[0].Actions[0].Id;
     var testLocalization = new TestLocalizationService();
     var testCatalogService = new TestCatalogService();
+    var themeEditor = new TestCustomThemeEditorService();
+    var themeManager = new TestThemeManager();
+    var themeSettingsRepository = new TestSettingsRepository();
+    var editableSettings = new UserSettings { ThemeId = ThemeIds.Graphite, LanguageId = "en" };
     var main = new MainWindowViewModel(testCatalogService, new TestDialogService(), configurationCatalog,
-        new TestThemeManager(), testLocalization, new TestSettingsRepository(),
-        new UserSettings { ThemeId = ThemeIds.Graphite, LanguageId = "en" }, runner,
+        themeManager, testLocalization, themeSettingsRepository,
+        editableSettings, runner,
         new ProfileRestoreRunner(registry, sessionRepository), sessionRepository,
         new TestCompletionBehavior(), new TestDisplayManager(new("", "", "", 1, 1, 1, 32, 0, 0, 0, 0)),
-        new TestCustomThemeEditorService());
+        themeEditor);
 
     var initialActionCount = main.SelectedProfile!.Actions.Count;
     main.AddActionCommand.Execute(null);
@@ -367,6 +529,166 @@ try
               item.Actions.Any(action => action.Id == originalActionId)),
         "category/profile/action Save snapshot is restart-safe", failures);
 
+    var addCancelCount = editableSettings.CustomThemes.Count;
+    var savesBeforeCancelledAdd = themeSettingsRepository.SaveCount;
+    themeEditor.EditActions.Enqueue(request =>
+    {
+        var liveDraft = request.Colors.Clone();
+        liveDraft.Background = "#FFFF00FF";
+        request.ApplyTemporary?.Invoke(liveDraft);
+    });
+    themeEditor.Results.Enqueue(null);
+    main.AddThemeCommand.Execute(null);
+    await WaitUntilAsync(() => main.AddThemeCommand.CanExecute(null));
+    Check(editableSettings.CustomThemes.Count == addCancelCount &&
+          editableSettings.ThemeId == ThemeIds.Graphite && themeManager.CurrentThemeId == ThemeIds.Graphite &&
+          themeManager.TemporaryApplyCount >= 2 && themeSettingsRepository.SaveCount == savesBeforeCancelledAdd,
+        "Custom Theme add draft live-applies and Cancel leaves no collection item", failures);
+
+    var whiteTheme = CustomThemeSettings.CreateDefault();
+    whiteTheme.Background = "#FFFFFFFF";
+    whiteTheme.PrimaryText = "#FFFFFFFF";
+    themeEditor.Results.Enqueue(new("Snow", whiteTheme));
+    main.AddThemeCommand.Execute(null);
+    await WaitUntilAsync(() => editableSettings.CustomThemes.Count == 1);
+    var snowOption = main.ThemeOptions.Single(item => item.IsCustom);
+    Check(snowOption.DisplayName == "Snow" && snowOption.IsActive && editableSettings.ThemeId == snowOption.Id,
+        "Custom Theme create adds collection item and activates it", failures);
+    Check(themeSettingsRepository.Saved.CustomThemes.Single().Name == "Snow",
+        "Custom Theme create is persisted atomically", failures);
+
+    var restartThemeManager = new TestThemeManager();
+    restartThemeManager.ApplyTheme(themeSettingsRepository.Saved.ThemeId,
+        themeSettingsRepository.Saved.CustomThemes.Single().Colors);
+    var restartedMain = new MainWindowViewModel(testCatalogService, new TestDialogService(), configurationCatalog,
+        restartThemeManager, testLocalization, new TestSettingsRepository(), themeSettingsRepository.Saved,
+        runner, new ProfileRestoreRunner(registry, sessionRepository), sessionRepository,
+        new TestCompletionBehavior(), new TestDisplayManager(new("", "", "", 1, 1, 1, 32, 0, 0, 0, 0)),
+        new TestCustomThemeEditorService());
+    Check(restartedMain.ThemeOptions.Any(item => item.IsCustom && item.DisplayName == "Snow") &&
+          restartedMain.SelectedThemeOption?.DisplayName == "Snow",
+        "Custom Theme collection reloads with active selection after restart", failures);
+
+    var graphiteBeforeInactiveEdit = main.ThemeOptions.Single(item => item.Id == ThemeIds.Graphite);
+    main.SelectedThemeOption = graphiteBeforeInactiveEdit;
+    await WaitUntilAsync(() => editableSettings.ThemeId == ThemeIds.Graphite);
+    var persistedSnowBeforeCancel = editableSettings.CustomThemes.Single(item => item.Id == snowOption.Id).Colors.Clone();
+    themeEditor.EditActions.Enqueue(request =>
+    {
+        var liveDraft = request.Colors.Clone();
+        liveDraft.Card = "#FFFF00FF";
+        request.ApplyTemporary?.Invoke(liveDraft);
+    });
+    themeEditor.Results.Enqueue(null);
+    main.EditThemeCommand.Execute(snowOption.Id);
+    await WaitUntilAsync(() => main.EditThemeCommand.CanExecute(snowOption.Id));
+    Check(editableSettings.ThemeId == ThemeIds.Graphite && themeManager.CurrentThemeId == ThemeIds.Graphite &&
+          editableSettings.CustomThemes.Single(item => item.Id == snowOption.Id).Colors.Card == persistedSnowBeforeCancel.Card,
+        "editing an inactive theme live-applies and Cancel restores the previous active theme", failures);
+
+    var blackTheme = whiteTheme.Clone();
+    blackTheme.Background = "#FF000000";
+    blackTheme.PrimaryText = "#FF000000";
+    themeEditor.Results.Enqueue(new("Snow edited", blackTheme));
+    main.EditThemeCommand.Execute(snowOption.Id);
+    await WaitUntilAsync(() => snowOption.DisplayName == "Snow edited");
+    Check(editableSettings.CustomThemes.Single().Colors.Background == "#FF000000" && snowOption.IsActive,
+        "Custom Theme edit updates existing item without changing its ID", failures);
+
+    var countBeforeCancelledDuplicate = editableSettings.CustomThemes.Count;
+    themeEditor.EditActions.Enqueue(request => request.ApplyTemporary?.Invoke(request.Colors.Clone()));
+    themeEditor.Results.Enqueue(null);
+    main.DuplicateThemeCommand.Execute(snowOption.Id);
+    await WaitUntilAsync(() => main.DuplicateThemeCommand.CanExecute(snowOption.Id));
+    Check(editableSettings.CustomThemes.Count == countBeforeCancelledDuplicate &&
+          editableSettings.ThemeId == snowOption.Id && themeManager.CurrentThemeId == snowOption.Id,
+        "cancelled duplicate draft leaves no orphan and restores active theme", failures);
+
+    themeEditor.Results.Enqueue(new("Snow copy", blackTheme.Clone()));
+    main.DuplicateThemeCommand.Execute(snowOption.Id);
+    await WaitUntilAsync(() => editableSettings.CustomThemes.Count == 2);
+    var copiedOption = main.ThemeOptions.Single(item => item.IsCustom && item.DisplayName == "Snow copy");
+    Check(copiedOption.Id != snowOption.Id && copiedOption.IsActive,
+        "Custom Theme duplicate receives a new ID and becomes active", failures);
+
+    themeEditor.RenameResults.Enqueue("Renamed copy");
+    main.RenameThemeCommand.Execute(copiedOption.Id);
+    await WaitUntilAsync(() => copiedOption.DisplayName == "Renamed copy");
+    Check(editableSettings.CustomThemes.Any(item => item.Name == "Renamed copy"),
+        "Custom Theme rename updates persistence", failures);
+
+    main.DeleteThemeCommand.Execute(copiedOption.Id);
+    await WaitUntilAsync(() => editableSettings.CustomThemes.Count == 1);
+    Check(main.SelectedThemeOption?.Id == ThemeIds.Graphite && main.SelectedThemeOption.IsActive,
+        "deleting active Custom Theme returns to a built-in theme", failures);
+
+    var graphite = main.ThemeOptions.Single(item => item.Id == ThemeIds.Graphite);
+    themeEditor.Results.Enqueue(new("Graphite copy", CustomThemeSettings.CreateDefault()));
+    main.DuplicateThemeCommand.Execute(graphite.Id);
+    await WaitUntilAsync(() => editableSettings.CustomThemes.Count == 2);
+    Check(main.SelectedThemeOption?.DisplayName == "Graphite copy" && main.SelectedThemeOption.IsCustom,
+        "editing a built-in theme saves and activates a new copy", failures);
+
+    var duplicateNameVm = new CustomThemeEditorViewModel(new(
+        CustomThemeEditMode.Add, "Snow edited", CustomThemeSettings.CreateDefault(), ["Snow edited"]), testLocalization);
+    Check(!duplicateNameVm.IsNameValid && duplicateNameVm.NameError.Length > 0,
+        "identical Custom Theme names are rejected", failures);
+
+    var duplicateSources = new[]
+    {
+        new CustomThemeDefinition { Name = "First", Colors = CustomThemeSettings.CreateDefault() },
+        new CustomThemeDefinition { Name = "Second", Colors = CustomThemeSettings.CreateDefault() },
+        new CustomThemeDefinition { Name = "Last", Colors = CustomThemeSettings.CreateDefault() }
+    };
+    duplicateSources[0].Colors.Background = "#FF110000";
+    duplicateSources[0].Colors.PrimaryButtonBackground = "#FFFF1111";
+    duplicateSources[1].Colors.Background = "#FF001100";
+    duplicateSources[1].Colors.PrimaryButtonBackground = "#FF11FF11";
+    duplicateSources[2].Colors.Background = "#FF000011";
+    duplicateSources[2].Colors.PrimaryButtonBackground = "#FF1111FF";
+    var duplicateSettings = new UserSettings
+    {
+        ThemeId = duplicateSources[1].Id,
+        CustomThemes = duplicateSources.Select(item => item.Clone()).ToList()
+    };
+    var duplicateManager = new TestThemeManager();
+    duplicateManager.ApplyTheme(duplicateSettings.ThemeId, duplicateSettings.CustomThemes[1].Colors);
+    var duplicateEditor = new TestCustomThemeEditorService { EchoWhenEmpty = true };
+    var duplicateMain = new MainWindowViewModel(new TestCatalogService(), new TestDialogService(), configurationCatalog,
+        duplicateManager, testLocalization, new TestSettingsRepository(), duplicateSettings, runner,
+        new ProfileRestoreRunner(registry, sessionRepository), sessionRepository, new TestCompletionBehavior(),
+        new TestDisplayManager(new("", "", "", 1, 1, 1, 32, 0, 0, 0, 0)), duplicateEditor);
+    Check(duplicateMain.ThemeOptions.Single(item => item.Id == duplicateSources[1].Id).IsActive,
+        "duplication test starts with the second source active", failures);
+    var sourceIds = new[]
+    {
+        duplicateSources[1].Id, // active second
+        duplicateSources[0].Id, // inactive first
+        duplicateSources[2].Id, // inactive last
+        duplicateSources[0].Id,
+        duplicateSources[0].Id
+    };
+    foreach (var sourceId in sourceIds)
+    {
+        var sourceSnapshot = duplicateSettings.CustomThemes.Single(item => item.Id == sourceId).Colors.Clone();
+        var previousRequestCount = duplicateEditor.Requests.Count;
+        duplicateMain.DuplicateThemeCommand.Execute(sourceId);
+        await WaitUntilAsync(() => duplicateEditor.Requests.Count == previousRequestCount + 1 &&
+                                   duplicateMain.DuplicateThemeCommand.CanExecute(sourceId));
+        var request = duplicateEditor.Requests[^1];
+        var openedCopy = duplicateSettings.CustomThemes.SingleOrDefault(item => item.Id == request.ThemeId);
+        Check(request.ThemeId is not null && request.ThemeId != sourceId && openedCopy is not null &&
+              request.Colors.Background == sourceSnapshot.Background &&
+              request.Colors.PrimaryButtonBackground == sourceSnapshot.PrimaryButtonBackground &&
+              openedCopy.Colors.Background == sourceSnapshot.Background &&
+              !ReferenceEquals(openedCopy.Colors, duplicateSettings.CustomThemes.Single(item => item.Id == sourceId).Colors),
+            $"duplicate resolves exact source ID and opens exact new ID: {sourceId}", failures);
+    }
+    Check(duplicateSettings.CustomThemes.Any(item => item.Name == "First — copy") &&
+          duplicateSettings.CustomThemes.Any(item => item.Name == "First — copy (2)") &&
+          duplicateSettings.CustomThemes.Any(item => item.Name == "First — copy (3)"),
+        "multiple copies of one ThemeId receive deterministic unique names", failures);
+
     using (var notepad = Process.Start(new ProcessStartInfo("notepad.exe") { UseShellExecute = true }))
     {
         if (notepad is not null)
@@ -435,6 +757,76 @@ try
             }
             if (!preexisting.HasExited) preexisting.Kill();
         }
+    }
+
+    var treeHelperPath = Environment.ProcessPath;
+    var treeChildPidPath = Path.Combine(testRoot, "program-run-child.pid");
+    if (!string.IsNullOrWhiteSpace(treeHelperPath) &&
+        string.Equals(Path.GetExtension(treeHelperPath), ".exe", StringComparison.OrdinalIgnoreCase))
+    {
+        var treeAction = Action(ActionTypeIds.ProgramRun, new JsonObject
+        {
+            [ActionParameterNames.Target] = treeHelperPath,
+            [ActionParameterNames.Arguments] = $"--program-run-tree-helper \"{treeChildPidPath}\"",
+            [ActionParameterNames.StartOnlyIfNotAlreadyRunning] = false
+        });
+        treeAction.RestoreBehavior = ActionRestoreBehavior.CloseIfStartedBySwitchBoard;
+        var treeProfile = new ProfileDefinition
+        {
+            CategoryId = Guid.NewGuid(), Name = "Program process tree restore test", Actions = [treeAction]
+        };
+
+        var treeSession = await runner.RunAsync(treeProfile);
+        var treePending = await sessionRepository.GetLatestPendingAsync(treeProfile.Id);
+        await Task.Delay(1500);
+        var treeState = treePending?.Actions[0].PreviousState;
+        var rootPid = treeState?["processId"]?.GetValue<int>() ?? 0;
+        var childPid = File.Exists(treeChildPidPath) &&
+                       int.TryParse(await File.ReadAllTextAsync(treeChildPidPath), out var parsedChildPid)
+            ? parsedChildPid
+            : 0;
+        var trackedProcesses = treeState?["launchedProcesses"] as JsonArray;
+        Check(treeSession.Status == ExecutionSessionStatus.Completed && rootPid > 0 && childPid > 0 &&
+              trackedProcesses?.OfType<JsonObject>().Any(item =>
+                  item["processId"]?.GetValue<int>() == childPid) == true,
+            "program.run persists launcher and descendant process identities", failures);
+
+        var rootExitedBeforeRestore = rootPid > 0;
+        try
+        {
+            using var rootProcess = Process.GetProcessById(rootPid);
+            rootExitedBeforeRestore = rootProcess.HasExited;
+        }
+        catch (ArgumentException) { rootExitedBeforeRestore = true; }
+        Check(rootExitedBeforeRestore, "program.run test launcher exits before Restore", failures);
+
+        if (treePending is not null)
+            await new ProfileRestoreRunner(registry, sessionRepository).RunAsync(treePending);
+        await Task.Delay(300);
+
+        var childStillAlive = childPid > 0;
+        try
+        {
+            using var childProcess = Process.GetProcessById(childPid);
+            childStillAlive = !childProcess.HasExited;
+        }
+        catch (ArgumentException) { childStillAlive = false; }
+        Check(!childStillAlive,
+            "program.run Restore closes saved descendant after launcher has exited", failures);
+
+        foreach (var processId in new[] { rootPid, childPid }.Where(value => value > 0))
+        {
+            try
+            {
+                using var process = Process.GetProcessById(processId);
+                if (!process.HasExited) process.Kill(entireProcessTree: true);
+            }
+            catch (Exception exception) when (exception is ArgumentException or InvalidOperationException) { }
+        }
+    }
+    else
+    {
+        failures.Add("Runtime test executable path is unavailable for program.run process-tree test");
     }
 
     var powershellInfo = new ProcessStartInfo(powershellPath) { UseShellExecute = false };
@@ -794,6 +1186,104 @@ static double ContrastRatio(Color first, Color second)
     return (light + 0.05) / (dark + 0.05);
 }
 
+static bool SemanticContrastIsAccessible(System.Windows.Application app)
+{
+    var pairs = new[]
+    {
+        ("PrimaryButtonBackground", "PrimaryButtonForeground"),
+        ("PrimaryButtonHoverBackground", "PrimaryButtonHoverForeground"),
+        ("PrimaryButtonPressedBackground", "PrimaryButtonPressedForeground"),
+        ("PrimaryButtonDisabledBackground", "PrimaryButtonDisabledForeground"),
+        ("SecondaryButtonBackground", "SecondaryButtonForeground"),
+        ("SecondaryButtonHoverBackground", "SecondaryButtonHoverForeground"),
+        ("SecondaryButtonPressedBackground", "SecondaryButtonPressedForeground"),
+        ("SecondaryButtonDisabledBackground", "SecondaryButtonDisabledForeground"),
+        ("MenuBackground", "MenuForeground"),
+        ("MenuHoverBackground", "MenuHoverForeground"),
+        ("MenuPressedBackground", "MenuPressedForeground"),
+        ("MenuDisabledBackground", "MenuDisabledForeground"),
+        ("SelectedBrush", "SelectionForeground"),
+        ("HoverBrush", "HoverForeground"),
+        ("DisabledInputBackground", "DisabledInputForeground"),
+        ("BackgroundBrush", "TextPrimaryBrush"),
+        ("BackgroundBrush", "TextSecondaryBrush")
+    };
+    var applicationBackground = RepresentativeColor(app.TryFindResource("BackgroundBrush") as Brush, Colors.Black);
+    return pairs.All(pair => app.TryFindResource(pair.Item1) is Brush background &&
+                             app.TryFindResource(pair.Item2) is SolidColorBrush foreground &&
+                             BrushColors(background).All(color =>
+                                 ContrastRatio(Composite(color, applicationBackground), foreground.Color) >= 4.5));
+}
+
+static bool RenderedSemanticControlsAreAccessible(System.Windows.Application app)
+{
+    var secondary = new System.Windows.Controls.Button();
+    secondary.Style = app.TryFindResource(typeof(System.Windows.Controls.Button)) as System.Windows.Style;
+    var primary = new System.Windows.Controls.Button
+    {
+        Style = app.TryFindResource("AccentButton") as System.Windows.Style
+    };
+    var menu = new System.Windows.Controls.ContextMenu();
+    var menuItem = new System.Windows.Controls.MenuItem
+    {
+        Header = "Theme",
+        Style = app.TryFindResource(typeof(System.Windows.Controls.MenuItem)) as System.Windows.Style
+    };
+    menu.Items.Add(menuItem);
+
+    var normal = Matches(secondary, "SecondaryButtonBackground", "SecondaryButtonForeground") &&
+                 Matches(primary, "PrimaryButtonBackground", "PrimaryButtonForeground") &&
+                 Matches(menuItem, "MenuBackground", "MenuForeground");
+    secondary.IsEnabled = false;
+    primary.IsEnabled = false;
+    menuItem.IsEnabled = false;
+    return normal &&
+           Matches(secondary, "SecondaryButtonDisabledBackground", "SecondaryButtonDisabledForeground") &&
+           Matches(primary, "PrimaryButtonDisabledBackground", "PrimaryButtonDisabledForeground") &&
+           Matches(menuItem, "MenuDisabledBackground", "MenuDisabledForeground");
+
+    bool Matches(System.Windows.Controls.Control control, string backgroundKey, string foregroundKey) =>
+        control.Background is Brush actualBackground && control.Foreground is SolidColorBrush actualForeground &&
+        app.TryFindResource(backgroundKey) is Brush expectedBackground &&
+        app.TryFindResource(foregroundKey) is SolidColorBrush expectedForeground &&
+        BrushColors(actualBackground).SequenceEqual(BrushColors(expectedBackground)) &&
+        actualForeground.Color == expectedForeground.Color;
+}
+
+static IReadOnlyList<Color> BrushColors(Brush brush) => brush switch
+{
+    SolidColorBrush solid => [solid.Color],
+    GradientBrush gradient when gradient.GradientStops.Count > 0 => gradient.GradientStops.Select(stop => stop.Color).ToArray(),
+    _ => [Colors.Black]
+};
+
+static Color RepresentativeColor(Brush? brush, Color fallback)
+{
+    if (brush is null) return fallback;
+    var colors = BrushColors(brush);
+    return Color.FromArgb((byte)Math.Round(colors.Average(value => value.A)),
+        (byte)Math.Round(colors.Average(value => value.R)),
+        (byte)Math.Round(colors.Average(value => value.G)),
+        (byte)Math.Round(colors.Average(value => value.B)));
+}
+
+static Color Composite(Color foreground, Color background)
+{
+    if (foreground.A == byte.MaxValue) return foreground;
+    var alpha = foreground.A / 255d;
+    return Color.FromRgb(
+        (byte)Math.Round(foreground.R * alpha + background.R * (1 - alpha)),
+        (byte)Math.Round(foreground.G * alpha + background.G * (1 - alpha)),
+        (byte)Math.Round(foreground.B * alpha + background.B * (1 - alpha)));
+}
+
+static async Task WaitUntilAsync(Func<bool> predicate)
+{
+    for (var attempt = 0; attempt < 100 && !predicate(); attempt++)
+        await Task.Delay(20);
+    if (!predicate()) throw new TimeoutException("The asynchronous test condition was not reached.");
+}
+
 sealed class TestDisplayConfirmationService(bool result, TimeSpan? delay = null) : IDisplayConfirmationService
 {
     public async Task<bool> ConfirmAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
@@ -811,7 +1301,9 @@ sealed class TestLocalizationService : ILocalizationService
     public string DetectSystemLanguage() => "en";
     public string ApplyLanguage(string? languageId) => languageId ?? "en";
     public string GetString(string resourceKey) => resourceKey;
-    public string Format(string resourceKey, params object?[] arguments) => $"{resourceKey}: {string.Join(", ", arguments)}";
+    public string Format(string resourceKey, params object?[] arguments) => resourceKey == "CustomTheme.CopyName"
+        ? $"{arguments[0]} — copy"
+        : $"{resourceKey}: {string.Join(", ", arguments)}";
 }
 
 sealed class TestCatalogService : IProfileCatalogService
@@ -827,21 +1319,56 @@ sealed class TestCatalogService : IProfileCatalogService
 
 sealed class TestSettingsRepository : ISettingsRepository
 {
-    public Task<UserSettings> LoadAsync(CancellationToken cancellationToken = default) => Task.FromResult(new UserSettings());
-    public Task SaveAsync(UserSettings settings, CancellationToken cancellationToken = default) => Task.CompletedTask;
+    public UserSettings Saved { get; private set; } = new();
+    public int SaveCount { get; private set; }
+    public Task<UserSettings> LoadAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult(JsonSerializer.Deserialize<UserSettings>(JsonSerializer.Serialize(Saved))!);
+    public Task SaveAsync(UserSettings settings, CancellationToken cancellationToken = default)
+    {
+        SaveCount++;
+        Saved = JsonSerializer.Deserialize<UserSettings>(JsonSerializer.Serialize(settings))!;
+        return Task.CompletedTask;
+    }
 }
 
 sealed class TestThemeManager : IThemeManager
 {
     public IReadOnlyList<ThemeDefinition> AvailableThemes =>
         [new(ThemeIds.Graphite, "Graphite", new Uri("Themes/GraphiteTheme.xaml", UriKind.Relative))];
-    public string CurrentThemeId => ThemeIds.Graphite;
-    public string ApplyTheme(string? themeId, CustomThemeSettings? customTheme = null) => ThemeIds.Graphite;
+    public string CurrentThemeId { get; private set; } = ThemeIds.Graphite;
+    public string ApplyTheme(string? themeId, CustomThemeSettings? customTheme = null)
+    {
+        CurrentThemeId = customTheme is not null && !string.IsNullOrWhiteSpace(themeId) ? themeId : ThemeIds.Graphite;
+        return CurrentThemeId;
+    }
+    public string ApplyTemporary(string draftThemeId, CustomThemeSettings draft)
+    {
+        CurrentThemeId = draftThemeId;
+        LastTemporarySettings = draft.Clone();
+        TemporaryApplyCount++;
+        return CurrentThemeId;
+    }
+    public CustomThemeSettings? LastTemporarySettings { get; private set; }
+    public int TemporaryApplyCount { get; private set; }
+    public CustomThemeSettings CreateEditableCopy(string builtInThemeId) => CustomThemeSettings.CreateDefault();
 }
 
 sealed class TestCustomThemeEditorService : ICustomThemeEditorService
 {
-    public CustomThemeSettings? Edit(CustomThemeSettings current, Action<CustomThemeSettings> livePreview) => null;
+    public Queue<CustomThemeEditResult?> Results { get; } = [];
+    public Queue<Action<CustomThemeEditRequest>> EditActions { get; } = [];
+    public Queue<string?> RenameResults { get; } = [];
+    public List<CustomThemeEditRequest> Requests { get; } = [];
+    public bool EchoWhenEmpty { get; set; }
+    public CustomThemeEditResult? Edit(CustomThemeEditRequest request)
+    {
+        Requests.Add(request with { Colors = request.Colors.Clone() });
+        if (EditActions.Count > 0) EditActions.Dequeue()(request);
+        return Results.Count > 0 ? Results.Dequeue()
+            : EchoWhenEmpty ? new(request.Name, request.Colors.Clone()) : null;
+    }
+    public string? Rename(string currentName, IReadOnlyCollection<string> unavailableNames) =>
+        RenameResults.Count > 0 ? RenameResults.Dequeue() : null;
 }
 
 sealed class TestCompletionBehavior : IProfileCompletionBehavior

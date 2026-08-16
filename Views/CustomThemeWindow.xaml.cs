@@ -1,13 +1,12 @@
 using System.ComponentModel;
 using System.IO;
-using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Interop;
 using System.Windows.Media;
 using Microsoft.Win32;
 using SwitchBoard.Data;
 using SwitchBoard.Localization;
+using SwitchBoard.Services;
 using SwitchBoard.Themes;
 using SwitchBoard.ViewModels;
 
@@ -17,32 +16,38 @@ public partial class CustomThemeWindow : Window
 {
     private readonly AppDataPaths _paths;
     private readonly ILocalizationService _localization;
-    private readonly Action<CustomThemeSettings> _preview;
-    private readonly CustomThemeSettings _initial;
     private readonly List<string> _createdAssets = [];
     private bool _saved;
 
-    public CustomThemeWindow(CustomThemeSettings current, AppDataPaths paths, ILocalizationService localization,
-        Action<CustomThemeSettings> preview)
+    public CustomThemeWindow(CustomThemeEditRequest request, AppDataPaths paths, ILocalizationService localization)
     {
         InitializeComponent();
         _paths = paths;
         _localization = localization;
-        _preview = preview;
-        _initial = current.Clone();
-        ViewModel = new CustomThemeEditorViewModel(current.Clone(), localization, preview);
+        var prepared = request.Colors.Clone();
+        if (!string.IsNullOrWhiteSpace(prepared.BackgroundAssetFileName))
+        {
+            var backgroundPath = Path.Combine(paths.CustomThemeDirectory, prepared.BackgroundAssetFileName);
+            if (File.Exists(backgroundPath)) prepared.PreviewBackgroundPath = backgroundPath;
+        }
+        ViewModel = new CustomThemeEditorViewModel(request with { Colors = prepared }, localization);
         DataContext = ViewModel;
     }
 
     public CustomThemeEditorViewModel ViewModel { get; }
-    public CustomThemeSettings? Result { get; private set; }
+    public CustomThemeEditResult? Result { get; private set; }
 
     private void ColorButton_OnClick(object sender, RoutedEventArgs e)
     {
         if (sender is not Button { DataContext: CustomThemeColorItemViewModel item }) return;
         var initial = CustomThemeColorItemViewModel.TryColor(item.Color, out var color) ? color : Colors.White;
-        if (NativeColorPicker.TryChoose(new WindowInteropHelper(this).Handle, initial, out var selected))
-            item.Color = selected.ToString();
+        var initialText = item.Color;
+        var picker = new ThemeColorPickerWindow(initial, _localization,
+            selected => item.Color = selected.ToString()) { Owner = this };
+        if (picker.ShowDialog() == true)
+            item.Color = picker.SelectedColor.ToString();
+        else
+            item.Color = initialText;
     }
 
     private void ChooseImage_OnClick(object sender, RoutedEventArgs e)
@@ -93,7 +98,7 @@ public partial class CustomThemeWindow : Window
         ViewModel.Warning = string.Empty;
     }
 
-    private void Reset_OnClick(object sender, RoutedEventArgs e) => ViewModel.Reset(_localization);
+    private void Reset_OnClick(object sender, RoutedEventArgs e) => ViewModel.Reset();
     private void Cancel_OnClick(object sender, RoutedEventArgs e) => Close();
 
     private void Save_OnClick(object sender, RoutedEventArgs e)
@@ -103,23 +108,28 @@ public partial class CustomThemeWindow : Window
             ViewModel.Warning = _localization.GetString("CustomTheme.InvalidColor");
             return;
         }
-        Result = ViewModel.Settings.Clone();
-        Result.PreviewBackgroundPath = null;
+        if (!ViewModel.IsNameValid)
+        {
+            ViewModel.Warning = ViewModel.NameError;
+            return;
+        }
+        var colors = ViewModel.Settings.Clone();
+        colors.PreviewBackgroundPath = null;
+        Result = new CustomThemeEditResult(ViewModel.Name.Trim(), colors);
         _saved = true;
         DialogResult = true;
     }
 
     protected override void OnClosing(CancelEventArgs e)
     {
-        if (!_saved) _preview(_initial);
         CleanupAssets();
         base.OnClosing(e);
     }
 
     private void CleanupAssets()
     {
-        var kept = _saved && !string.IsNullOrWhiteSpace(Result?.BackgroundAssetFileName)
-            ? Path.GetFullPath(Path.Combine(_paths.CustomThemeDirectory, Result.BackgroundAssetFileName))
+        var kept = _saved && !string.IsNullOrWhiteSpace(Result?.Colors.BackgroundAssetFileName)
+            ? Path.GetFullPath(Path.Combine(_paths.CustomThemeDirectory, Result.Colors.BackgroundAssetFileName))
             : null;
         foreach (var asset in _createdAssets)
         {
@@ -130,42 +140,4 @@ public partial class CustomThemeWindow : Window
         // last good settings.json reference a missing file if the subsequent atomic settings save fails.
     }
 
-    private static class NativeColorPicker
-    {
-        private static readonly uint[] CustomColors = new uint[16];
-
-        public static bool TryChoose(IntPtr owner, Color initial, out Color selected)
-        {
-            var colors = Marshal.AllocHGlobal(sizeof(uint) * CustomColors.Length);
-            try
-            {
-                Marshal.Copy(CustomColors.Select(value => unchecked((int)value)).ToArray(), 0, colors, CustomColors.Length);
-                var value = new ChooseColor
-                {
-                    StructSize = Marshal.SizeOf<ChooseColor>(), Owner = owner,
-                    ResultColor = (uint)(initial.R | initial.G << 8 | initial.B << 16),
-                    CustomColors = colors, Flags = 0x00000001 | 0x00000100
-                };
-                if (!ChooseColorDialog(ref value)) { selected = initial; return false; }
-                var raw = value.ResultColor;
-                selected = Color.FromArgb(255, (byte)(raw & 0xFF), (byte)((raw >> 8) & 0xFF), (byte)((raw >> 16) & 0xFF));
-                var copied = new int[CustomColors.Length];
-                Marshal.Copy(colors, copied, 0, copied.Length);
-                for (var index = 0; index < copied.Length; index++) CustomColors[index] = unchecked((uint)copied[index]);
-                return true;
-            }
-            finally { Marshal.FreeHGlobal(colors); }
-        }
-
-        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-        private struct ChooseColor
-        {
-            public int StructSize; public IntPtr Owner; public IntPtr Instance; public uint ResultColor;
-            public IntPtr CustomColors; public uint Flags; public IntPtr CustomData; public IntPtr Hook; public string? TemplateName;
-        }
-
-        [DllImport("comdlg32.dll", CharSet = CharSet.Unicode, EntryPoint = "ChooseColorW")]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        private static extern bool ChooseColorDialog(ref ChooseColor value);
-    }
 }

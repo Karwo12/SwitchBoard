@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Controls;
 using System.ComponentModel;
 using SwitchBoard.ViewModels;
 
@@ -11,6 +12,14 @@ public partial class MainWindow : Window
         InitializeComponent();
         DataContext = viewModel;
         Closing += OnClosing;
+    }
+
+    private void ThemeMenuButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { ContextMenu: { } menu } button) return;
+        menu.PlacementTarget = button;
+        menu.IsOpen = true;
+        e.Handled = true;
     }
 
     private void OnClosing(object? sender, CancelEventArgs e)

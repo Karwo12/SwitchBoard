@@ -6,7 +6,8 @@
              mc:Ignorable="d"
              d:DesignHeight="640"
              d:DesignWidth="700">
-    <ContentControl Padding="24,22,24,68" Style="{StaticResource GlassPanel}">
+    <ContentControl Padding="24,22,24,68" Background="{DynamicResource ProfileEditorSurfaceBrush}"
+                    Style="{StaticResource GlassPanel}">
         <Grid>
             <StackPanel HorizontalAlignment="Center"
                         VerticalAlignment="Center"

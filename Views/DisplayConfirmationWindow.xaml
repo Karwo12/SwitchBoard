@@ -12,7 +12,7 @@
                 <TextBlock HorizontalAlignment="Center" FontSize="18" FontWeight="SemiBold"
                            Text="{DynamicResource DisplayConfirmation.Question}" TextAlignment="Center" TextWrapping="Wrap"/>
                 <TextBlock Margin="0,14,0,0" HorizontalAlignment="Center" FontSize="28" FontWeight="Bold"
-                           Foreground="{DynamicResource AccentBrush}" Text="{Binding CountdownText}"/>
+                                   Foreground="{DynamicResource TextPrimaryBrush}" Text="{Binding CountdownText}"/>
                 <TextBlock Margin="0,8,0,0" HorizontalAlignment="Center" Style="{StaticResource CaptionText}"
                            Text="{DynamicResource DisplayConfirmation.TimeoutHint}" TextAlignment="Center" TextWrapping="Wrap"/>
             </StackPanel>

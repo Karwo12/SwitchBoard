@@ -2,5 +2,6 @@ namespace SwitchBoard.Data;
 
 public static class SettingsSchema
 {
-    public const int CurrentVersion = 4;
+    public const int SurfaceOpacityVersion = 8;
+    public const int CurrentVersion = 8;
 }

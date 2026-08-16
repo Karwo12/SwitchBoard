@@ -4,5 +4,19 @@ namespace SwitchBoard.Services;
 
 public interface ICustomThemeEditorService
 {
-    CustomThemeSettings? Edit(CustomThemeSettings current, Action<CustomThemeSettings> livePreview);
+    CustomThemeEditResult? Edit(CustomThemeEditRequest request);
+
+    string? Rename(string currentName, IReadOnlyCollection<string> unavailableNames);
 }
+
+public enum CustomThemeEditMode { Add, EditCustom, CopyBuiltIn, DuplicateCustom }
+
+public sealed record CustomThemeEditRequest(
+    CustomThemeEditMode Mode,
+    string Name,
+    CustomThemeSettings Colors,
+    IReadOnlyCollection<string> UnavailableNames,
+    string? ThemeId = null,
+    Action<CustomThemeSettings>? ApplyTemporary = null);
+
+public sealed record CustomThemeEditResult(string Name, CustomThemeSettings Colors);

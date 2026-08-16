@@ -91,7 +91,8 @@
                 <ColumnDefinition Width="2.4*" MinWidth="420" />
             </Grid.ColumnDefinitions>
 
-            <ContentControl Grid.Column="0" Style="{StaticResource GlassPanel}">
+            <ContentControl Grid.Column="0" Background="{DynamicResource CategoriesSurfaceBrush}"
+                            Style="{StaticResource GlassPanel}">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
@@ -174,7 +175,8 @@
             <GridSplitter Grid.Column="1" Width="6" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
                           Background="Transparent" Cursor="SizeWE" ShowsPreview="True" />
 
-            <ContentControl Grid.Column="2" Style="{StaticResource GlassPanel}">
+            <ContentControl Grid.Column="2" Background="{DynamicResource ProfilesSurfaceBrush}"
+                            Style="{StaticResource GlassPanel}">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
@@ -337,22 +339,55 @@
                         <TextBlock Margin="0,7,0,6"
                                    Style="{StaticResource CaptionText}"
                                    Text="{DynamicResource Settings.Theme}" />
-                        <ComboBox ItemsSource="{Binding ThemeOptions}"
-                                  DisplayMemberPath="DisplayName"
-                                  SelectedItem="{Binding SelectedThemeOption, Mode=TwoWay}" />
-                        <Button Margin="0,9,0,0" Command="{Binding CustomizeThemeCommand}"
-                                Content="{DynamicResource Settings.CustomizeTheme}">
-                            <Button.Style>
-                                <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-                                    <Setter Property="Visibility" Value="Collapsed" />
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding SelectedThemeOption.Id}" Value="custom">
-                                            <Setter Property="Visibility" Value="Visible" />
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Button.Style>
-                        </Button>
+                        <ListBox MaxHeight="270" ItemsSource="{Binding ThemeOptions}"
+                                 SelectedItem="{Binding SelectedThemeOption, Mode=TwoWay}"
+                                 ScrollViewer.VerticalScrollBarVisibility="Auto">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Margin="4,2" MinHeight="30">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="16"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                        <Ellipse Width="7" Height="7" Fill="{DynamicResource AccentBrush}"
+                                                 Visibility="{Binding IsActive, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                        <TextBlock Grid.Column="1" Margin="3,0,7,0" VerticalAlignment="Center" Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis" />
+                                        <Button Grid.Column="2" Width="28" Height="26" Padding="0" Content="⋯"
+                                                DataContext="{Binding}" Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                Click="ThemeMenuButton_OnClick" ToolTip="{DynamicResource CustomTheme.Manage}">
+                                            <Button.ContextMenu>
+                                                <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+                                                    <MenuItem Header="{DynamicResource CustomTheme.DuplicateAndEdit}"
+                                                              Command="{Binding PlacementTarget.Tag.DuplicateThemeCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                              CommandParameter="{Binding Id}">
+                                                        <MenuItem.Style><Style TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding IsBuiltIn}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></MenuItem.Style>
+                                                    </MenuItem>
+                                                    <MenuItem Header="{DynamicResource CustomTheme.Edit}"
+                                                              Command="{Binding PlacementTarget.Tag.EditThemeCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                              CommandParameter="{Binding Id}">
+                                                        <MenuItem.Style><Style TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding IsCustom}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></MenuItem.Style>
+                                                    </MenuItem>
+                                                    <MenuItem Header="{DynamicResource CustomTheme.Duplicate}"
+                                                              Command="{Binding PlacementTarget.Tag.DuplicateThemeCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                              CommandParameter="{Binding Id}">
+                                                        <MenuItem.Style><Style TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding IsCustom}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></MenuItem.Style>
+                                                    </MenuItem>
+                                                    <MenuItem Header="{DynamicResource CustomTheme.Rename}"
+                                                              Command="{Binding PlacementTarget.Tag.RenameThemeCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                              CommandParameter="{Binding Id}">
+                                                        <MenuItem.Style><Style TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding IsCustom}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></MenuItem.Style>
+                                                    </MenuItem>
+                                                    <Separator />
+                                                    <MenuItem Header="{DynamicResource CustomTheme.Delete}"
+                                                              Command="{Binding PlacementTarget.Tag.DeleteThemeCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                              CommandParameter="{Binding Id}">
+                                                        <MenuItem.Style><Style TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding IsCustom}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></MenuItem.Style>
+                                                    </MenuItem>
+                                                </ContextMenu>
+                                            </Button.ContextMenu>
+                                        </Button>
+                                    </Grid>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                        <Button Margin="0,9,0,0" Command="{Binding AddThemeCommand}" Content="{DynamicResource CustomTheme.AddWithPlus}" />
 
                         <Border Height="1" Margin="0,18" Background="{DynamicResource BorderBrush}" />
 

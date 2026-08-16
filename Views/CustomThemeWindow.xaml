@@ -1,55 +1,214 @@
 <Window x:Class="SwitchBoard.Views.CustomThemeWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="{DynamicResource CustomTheme.Title}" Width="620" Height="700" MinWidth="500" MinHeight="480"
-        WindowStartupLocation="CenterOwner" ResizeMode="CanResizeWithGrip">
+        Title="{Binding WindowTitle}" Width="760" Height="780" MinWidth="620" MinHeight="560"
+        WindowStartupLocation="CenterOwner" ResizeMode="CanResizeWithGrip"
+        Background="#FF0D0F13" Foreground="#FFF2F4F8">
+    <Window.Resources>
+        <SolidColorBrush x:Key="EditorBackgroundBrush" Color="#FF0D0F13" />
+        <SolidColorBrush x:Key="EditorPanelBrush" Color="#FF15181F" />
+        <SolidColorBrush x:Key="EditorCardBrush" Color="#FF1D212A" />
+        <SolidColorBrush x:Key="EditorInputBrush" Color="#FF232833" />
+        <SolidColorBrush x:Key="EditorHoverBrush" Color="#FF303746" />
+        <SolidColorBrush x:Key="EditorBorderBrush" Color="#FF3A4251" />
+        <SolidColorBrush x:Key="EditorTextBrush" Color="#FFF2F4F8" />
+        <SolidColorBrush x:Key="EditorMutedBrush" Color="#FFAAB2C0" />
+        <SolidColorBrush x:Key="EditorAccentBrush" Color="#FF72A7FF" />
+        <SolidColorBrush x:Key="EditorDangerBrush" Color="#FFFF7886" />
+        <SolidColorBrush x:Key="EditorPrimaryHoverBrush" Color="#FF8DBAFF" />
+        <SolidColorBrush x:Key="EditorPrimaryPressedBrush" Color="#FF3D6EAF" />
+        <SolidColorBrush x:Key="EditorDisabledBrush" Color="#FF343B47" />
+        <SolidColorBrush x:Key="EditorDisabledTextBrush" Color="#FFF7F8FA" />
+
+        <Style TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource EditorTextBrush}" />
+        </Style>
+        <Style x:Key="EditorSectionTitle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="20" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style x:Key="EditorCaption" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource EditorMutedBrush}" />
+            <Setter Property="FontSize" Value="12" />
+        </Style>
+        <Style x:Key="EditorEyebrow" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource EditorMutedBrush}" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style TargetType="TextBox">
+            <Setter Property="Foreground" Value="{StaticResource EditorTextBrush}" />
+            <Setter Property="Background" Value="{StaticResource EditorInputBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource EditorBorderBrush}" />
+            <Setter Property="CaretBrush" Value="{StaticResource EditorTextBrush}" />
+            <Setter Property="SelectionBrush" Value="{StaticResource EditorAccentBrush}" />
+            <Setter Property="Padding" Value="9,7" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+        <Style TargetType="Button">
+            <Setter Property="Foreground" Value="{StaticResource EditorTextBrush}" />
+            <Setter Property="Background" Value="{StaticResource EditorInputBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource EditorBorderBrush}" />
+            <Setter Property="Padding" Value="12,8" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Border" Padding="{TemplateBinding Padding}" CornerRadius="6"
+                                Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Border" Property="Background" Value="{StaticResource EditorHoverBrush}" /></Trigger>
+                            <Trigger Property="IsPressed" Value="True"><Setter TargetName="Border" Property="Background" Value="#FF171B22" /></Trigger>
+                            <Trigger Property="IsEnabled" Value="False"><Setter TargetName="Border" Property="Background" Value="{StaticResource EditorDisabledBrush}"/><Setter Property="Foreground" Value="{StaticResource EditorDisabledTextBrush}"/><Setter Property="Cursor" Value="Arrow"/></Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="EditorPrimaryButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Background" Value="{StaticResource EditorAccentBrush}" />
+            <Setter Property="Foreground" Value="#FF08101D" />
+            <Setter Property="BorderBrush" Value="{StaticResource EditorAccentBrush}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="PrimaryBorder" Padding="{TemplateBinding Padding}" CornerRadius="6"
+                                Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="PrimaryBorder" Property="Background" Value="{StaticResource EditorPrimaryHoverBrush}"/></Trigger>
+                            <Trigger Property="IsPressed" Value="True"><Setter TargetName="PrimaryBorder" Property="Background" Value="{StaticResource EditorPrimaryPressedBrush}"/><Setter Property="Foreground" Value="{StaticResource EditorDisabledTextBrush}"/></Trigger>
+                            <Trigger Property="IsEnabled" Value="False"><Setter TargetName="PrimaryBorder" Property="Background" Value="{StaticResource EditorDisabledBrush}"/><Setter Property="Foreground" Value="{StaticResource EditorDisabledTextBrush}"/><Setter Property="Cursor" Value="Arrow"/></Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style TargetType="ComboBox">
+            <Setter Property="Foreground" Value="{StaticResource EditorTextBrush}" />
+            <Setter Property="Background" Value="{StaticResource EditorInputBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource EditorBorderBrush}" />
+            <Setter Property="Padding" Value="7" />
+        </Style>
+        <Style TargetType="ComboBoxItem">
+            <Setter Property="Foreground" Value="{StaticResource EditorTextBrush}" />
+            <Setter Property="Background" Value="{StaticResource EditorInputBrush}" />
+            <Setter Property="Padding" Value="8,6" />
+        </Style>
+        <Style TargetType="Slider">
+            <Setter Property="Foreground" Value="{StaticResource EditorAccentBrush}" />
+        </Style>
+        <Style TargetType="ScrollBar">
+            <Setter Property="Width" Value="10" />
+            <Setter Property="Background" Value="{StaticResource EditorPanelBrush}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ScrollBar">
+                        <Grid Background="{TemplateBinding Background}">
+                            <Track x:Name="PART_Track" Orientation="{TemplateBinding Orientation}" IsDirectionReversed="True">
+                                <Track.DecreaseRepeatButton><RepeatButton Command="ScrollBar.PageUpCommand" Opacity="0" /></Track.DecreaseRepeatButton>
+                                <Track.Thumb><Thumb Background="{StaticResource EditorBorderBrush}" MinHeight="28" MinWidth="28" /></Track.Thumb>
+                                <Track.IncreaseRepeatButton><RepeatButton Command="ScrollBar.PageDownCommand" Opacity="0" /></Track.IncreaseRepeatButton>
+                            </Track>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="Orientation" Value="Horizontal"><Setter Property="Height" Value="10" /><Setter Property="Width" Value="Auto" /></Trigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+
     <Grid Margin="22">
         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
         <StackPanel>
-            <TextBlock Style="{StaticResource SectionTitle}" Text="{DynamicResource CustomTheme.Title}" />
-            <TextBlock Margin="0,4,0,16" Style="{StaticResource CaptionText}" Text="{DynamicResource CustomTheme.Subtitle}" TextWrapping="Wrap" />
+            <TextBlock Style="{StaticResource EditorSectionTitle}" Text="{Binding WindowTitle}" />
+            <TextBlock Margin="0,4,0,16" Style="{StaticResource EditorCaption}" Text="{DynamicResource CustomTheme.FixedEditorSubtitle}" TextWrapping="Wrap" />
         </StackPanel>
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" CanContentScroll="False">
-            <StackPanel Margin="0,0,8,0">
-                <TextBlock Style="{StaticResource EyebrowText}" Text="{DynamicResource CustomTheme.Colors}" />
-                <ItemsControl Margin="0,8,0,0" ItemsSource="{Binding Colors}">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <Grid Margin="0,0,0,8">
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="42"/><ColumnDefinition Width="130"/></Grid.ColumnDefinitions>
-                                <TextBlock VerticalAlignment="Center" Text="{Binding DisplayName}" />
-                                <Button Grid.Column="1" Margin="5,0" Padding="4" Click="ColorButton_OnClick" ToolTip="{DynamicResource CustomTheme.ChooseColor}">
-                                    <Border Width="22" Height="22" CornerRadius="5" Background="{Binding PreviewBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" />
-                                </Button>
-                                <TextBox Grid.Column="2" Text="{Binding Color, UpdateSourceTrigger=PropertyChanged}" />
-                            </Grid>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
 
-                <Border Height="1" Margin="0,12" Background="{DynamicResource BorderBrush}" />
-                <TextBlock Style="{StaticResource EyebrowText}" Text="{DynamicResource CustomTheme.BackgroundImage}" />
-                <TextBlock Margin="0,5,0,8" Style="{StaticResource CaptionText}" Text="{Binding BackgroundFileName}" TextTrimming="CharacterEllipsis" />
-                <StackPanel Orientation="Horizontal">
-                    <Button Click="ChooseImage_OnClick" Content="{DynamicResource CustomTheme.ChooseImage}" />
-                    <Button Margin="8,0,0,0" Click="RemoveImage_OnClick" Content="{DynamicResource CustomTheme.RemoveBackground}" />
-                </StackPanel>
-                <TextBlock Margin="0,9,0,0" Foreground="{DynamicResource DangerBrush}" Text="{Binding Warning}" TextWrapping="Wrap" />
+        <Grid Grid.Row="1">
+            <Border Background="{StaticResource EditorPanelBrush}" BorderBrush="{StaticResource EditorBorderBrush}" BorderThickness="1" CornerRadius="10" Padding="16">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" CanContentScroll="False">
+                    <StackPanel Margin="0,0,8,0">
+                        <TextBlock Style="{StaticResource EditorEyebrow}" Text="{DynamicResource CustomTheme.ThemeName}" />
+                        <TextBox Margin="0,7,0,0" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Margin="0,5,0,12" Foreground="{StaticResource EditorDangerBrush}" Text="{Binding NameError}" TextWrapping="Wrap" />
 
-                <TextBlock Margin="0,15,0,6" Style="{StaticResource EyebrowText}" Text="{DynamicResource CustomTheme.ImageFit}" />
-                <ComboBox ItemsSource="{Binding ImageFitOptions}" DisplayMemberPath="DisplayName" SelectedValuePath="Value"
-                          SelectedValue="{Binding ImageFit, Mode=TwoWay}" />
-                <TextBlock Margin="0,15,0,5" Style="{StaticResource EyebrowText}" Text="{DynamicResource CustomTheme.BackgroundOpacity}" />
-                <DockPanel><TextBlock DockPanel.Dock="Right" Margin="10,0,0,0" Text="{Binding BackgroundOpacityPercent, StringFormat={}{0:0}%}"/><Slider Minimum="0" Maximum="100" Value="{Binding BackgroundOpacityPercent}" /></DockPanel>
-                <TextBlock Margin="0,15,0,5" Style="{StaticResource EyebrowText}" Text="{DynamicResource CustomTheme.DarkOverlay}" />
-                <DockPanel><TextBlock DockPanel.Dock="Right" Margin="10,0,0,0" Text="{Binding DarkOverlayPercent, StringFormat={}{0:0}%}"/><Slider Minimum="0" Maximum="100" Value="{Binding DarkOverlayPercent}" /></DockPanel>
-            </StackPanel>
-        </ScrollViewer>
+                        <TextBlock Style="{StaticResource EditorEyebrow}" Text="{DynamicResource CustomTheme.Colors}" />
+                        <ItemsControl Margin="0,8,0,0" ItemsSource="{Binding Colors}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Margin="0,0,0,8">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="42"/><ColumnDefinition Width="126"/></Grid.ColumnDefinitions>
+                                        <TextBlock VerticalAlignment="Center" Foreground="{StaticResource EditorMutedBrush}" Text="{Binding DisplayName}" />
+                                        <Button Grid.Column="1" Margin="5,0" Padding="4" Click="ColorButton_OnClick" ToolTip="{DynamicResource CustomTheme.ChooseColor}">
+                                            <Border Width="22" Height="22" CornerRadius="5" Background="{Binding PreviewBrush}" BorderBrush="{StaticResource EditorBorderBrush}" BorderThickness="1" />
+                                        </Button>
+                                        <TextBox Grid.Column="2" Text="{Binding Color, UpdateSourceTrigger=PropertyChanged}" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <TextBlock Margin="0,2,0,10" Style="{StaticResource EditorCaption}"
+                                   Text="{DynamicResource CustomTheme.AutomaticForegroundHint}" TextWrapping="Wrap" />
+
+                        <TextBlock Margin="0,10,0,5" Style="{StaticResource EditorEyebrow}"
+                                   Text="{DynamicResource CustomTheme.SurfaceOpacity}" />
+                        <DockPanel>
+                            <TextBlock DockPanel.Dock="Right" Margin="10,0,0,0"
+                                       Text="{Binding SurfaceOpacityPercent, StringFormat={}{0:0}%}" />
+                            <Slider Minimum="0" Maximum="100" Value="{Binding SurfaceOpacityPercent}" />
+                        </DockPanel>
+                        <TextBlock Margin="0,5,0,2" Style="{StaticResource EditorCaption}"
+                                   Text="{DynamicResource CustomTheme.SurfaceOpacityHint}" TextWrapping="Wrap" />
+                        <Grid Margin="0,12,0,0">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="18"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource EditorEyebrow}" Text="{DynamicResource CustomTheme.CategoriesOpacity}" />
+                                <DockPanel Margin="0,5,0,0"><TextBlock DockPanel.Dock="Right" Margin="8,0,0,0" Text="{Binding CategoriesPanelOpacityPercent, StringFormat={}{0:0}%}"/><Slider Minimum="0" Maximum="100" Value="{Binding CategoriesPanelOpacityPercent}"/></DockPanel>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Style="{StaticResource EditorEyebrow}" Text="{DynamicResource CustomTheme.ProfilesOpacity}" />
+                                <DockPanel Margin="0,5,0,0"><TextBlock DockPanel.Dock="Right" Margin="8,0,0,0" Text="{Binding ProfilesPanelOpacityPercent, StringFormat={}{0:0}%}"/><Slider Minimum="0" Maximum="100" Value="{Binding ProfilesPanelOpacityPercent}"/></DockPanel>
+                            </StackPanel>
+                        </Grid>
+                        <TextBlock Margin="0,12,0,5" Style="{StaticResource EditorEyebrow}"
+                                   Text="{DynamicResource CustomTheme.ProfileEditorOpacity}" />
+                        <DockPanel><TextBlock DockPanel.Dock="Right" Margin="10,0,0,0" Text="{Binding ProfileEditorPanelOpacityPercent, StringFormat={}{0:0}%}"/><Slider Minimum="0" Maximum="100" Value="{Binding ProfileEditorPanelOpacityPercent}"/></DockPanel>
+
+                        <Border Height="1" Margin="0,12" Background="{StaticResource EditorBorderBrush}" />
+                        <TextBlock Style="{StaticResource EditorEyebrow}" Text="{DynamicResource CustomTheme.BackgroundImage}" />
+                        <TextBlock Margin="0,5,0,8" Style="{StaticResource EditorCaption}" Text="{Binding BackgroundFileName}" TextTrimming="CharacterEllipsis" />
+                        <StackPanel Orientation="Horizontal">
+                            <Button Click="ChooseImage_OnClick" Content="{DynamicResource CustomTheme.ChooseImage}" />
+                            <Button Margin="8,0,0,0" Click="RemoveImage_OnClick" Content="{DynamicResource CustomTheme.RemoveBackground}" />
+                        </StackPanel>
+                        <TextBlock Margin="0,9,0,0" Foreground="{StaticResource EditorDangerBrush}" Text="{Binding Warning}" TextWrapping="Wrap" />
+
+                        <TextBlock Margin="0,15,0,6" Style="{StaticResource EditorEyebrow}" Text="{DynamicResource CustomTheme.ImageFit}" />
+                        <ComboBox ItemsSource="{Binding ImageFitOptions}" DisplayMemberPath="DisplayName" SelectedValuePath="Value"
+                                  SelectedValue="{Binding ImageFit, Mode=TwoWay}" />
+                        <TextBlock Margin="0,15,0,5" Style="{StaticResource EditorEyebrow}" Text="{DynamicResource CustomTheme.BackgroundOpacity}" />
+                        <DockPanel><TextBlock DockPanel.Dock="Right" Margin="10,0,0,0" Text="{Binding BackgroundOpacityPercent, StringFormat={}{0:0}%}"/><Slider Minimum="0" Maximum="100" Value="{Binding BackgroundOpacityPercent}" /></DockPanel>
+                        <TextBlock Margin="0,15,0,5" Style="{StaticResource EditorEyebrow}" Text="{DynamicResource CustomTheme.DarkOverlay}" />
+                        <DockPanel><TextBlock DockPanel.Dock="Right" Margin="10,0,0,0" Text="{Binding DarkOverlayPercent, StringFormat={}{0:0}%}"/><Slider Minimum="0" Maximum="100" Value="{Binding DarkOverlayPercent}" /></DockPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+        </Grid>
+
         <Grid Grid.Row="2" Margin="0,18,0,0">
             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="8"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
             <Button Click="Reset_OnClick" Content="{DynamicResource CustomTheme.Reset}" />
             <Button Grid.Column="2" Click="Cancel_OnClick" Content="{DynamicResource Common.Cancel}" />
-            <Button Grid.Column="4" Click="Save_OnClick" Style="{StaticResource AccentButton}" Content="{DynamicResource CustomTheme.Save}" />
+            <Button Grid.Column="4" Click="Save_OnClick" Style="{StaticResource EditorPrimaryButton}" Content="{Binding PrimaryActionText}" />
         </Grid>
     </Grid>
 </Window>

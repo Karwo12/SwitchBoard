@@ -7,4 +7,8 @@ public interface IThemeManager
     string CurrentThemeId { get; }
 
     string ApplyTheme(string? themeId, CustomThemeSettings? customTheme = null);
+
+    string ApplyTemporary(string draftThemeId, CustomThemeSettings draft);
+
+    CustomThemeSettings CreateEditableCopy(string builtInThemeId);
 }

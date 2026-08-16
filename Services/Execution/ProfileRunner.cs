@@ -83,7 +83,8 @@ public sealed class ProfileRunner(IActionRegistry actionRegistry, IExecutionSess
                 {
                     try
                     {
-                        saved.PreviousState = await reversible.CaptureStateAsync(action, context, cancellationToken);
+                        saved.PreviousState = await reversible.CaptureStateAsync(action,
+                            context with { ActionId = action.Id }, cancellationToken);
                         if (saved.PreviousState is null) throw new InvalidOperationException("The action did not provide a restorable state.");
                         saved.RequiresRestore = true;
                         saved.RestoreStatus = PersistentActionRestoreStatus.Pending;
@@ -106,7 +107,12 @@ public sealed class ProfileRunner(IActionRegistry actionRegistry, IExecutionSess
                 saved.ExecutionStatus = PersistentActionExecutionStatus.Running;
                 await sessionRepository.SaveAsync(persistent, cancellationToken);
                 ActionExecutionResult result;
-                try { result = await handler.ExecuteAsync(action, context, cancellationToken); }
+                var actionContext = context with
+                {
+                    ActionId = action.Id,
+                    CapturedState = saved.PreviousState?.DeepClone().AsObject()
+                };
+                try { result = await handler.ExecuteAsync(action, actionContext, cancellationToken); }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
                 catch (Exception exception) { result = ActionExecutionResult.Failure(exception.Message); }
 

@@ -120,8 +120,11 @@ public sealed class MainWindowViewModel : ObservableObject
 
         ThemeOptions = new ObservableCollection<ThemeOptionViewModel>(
             themeManager.AvailableThemes.Select(theme => new ThemeOptionViewModel(theme, localizationService)));
-        _selectedThemeOption = ThemeOptions.First(option =>
-            string.Equals(option.Id, themeManager.CurrentThemeId, StringComparison.OrdinalIgnoreCase));
+        foreach (var customTheme in userSettings.CustomThemes)
+            ThemeOptions.Add(new ThemeOptionViewModel(customTheme, localizationService));
+        _selectedThemeOption = ThemeOptions.FirstOrDefault(option =>
+            string.Equals(option.Id, themeManager.CurrentThemeId, StringComparison.OrdinalIgnoreCase)) ?? ThemeOptions[0];
+        UpdateActiveThemeMarker();
 
         LanguageOptions = new ObservableCollection<LanguageOptionViewModel>(
             localizationService.AvailableLanguages.Select(language =>
@@ -144,8 +147,11 @@ public sealed class MainWindowViewModel : ObservableObject
         CommitProfileRenameCommand = new RelayCommand<ProfileItemViewModel>(profile => profile?.CommitEdit());
         CancelProfileRenameCommand = new RelayCommand<ProfileItemViewModel>(profile => profile?.CancelEdit());
         ToggleThemeMenuCommand = new RelayCommand(() => IsThemeMenuOpen = !IsThemeMenuOpen);
-        CustomizeThemeCommand = new RelayCommand(CustomizeTheme,
-            () => string.Equals(SelectedThemeOption?.Id, ThemeIds.Custom, StringComparison.OrdinalIgnoreCase));
+        AddThemeCommand = new AsyncRelayCommand(AddThemeAsync);
+        EditThemeCommand = new AsyncRelayCommand<string>(EditThemeAsync, id => !string.IsNullOrWhiteSpace(id));
+        DuplicateThemeCommand = new AsyncRelayCommand<string>(DuplicateThemeAsync, id => !string.IsNullOrWhiteSpace(id));
+        RenameThemeCommand = new AsyncRelayCommand<string>(RenameThemeAsync, id => FindCustomTheme(id ?? string.Empty) is not null);
+        DeleteThemeCommand = new AsyncRelayCommand<string>(DeleteThemeAsync, id => FindCustomTheme(id ?? string.Empty) is not null);
         BrowseProgramCommand = new RelayCommand<ActionItemViewModel>(BrowseProgram, action => action?.Type == ActionTypeIds.ProgramRun);
         FindProgramCommand = new RelayCommand<ActionItemViewModel>(FindProgram, action => action?.Type == ActionTypeIds.ProgramRun);
         SelectProcessCommand = new RelayCommand<ActionItemViewModel>(SelectProcess, action => action?.Type == ActionTypeIds.ProcessSetState);
@@ -238,8 +244,8 @@ public sealed class MainWindowViewModel : ObservableObject
         {
             if (SetProperty(ref _selectedThemeOption, value) && value is not null)
             {
+                UpdateActiveThemeMarker();
                 _ = ChangeThemeAsync(value);
-                CustomizeThemeCommand.NotifyCanExecuteChanged();
             }
         }
     }
@@ -402,7 +408,11 @@ public sealed class MainWindowViewModel : ObservableObject
     public RelayCommand<ProfileItemViewModel> CancelProfileRenameCommand { get; }
 
     public RelayCommand ToggleThemeMenuCommand { get; }
-    public RelayCommand CustomizeThemeCommand { get; }
+    public AsyncRelayCommand AddThemeCommand { get; }
+    public AsyncRelayCommand<string> EditThemeCommand { get; }
+    public AsyncRelayCommand<string> DuplicateThemeCommand { get; }
+    public AsyncRelayCommand<string> RenameThemeCommand { get; }
+    public AsyncRelayCommand<string> DeleteThemeCommand { get; }
 
     public RelayCommand<ActionItemViewModel> BrowseProgramCommand { get; }
 
@@ -1101,9 +1111,11 @@ public sealed class MainWindowViewModel : ObservableObject
             return;
         }
 
-        var appliedThemeId = _themeManager.ApplyTheme(option.Id, _userSettings.CustomTheme);
+        var customTheme = FindCustomTheme(option.Id);
+        var appliedThemeId = _themeManager.ApplyTheme(option.Id, customTheme?.Colors);
         _userSettings.SchemaVersion = SettingsSchema.CurrentVersion;
         _userSettings.ThemeId = appliedThemeId;
+        UpdateActiveThemeMarker();
 
         try
         {
@@ -1116,35 +1128,222 @@ public sealed class MainWindowViewModel : ObservableObject
         }
     }
 
-    private void CustomizeTheme()
+    private async Task AddThemeAsync()
     {
-        if (!string.Equals(SelectedThemeOption?.Id, ThemeIds.Custom, StringComparison.OrdinalIgnoreCase)) return;
-        var result = _customThemeEditorService.Edit(_userSettings.CustomTheme,
-            preview => _themeManager.ApplyTheme(ThemeIds.Custom, preview));
-        if (result is null)
+        var previous = CaptureActiveTheme();
+        var draftId = CustomThemeDefinition.CreateId();
+        var draft = CustomThemeSettings.CreateDefault();
+        var result = EditThemeDraft(new(CustomThemeEditMode.Add, string.Empty, draft,
+            GetUnavailableThemeNames(), draftId, colors => _themeManager.ApplyTemporary(draftId, colors)), previous);
+        if (result is null) return;
+        var now = DateTimeOffset.UtcNow;
+        var definition = new CustomThemeDefinition
         {
-            _themeManager.ApplyTheme(ThemeIds.Custom, _userSettings.CustomTheme);
-            return;
-        }
-        _userSettings.CustomTheme = result;
-        _userSettings.ThemeId = ThemeIds.Custom;
-        _themeManager.ApplyTheme(ThemeIds.Custom, result);
-        _ = SaveCustomThemeSettingsAsync();
+            Id = draftId, Name = result.Name, Colors = result.Colors.Clone(), CreatedAt = now, UpdatedAt = now
+        };
+        _userSettings.CustomThemes.Add(definition);
+        var option = new ThemeOptionViewModel(definition, _localizationService);
+        ThemeOptions.Add(option);
+        await SelectApplyAndSaveThemeAsync(option, "CustomTheme.AddedStatus");
     }
 
-    private async Task SaveCustomThemeSettingsAsync()
+    private async Task EditThemeAsync(string? themeId)
+    {
+        if (string.IsNullOrWhiteSpace(themeId)) return;
+        if (FindCustomTheme(themeId) is null)
+        {
+            await DuplicateThemeAsync(themeId);
+            return;
+        }
+        await EditCustomThemeByIdAsync(themeId, CustomThemeEditMode.EditCustom);
+    }
+
+    private async Task DuplicateThemeAsync(string? sourceThemeId)
+    {
+        if (string.IsNullOrWhiteSpace(sourceThemeId)) return;
+        var source = GetThemeSourceById(sourceThemeId);
+        if (source is null) return;
+
+        var previous = CaptureActiveTheme();
+        var draftId = CustomThemeDefinition.CreateId();
+        var draftName = CreateUniqueThemeName(_localizationService.Format("CustomTheme.CopyName", source.Name));
+        var mode = source.IsBuiltIn ? CustomThemeEditMode.CopyBuiltIn : CustomThemeEditMode.DuplicateCustom;
+        var result = EditThemeDraft(new(mode, draftName, source.Colors.Clone(), GetUnavailableThemeNames(), draftId,
+            colors => _themeManager.ApplyTemporary(draftId, colors)), previous);
+        if (result is null) return;
+
+        var now = DateTimeOffset.UtcNow;
+        var duplicate = new CustomThemeDefinition
+        {
+            Id = draftId,
+            Name = result.Name,
+            Colors = result.Colors.Clone(),
+            CreatedAt = now,
+            UpdatedAt = now,
+            IsBuiltIn = false
+        };
+        _userSettings.CustomThemes.Add(duplicate);
+        var duplicateOption = new ThemeOptionViewModel(duplicate, _localizationService);
+        ThemeOptions.Add(duplicateOption);
+        await SelectApplyAndSaveThemeAsync(duplicateOption, "CustomTheme.DuplicatedStatus");
+    }
+
+    private async Task EditCustomThemeByIdAsync(string themeId, CustomThemeEditMode mode)
+    {
+        var custom = FindCustomTheme(themeId);
+        if (custom is null) return;
+        var previous = CaptureActiveTheme();
+        var result = EditThemeDraft(new(mode, custom.Name, custom.Colors.Clone(),
+            GetUnavailableThemeNames(themeId), themeId,
+            colors => _themeManager.ApplyTemporary(themeId, colors)), previous);
+        if (result is null) return;
+
+        // Resolve again by the same stable ID in case the modal dialog was open for a while.
+        custom = FindCustomTheme(themeId);
+        if (custom is null) return;
+        custom.Name = result.Name;
+        custom.Colors = result.Colors.Clone();
+        custom.UpdatedAt = DateTimeOffset.UtcNow;
+        var option = GetThemeOptionById(themeId);
+        if (option is not null) option.DisplayName = custom.Name;
+        var editedOption = GetThemeOptionById(themeId);
+        if (editedOption is null) return;
+        await SelectApplyAndSaveThemeAsync(editedOption, "CustomTheme.UpdatedStatus");
+    }
+
+    private async Task RenameThemeAsync(string? themeId)
+    {
+        if (string.IsNullOrWhiteSpace(themeId) || FindCustomTheme(themeId) is not { } custom) return;
+        var name = _customThemeEditorService.Rename(custom.Name, GetUnavailableThemeNames(themeId));
+        if (name is null) return;
+        custom = FindCustomTheme(themeId);
+        if (custom is null) return;
+        custom.Name = name.Trim();
+        custom.UpdatedAt = DateTimeOffset.UtcNow;
+        var option = GetThemeOptionById(themeId);
+        if (option is not null) option.DisplayName = custom.Name;
+        await SaveThemeCollectionAsync("CustomTheme.RenamedStatus");
+    }
+
+    private async Task DeleteThemeAsync(string? themeId)
+    {
+        if (string.IsNullOrWhiteSpace(themeId) || FindCustomTheme(themeId) is not { } custom) return;
+        if (!_dialogService.Confirm(_localizationService.GetString("CustomTheme.Delete"),
+                _localizationService.Format("CustomTheme.DeleteConfirm", custom.Name))) return;
+        var wasActive = string.Equals(_userSettings.ThemeId, themeId, StringComparison.OrdinalIgnoreCase);
+        _userSettings.CustomThemes.Remove(custom);
+        var option = GetThemeOptionById(themeId);
+        if (option is not null) ThemeOptions.Remove(option);
+        if (wasActive)
+        {
+            var fallback = GetThemeOptionById(ThemeIds.Graphite)!;
+            _selectedThemeOption = fallback;
+            OnPropertyChanged(nameof(SelectedThemeOption));
+            _themeManager.ApplyTheme(fallback.Id);
+            _userSettings.ThemeId = fallback.Id;
+            UpdateActiveThemeMarker();
+        }
+        await SaveThemeCollectionAsync("CustomTheme.DeletedStatus");
+    }
+
+    private async Task SelectApplyAndSaveThemeAsync(ThemeOptionViewModel option, string statusKey)
+    {
+        _selectedThemeOption = option;
+        OnPropertyChanged(nameof(SelectedThemeOption));
+        var custom = FindCustomTheme(option.Id);
+        _userSettings.ThemeId = _themeManager.ApplyTheme(option.Id, custom?.Colors);
+        UpdateActiveThemeMarker();
+        await SaveThemeCollectionAsync(statusKey);
+    }
+
+    private async Task SaveThemeCollectionAsync(string successStatusKey)
     {
         try
         {
             _userSettings.SchemaVersion = SettingsSchema.CurrentVersion;
             await _settingsRepository.SaveAsync(_userSettings);
-            StatusMessage = _localizationService.GetString("CustomTheme.SavedStatus");
+            StatusMessage = _localizationService.GetString(successStatusKey);
         }
         catch (Exception exception)
         {
             StatusMessage = _localizationService.Format("Status.SettingsSaveFailed", exception.Message);
         }
     }
+
+    private CustomThemeDefinition? FindCustomTheme(string id) => _userSettings.CustomThemes.FirstOrDefault(theme =>
+        string.Equals(theme.Id, id, StringComparison.OrdinalIgnoreCase));
+
+    private ThemeOptionViewModel? GetThemeOptionById(string id) => ThemeOptions.FirstOrDefault(option =>
+        string.Equals(option.Id, id, StringComparison.OrdinalIgnoreCase));
+
+    private ThemeSource? GetThemeSourceById(string id)
+    {
+        if (FindCustomTheme(id) is { } custom)
+            return new(custom.Id, custom.Name, custom.Colors.Clone(), false);
+        var builtIn = _themeManager.AvailableThemes.FirstOrDefault(theme =>
+            string.Equals(theme.Id, id, StringComparison.OrdinalIgnoreCase));
+        if (builtIn is null) return null;
+        var displayName = GetThemeOptionById(builtIn.Id)?.DisplayName
+                          ?? _localizationService.GetString(builtIn.DisplayNameResourceKey);
+        return new(builtIn.Id, displayName, _themeManager.CreateEditableCopy(builtIn.Id), true);
+    }
+
+    private IReadOnlyCollection<string> GetUnavailableThemeNames(string? excludedId = null) => ThemeOptions
+        .Where(option => !string.Equals(option.Id, excludedId, StringComparison.OrdinalIgnoreCase))
+        .Select(option => option.DisplayName).ToArray();
+
+    private string CreateUniqueThemeName(string baseName)
+    {
+        var unavailable = new HashSet<string>(GetUnavailableThemeNames(), StringComparer.CurrentCultureIgnoreCase);
+        var candidate = baseName;
+        var suffix = 2;
+        while (unavailable.Contains(candidate)) candidate = $"{baseName} ({suffix++})";
+        return candidate;
+    }
+
+    private void UpdateActiveThemeMarker()
+    {
+        foreach (var option in ThemeOptions)
+            option.IsActive = string.Equals(option.Id, _selectedThemeOption?.Id, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private sealed record ThemeSource(string Id, string Name, CustomThemeSettings Colors, bool IsBuiltIn);
+
+    private CustomThemeEditResult? EditThemeDraft(CustomThemeEditRequest request, AppliedThemeSnapshot previous)
+    {
+        try
+        {
+            _themeManager.ApplyTemporary(request.ThemeId ?? CustomThemeDefinition.CreateId(), request.Colors);
+            var result = _customThemeEditorService.Edit(request);
+            if (result is null) RestoreActiveTheme(previous);
+            return result;
+        }
+        catch
+        {
+            RestoreActiveTheme(previous);
+            throw;
+        }
+    }
+
+    private AppliedThemeSnapshot CaptureActiveTheme()
+    {
+        var activeId = _userSettings.ThemeId;
+        return new(activeId, FindCustomTheme(activeId)?.Colors.Clone());
+    }
+
+    private void RestoreActiveTheme(AppliedThemeSnapshot snapshot)
+    {
+        _themeManager.ApplyTheme(snapshot.ThemeId, snapshot.Colors?.Clone());
+        var option = GetThemeOptionById(snapshot.ThemeId);
+        if (option is not null)
+        {
+            _selectedThemeOption = option;
+            OnPropertyChanged(nameof(SelectedThemeOption));
+        }
+        UpdateActiveThemeMarker();
+    }
+
+    private sealed record AppliedThemeSnapshot(string ThemeId, CustomThemeSettings? Colors);
 
     private async Task ChangeLanguageAsync(LanguageOptionViewModel option)
     {

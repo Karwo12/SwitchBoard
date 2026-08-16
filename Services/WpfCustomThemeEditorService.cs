@@ -9,9 +9,18 @@ namespace SwitchBoard.Services;
 public sealed class WpfCustomThemeEditorService(AppDataPaths paths, ILocalizationService localization)
     : ICustomThemeEditorService
 {
-    public CustomThemeSettings? Edit(CustomThemeSettings current, Action<CustomThemeSettings> livePreview)
+    public CustomThemeEditResult? Edit(CustomThemeEditRequest request)
     {
-        var window = new CustomThemeWindow(current, paths, localization, livePreview)
+        var window = new CustomThemeWindow(request, paths, localization)
+        {
+            Owner = Application.Current.MainWindow
+        };
+        return window.ShowDialog() == true ? window.Result : null;
+    }
+
+    public string? Rename(string currentName, IReadOnlyCollection<string> unavailableNames)
+    {
+        var window = new ThemeNameWindow(currentName, unavailableNames, localization)
         {
             Owner = Application.Current.MainWindow
         };

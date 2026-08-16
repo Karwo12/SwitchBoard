@@ -65,9 +65,28 @@ public partial class App : Application
             _localizationService = new LocalizationService();
             settings.LanguageId = _localizationService.ApplyLanguage(
                 settings.LanguageId ?? _localizationService.DetectSystemLanguage());
-            settings.CustomTheme ??= CustomThemeSettings.CreateDefault();
+            settings.CustomThemes ??= [];
+            if (settings.CustomTheme is not null)
+            {
+                var migrated = new CustomThemeDefinition
+                {
+                    Name = _localizationService.GetString("CustomTheme.MigratedName"),
+                    Colors = settings.CustomTheme.Clone()
+                };
+                settings.CustomThemes.Add(migrated);
+                if (string.Equals(settings.ThemeId, ThemeIds.Custom, StringComparison.OrdinalIgnoreCase))
+                    settings.ThemeId = migrated.Id;
+                settings.CustomTheme = null;
+            }
+            if (settings.SchemaVersion < SettingsSchema.SurfaceOpacityVersion)
+                foreach (var theme in settings.CustomThemes)
+                    theme.Colors.MigrateSurfaceOpacityFromLegacyAlpha();
             var themeManager = new ThemeManager(paths);
-            settings.ThemeId = themeManager.ApplyTheme(settings.ThemeId, settings.CustomTheme);
+            NormalizeCustomThemes(settings.CustomThemes, _localizationService.GetString("CustomTheme.DefaultName"),
+                themeManager.AvailableThemes.Select(theme => _localizationService.GetString(theme.DisplayNameResourceKey)));
+            var activeCustomTheme = settings.CustomThemes.FirstOrDefault(theme =>
+                string.Equals(theme.Id, settings.ThemeId, StringComparison.OrdinalIgnoreCase));
+            settings.ThemeId = themeManager.ApplyTheme(settings.ThemeId, activeCustomTheme?.Colors);
             settings.SchemaVersion = SettingsSchema.CurrentVersion;
             await _settingsRepository.SaveAsync(settings);
             var catalogService = new ProfileCatalogService(_repository);
@@ -136,6 +155,31 @@ public partial class App : Application
         _settingsRepository?.Dispose();
         _sessionRepository?.Dispose();
         base.OnExit(e);
+    }
+
+    private static void NormalizeCustomThemes(List<CustomThemeDefinition> themes, string fallbackName,
+        IEnumerable<string> builtInNames)
+    {
+        var identifiers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var names = new HashSet<string>(builtInNames, StringComparer.CurrentCultureIgnoreCase);
+        foreach (var theme in themes)
+        {
+            if (string.IsNullOrWhiteSpace(theme.Id) || !identifiers.Add(theme.Id))
+            {
+                theme.Id = CustomThemeDefinition.CreateId();
+                identifiers.Add(theme.Id);
+            }
+            theme.Colors ??= CustomThemeSettings.CreateDefault();
+            theme.Colors.NormalizeLegacy();
+            theme.IsBuiltIn = false;
+            var baseName = string.IsNullOrWhiteSpace(theme.Name) ? fallbackName : theme.Name.Trim();
+            var candidate = baseName;
+            var suffix = 2;
+            while (!names.Add(candidate)) candidate = $"{baseName} ({suffix++})";
+            theme.Name = candidate;
+            if (theme.CreatedAt == default) theme.CreatedAt = DateTimeOffset.UtcNow;
+            if (theme.UpdatedAt == default) theme.UpdatedAt = theme.CreatedAt;
+        }
     }
 }
 
