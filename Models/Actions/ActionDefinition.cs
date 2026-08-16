@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 
 namespace SwitchBoard.Models.Actions;
 
@@ -16,9 +17,14 @@ public sealed class ActionDefinition
 
     public bool IsEnabled { get; set; } = true;
 
-    public ActionFailurePolicy FailurePolicy { get; set; } = ActionFailurePolicy.Stop;
+    public ActionFailurePolicy FailurePolicy { get; set; } = ActionFailurePolicy.Continue;
+
+    public ActionRestoreBehavior RestoreBehavior { get; set; } = ActionRestoreBehavior.DoNotRestore;
 
     public TimeSpan? Timeout { get; set; }
 
     public JsonObject Parameters { get; set; } = [];
+
+    [JsonIgnore]
+    public int? RuntimeProcessIdHint { get; set; }
 }

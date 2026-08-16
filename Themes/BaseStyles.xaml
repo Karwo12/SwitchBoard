@@ -12,6 +12,18 @@
         <Setter Property="FontFamily" Value="Segoe UI Variable Text, Segoe UI" />
     </Style>
 
+    <Style x:Key="SemanticStrokeIcon" TargetType="Path">
+        <Setter Property="Stroke" Value="{DynamicResource IconPrimary}" />
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=Button}}" Value="True">
+                <Setter Property="Stroke" Value="{DynamicResource IconAccent}" />
+            </DataTrigger>
+            <DataTrigger Binding="{Binding IsEnabled, RelativeSource={RelativeSource AncestorType=Button}}" Value="False">
+                <Setter Property="Stroke" Value="{DynamicResource IconMuted}" />
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
     <Style x:Key="SectionTitle" TargetType="TextBlock">
         <Setter Property="FontSize" Value="16" />
         <Setter Property="FontWeight" Value="SemiBold" />
@@ -74,7 +86,7 @@
     </Style>
 
     <Style x:Key="GlassCard" TargetType="Border">
-        <Setter Property="Background" Value="{DynamicResource ElevatedSurfaceBrush}" />
+        <Setter Property="Background" Value="{DynamicResource CardSurfaceBrush}" />
         <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="CornerRadius" Value="11" />

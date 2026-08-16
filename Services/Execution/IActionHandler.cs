@@ -18,3 +18,11 @@ public interface IActionHandler
         ActionExecutionContext context,
         CancellationToken cancellationToken);
 }
+
+public interface IReversibleActionHandler : IActionHandler
+{
+    Task<JsonObject?> CaptureStateAsync(
+        ActionDefinition action,
+        ActionExecutionContext context,
+        CancellationToken cancellationToken);
+}

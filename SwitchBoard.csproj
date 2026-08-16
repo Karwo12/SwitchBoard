@@ -8,4 +8,8 @@
     <UseWPF>true</UseWPF>
   </PropertyGroup>
 
+  <ItemGroup>
+    <Compile Remove="SwitchBoard.RuntimeTests\**\*.cs" />
+  </ItemGroup>
+
 </Project>

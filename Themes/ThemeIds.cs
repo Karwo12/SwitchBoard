@@ -12,4 +12,5 @@ public static class ThemeIds
     public const string WarmAmber = "warmAmber";
     public const string SolarDepths = "solarDepths";
     public const string OledBlack = "oledBlack";
+    public const string Custom = "custom";
 }

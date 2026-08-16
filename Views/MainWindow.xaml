@@ -8,14 +8,23 @@
         Title="SwitchBoard"
         Width="1340"
         Height="820"
-        MinWidth="1080"
-        MinHeight="680"
+        MinWidth="900"
+        MinHeight="500"
         WindowStartupLocation="CenterScreen">
+    <Window.InputBindings>
+        <KeyBinding Key="Z" Modifiers="Control" Command="{Binding UndoCommand}" CommandParameter="keyboard" />
+    </Window.InputBindings>
     <Grid Background="{DynamicResource BackgroundBrush}">
         <Grid.RowDefinitions>
             <RowDefinition Height="82" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
+
+        <controls:AnimatedBackground Grid.RowSpan="2"
+                                     SourcePath="{DynamicResource CustomBackgroundPath}"
+                                     ImageOpacity="{DynamicResource CustomBackgroundOpacity}"
+                                     ImageStretch="{DynamicResource CustomBackgroundStretch}" />
+        <Border Grid.RowSpan="2" Background="{DynamicResource CustomBackgroundOverlayBrush}" IsHitTestVisible="False" />
 
         <Grid Grid.Row="0" Margin="26,0">
             <Grid.ColumnDefinitions>
@@ -47,20 +56,39 @@
                         </TextBlock.Style>
                     </TextBlock>
                 </StackPanel>
-                <Button MinWidth="116"
+                <Button MinWidth="92" Margin="0,0,8,0"
+                        Command="{Binding UndoCommand}"
+                        CommandParameter="button"
+                        ToolTip="{DynamicResource Common.UndoTooltip}">
+                    <StackPanel Orientation="Horizontal">
+                        <Path Width="17" Height="17" Margin="0,0,7,0" Stretch="Uniform"
+                              Style="{StaticResource SemanticStrokeIcon}"
+                              Data="M8,4 L3,8 L8,12 M4,8 H11 C15,8 17,10 17,14"
+                              StrokeThickness="1.7" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                        <TextBlock VerticalAlignment="Center" Text="{DynamicResource Common.Undo}" />
+                    </StackPanel>
+                </Button>
+                <Button MinWidth="128"
                         Command="{Binding SaveCommand}"
-                        Content="{DynamicResource Common.SaveChanges}"
-                        Style="{StaticResource AccentButton}" />
+                        Style="{StaticResource AccentButton}">
+                    <StackPanel Orientation="Horizontal">
+                        <Path Width="17" Height="17" Margin="0,0,7,0" Stretch="Uniform"
+                              Data="M2,2 H14 L18,6 V18 H2 Z M5,2 V8 H14 M5,12 H15 V18 H5 Z"
+                              Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                              StrokeThickness="1.5" StrokeLineJoin="Round" />
+                        <TextBlock VerticalAlignment="Center" Text="{DynamicResource Common.SaveChanges}" />
+                    </StackPanel>
+                </Button>
             </StackPanel>
         </Grid>
 
         <Grid Grid.Row="1" Margin="16,0,16,16">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="258" />
-                <ColumnDefinition Width="8" />
-                <ColumnDefinition Width="334" />
-                <ColumnDefinition Width="8" />
-                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="0.8*" MinWidth="180" MaxWidth="280" />
+                <ColumnDefinition Width="6" />
+                <ColumnDefinition Width="1*" MinWidth="220" MaxWidth="360" />
+                <ColumnDefinition Width="6" />
+                <ColumnDefinition Width="2.4*" MinWidth="420" />
             </Grid.ColumnDefinitions>
 
             <ContentControl Grid.Column="0" Style="{StaticResource GlassPanel}">
@@ -142,6 +170,9 @@
                     </Grid>
                 </Grid>
             </ContentControl>
+
+            <GridSplitter Grid.Column="1" Width="6" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                          Background="Transparent" Cursor="SizeWE" ShowsPreview="True" />
 
             <ContentControl Grid.Column="2" Style="{StaticResource GlassPanel}">
                 <Grid>
@@ -235,6 +266,9 @@
                 </Grid>
             </ContentControl>
 
+            <GridSplitter Grid.Column="3" Width="6" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                          Background="Transparent" Cursor="SizeWE" ShowsPreview="True" />
+
             <controls:ActionEditorControl Grid.Column="4" />
         </Grid>
 
@@ -273,7 +307,7 @@
                    Placement="Top"
                    PlacementTarget="{Binding ElementName=SettingsButton}"
                    PopupAnimation="Fade"
-                   StaysOpen="True">
+                   StaysOpen="False">
                 <ContentControl Width="300"
                                 Margin="0,0,0,10"
                                 Padding="18"
@@ -306,6 +340,19 @@
                         <ComboBox ItemsSource="{Binding ThemeOptions}"
                                   DisplayMemberPath="DisplayName"
                                   SelectedItem="{Binding SelectedThemeOption, Mode=TwoWay}" />
+                        <Button Margin="0,9,0,0" Command="{Binding CustomizeThemeCommand}"
+                                Content="{DynamicResource Settings.CustomizeTheme}">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding SelectedThemeOption.Id}" Value="custom">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
 
                         <Border Height="1" Margin="0,18" Background="{DynamicResource BorderBrush}" />
 

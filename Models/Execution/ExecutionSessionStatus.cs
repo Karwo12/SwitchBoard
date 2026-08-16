@@ -7,6 +7,7 @@ public enum ExecutionSessionStatus
     Active,
     Stopping,
     Completed,
+    CompletedWithErrors,
     Failed,
     Cancelled
 }

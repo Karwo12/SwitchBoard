@@ -1,0 +1,56 @@
+<Window x:Class="SwitchBoard.Views.ServicePickerWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Width="860" Height="640" MinWidth="700" MinHeight="500"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
+        Background="{DynamicResource BackgroundBrush}">
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/><RowDefinition Height="12"/><RowDefinition Height="Auto"/>
+            <RowDefinition Height="12"/><RowDefinition Height="*"/><RowDefinition Height="12"/><RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        <StackPanel>
+            <TextBlock Style="{StaticResource SectionTitle}" Text="{DynamicResource ServicePicker.Heading}"/>
+            <TextBlock Margin="0,4,0,0" Style="{StaticResource CaptionText}" Text="{DynamicResource ServicePicker.Description}"/>
+        </StackPanel>
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="10"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <TextBox Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" ToolTip="{DynamicResource ServicePicker.SearchHint}"/>
+            <Button Grid.Column="2" Click="RefreshButton_OnClick" Content="{DynamicResource Common.Refresh}"/>
+        </Grid>
+        <Border Grid.Row="4" Padding="8" Style="{StaticResource GlassCard}">
+            <Grid>
+                <ListBox x:Name="ServiceList" ItemsSource="{Binding Services}" SelectedItem="{Binding SelectedService, Mode=TwoWay}"
+                         SelectionChanged="ServiceList_OnSelectionChanged" MouseDoubleClick="ServiceList_OnMouseDoubleClick">
+                    <ListBox.ItemContainerStyle>
+                        <Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
+                            <Setter Property="HorizontalContentAlignment" Value="Stretch"/><Setter Property="Margin" Value="0,0,0,5"/>
+                        </Style>
+                    </ListBox.ItemContainerStyle>
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <Grid Margin="7,6">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock FontWeight="SemiBold" Text="{Binding DisplayName}"/>
+                                    <TextBlock Margin="0,3,0,0" Style="{StaticResource CaptionText}"><Run Text="{Binding ServiceName}"/><Run Text="  •  "/><Run Text="{Binding Status}"/></TextBlock>
+                                    <TextBlock Margin="0,3,0,0" Style="{StaticResource CaptionText}" Text="{Binding Description}" TextTrimming="CharacterEllipsis"/>
+                                </StackPanel>
+                                <TextBlock Grid.Column="1" Margin="14,0,0,0" Style="{StaticResource CaptionText}" Text="{Binding StartupType}"/>
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding IsBusy, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <ProgressBar Width="220" Height="4" IsIndeterminate="True"/><TextBlock Margin="0,10,0,0" Style="{StaticResource CaptionText}" Text="{DynamicResource ServicePicker.Loading}"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+        <Grid Grid.Row="6">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="8"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <TextBlock VerticalAlignment="Center" Style="{StaticResource CaptionText}" Text="{Binding StatusText}"/>
+            <Button Grid.Column="1" Click="CancelButton_OnClick" Content="{DynamicResource Common.Cancel}"/>
+            <Button x:Name="SelectButton" Grid.Column="3" MinWidth="112" IsEnabled="False" Click="SelectButton_OnClick" Content="{DynamicResource Common.Select}" Style="{StaticResource AccentButton}"/>
+        </Grid>
+    </Grid>
+</Window>

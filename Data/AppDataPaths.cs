@@ -20,4 +20,10 @@ public sealed class AppDataPaths
     public string SettingsFilePath => Path.Combine(RootDirectory, "settings.json");
 
     public string SettingsBackupFilePath => Path.Combine(RootDirectory, "settings.json.bak");
+
+    public string SessionsDirectory => Path.Combine(RootDirectory, "sessions");
+
+    public string CustomThemeDirectory => Path.Combine(RootDirectory, "themes", "custom");
+
+    public string LogsDirectory => Path.Combine(RootDirectory, "logs");
 }

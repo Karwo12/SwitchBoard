@@ -6,5 +6,5 @@ public interface IThemeManager
 
     string CurrentThemeId { get; }
 
-    string ApplyTheme(string? themeId);
+    string ApplyTheme(string? themeId, CustomThemeSettings? customTheme = null);
 }

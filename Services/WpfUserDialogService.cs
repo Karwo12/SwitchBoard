@@ -4,12 +4,16 @@ using Microsoft.Win32;
 using SwitchBoard.Localization;
 using SwitchBoard.Services.Discovery;
 using SwitchBoard.Views;
+using SwitchBoard.Services.Windows;
 
 namespace SwitchBoard.Services;
 
 public sealed class WpfUserDialogService(
     IProcessDiscoveryService processDiscoveryService,
     IProgramDiscoveryService programDiscoveryService,
+    IWindowsServiceManager windowsServiceManager,
+    IPowerPlanManager powerPlanManager,
+    IDisplayManager displayManager,
     ILocalizationService localizationService) : IUserDialogService
 {
     public bool Confirm(string title, string message) =>
@@ -56,6 +60,36 @@ public sealed class WpfUserDialogService(
     public ProcessCandidate? SelectProcess(string title)
     {
         var dialog = new ProcessPickerWindow(processDiscoveryService, localizationService)
+        {
+            Title = title,
+            Owner = Application.Current.MainWindow
+        };
+        return dialog.ShowDialog() == true ? dialog.Result : null;
+    }
+
+    public ServiceCandidate? SelectService(string title)
+    {
+        var dialog = new ServicePickerWindow(windowsServiceManager, localizationService)
+        {
+            Title = title,
+            Owner = Application.Current.MainWindow
+        };
+        return dialog.ShowDialog() == true ? dialog.Result : null;
+    }
+
+    public PowerPlanCandidate? SelectPowerPlan(string title)
+    {
+        var dialog = new PowerPlanPickerWindow(powerPlanManager, localizationService)
+        {
+            Title = title,
+            Owner = Application.Current.MainWindow
+        };
+        return dialog.ShowDialog() == true ? dialog.Result : null;
+    }
+
+    public DisplayCandidate? SelectDisplay(string title)
+    {
+        var dialog = new DisplayPickerWindow(displayManager, localizationService)
         {
             Title = title,
             Owner = Application.Current.MainWindow

@@ -10,5 +10,11 @@ public interface IUserDialogService
 
     ProcessCandidate? SelectProcess(string title);
 
+    ServiceCandidate? SelectService(string title);
+
+    PowerPlanCandidate? SelectPowerPlan(string title);
+
+    DisplayCandidate? SelectDisplay(string title);
+
     ProgramCandidate? FindProgram(string title);
 }
