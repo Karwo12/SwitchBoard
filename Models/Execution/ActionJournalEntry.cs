@@ -17,4 +17,14 @@ public sealed class ActionJournalEntry
     public string? ErrorMessage { get; set; }
 
     public JsonObject? RestoreState { get; set; }
+
+    public Guid ProfileId { get; set; }
+
+    public Guid? ParentActionId { get; set; }
+
+    public string? Branch { get; set; }
+
+    public int NestingDepth { get; set; }
+
+    public int AttemptCount { get; set; }
 }

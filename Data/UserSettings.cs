@@ -11,6 +11,10 @@ public sealed class UserSettings
 
     public string? LanguageId { get; set; }
 
+    public double ActivityPanelHeightRatio { get; set; } = 0.5;
+
+    public bool ShowCurrentActionState { get; set; } = true;
+
     public List<CustomThemeDefinition> CustomThemes { get; set; } = [];
 
     // Schema 4 compatibility. Migrated once at startup and omitted from subsequent JSON.

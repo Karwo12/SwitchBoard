@@ -84,10 +84,12 @@ public sealed class CustomThemeEditorViewModel : ObservableObject
             _settings.CategoriesPanelOpacity = opacity;
             _settings.ProfilesPanelOpacity = opacity;
             _settings.ProfileEditorPanelOpacity = opacity;
+            _settings.ActivityPanelOpacity = opacity;
             OnPropertyChanged();
             OnPropertyChanged(nameof(CategoriesPanelOpacityPercent));
             OnPropertyChanged(nameof(ProfilesPanelOpacityPercent));
             OnPropertyChanged(nameof(ProfileEditorPanelOpacityPercent));
+            OnPropertyChanged(nameof(ActivityPanelOpacityPercent));
             ApplyDraft();
         }
     }
@@ -105,6 +107,11 @@ public sealed class CustomThemeEditorViewModel : ObservableObject
     {
         get => _settings.ProfileEditorPanelOpacity * 100;
         set { _settings.ProfileEditorPanelOpacity = Math.Clamp(value / 100, 0, 1); OnPropertyChanged(); ApplyDraft(); }
+    }
+    public double ActivityPanelOpacityPercent
+    {
+        get => _settings.ActivityPanelOpacity * 100;
+        set { _settings.ActivityPanelOpacity = Math.Clamp(value / 100, 0, 1); OnPropertyChanged(); ApplyDraft(); }
     }
     public double BackgroundOpacityPercent
     {
@@ -145,6 +152,7 @@ public sealed class CustomThemeEditorViewModel : ObservableObject
         OnPropertyChanged(nameof(CategoriesPanelOpacityPercent));
         OnPropertyChanged(nameof(ProfilesPanelOpacityPercent));
         OnPropertyChanged(nameof(ProfileEditorPanelOpacityPercent));
+        OnPropertyChanged(nameof(ActivityPanelOpacityPercent));
         OnPropertyChanged(nameof(BackgroundOpacityPercent));
         OnPropertyChanged(nameof(DarkOverlayPercent));
         OnPropertyChanged(nameof(ImageFit));

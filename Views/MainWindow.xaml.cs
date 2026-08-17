@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.ComponentModel;
 using SwitchBoard.ViewModels;
 
@@ -26,5 +27,24 @@ public partial class MainWindow : Window
     {
         if (DataContext is MainWindowViewModel viewModel && !viewModel.ConfirmCloseDuringCriticalOperation())
             e.Cancel = true;
+    }
+
+    private void ActivityScrollViewer_OnScrollChanged(object sender, ScrollChangedEventArgs e)
+    {
+        if (sender is not ScrollViewer viewer || e.ExtentHeightChange <= 0) return;
+        var oldScrollableHeight = viewer.ExtentHeight - e.ExtentHeightChange - viewer.ViewportHeight;
+        if (viewer.VerticalOffset >= Math.Max(0, oldScrollableHeight - 18)) viewer.ScrollToEnd();
+    }
+
+    private void ActivityLayoutSplitter_OnDragCompleted(object sender, DragCompletedEventArgs e)
+    {
+        if (DataContext is not MainWindowViewModel viewModel) return;
+        var total = MainContentGrid.ActualHeight - ActivityLayoutSplitter.ActualHeight;
+        if (total > 0) viewModel.UpdateActivityPanelRatio(ActivityRow.ActualHeight / total);
+    }
+
+    private void ActivityLayoutSplitter_OnMouseDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (DataContext is MainWindowViewModel viewModel) viewModel.ResetActivityPanelRatio();
     }
 }

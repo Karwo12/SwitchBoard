@@ -12,7 +12,7 @@ public interface IActionHandler
         ActionExecutionContext context,
         CancellationToken cancellationToken);
 
-    Task RestoreAsync(
+    Task<ActionExecutionResult> RestoreAsync(
         ActionDefinition action,
         JsonObject restoreState,
         ActionExecutionContext context,

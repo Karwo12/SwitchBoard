@@ -17,4 +17,8 @@ public interface IUserDialogService
     DisplayCandidate? SelectDisplay(string title);
 
     ProgramCandidate? FindProgram(string title);
+
+    AudioDeviceCandidate? SelectAudioDevice(string title, bool input);
+
+    DeviceCandidate? SelectDevice(string title);
 }

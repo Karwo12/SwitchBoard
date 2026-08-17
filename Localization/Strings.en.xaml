@@ -71,6 +71,31 @@
     <system:String x:Key="ServiceState.Running">Running</system:String>
     <system:String x:Key="ServiceState.Stopped">Stopped</system:String>
     <system:String x:Key="ServiceState.Unchanged">Unchanged</system:String>
+    <system:String x:Key="ServiceStartupType.Unchanged">Unchanged</system:String>
+    <system:String x:Key="ServiceStartupType.Automatic">Automatic</system:String>
+    <system:String x:Key="ServiceStartupType.AutomaticDelayed">Automatic (Delayed Start)</system:String>
+    <system:String x:Key="ServiceStartupType.Manual">Manual</system:String>
+    <system:String x:Key="ServiceStartupType.Disabled">Disabled</system:String>
+    <system:String x:Key="ActionEditor.ServiceRuntimeState">SERVICE STATUS</system:String>
+    <system:String x:Key="ActionEditor.ServiceStartupType">STARTUP TYPE</system:String>
+    <system:String x:Key="ActionStatus.Unavailable">? State unavailable</system:String>
+    <system:String x:Key="ActionStatus.LastChecked">Last checked: {0}</system:String>
+    <system:String x:Key="ActionStatus.Service">{0}; startup: {1}</system:String>
+    <system:String x:Key="ActionStatus.Running">Running</system:String>
+    <system:String x:Key="ActionStatus.Stopped">Not running</system:String>
+    <system:String x:Key="ActionStatus.Active">Active</system:String>
+    <system:String x:Key="ActionStatus.Inactive">Inactive</system:String>
+    <system:String x:Key="ActionStatus.Enabled">Enabled</system:String>
+    <system:String x:Key="ActionStatus.Disabled">Disabled</system:String>
+    <system:String x:Key="ActionStatus.Muted">muted</system:String>
+    <system:String x:Key="ActionStatus.Unmuted">not muted</system:String>
+    <system:String x:Key="ActionStatus.Audio">{0}, {1:0}%</system:String>
+    <system:String x:Key="ActionStatus.Display">{0}×{1} @ {2} Hz</system:String>
+    <system:String x:Key="ActionStatus.NotApplicable">—</system:String>
+    <system:String x:Key="Status.Refreshing">Refreshing...</system:String>
+    <system:String x:Key="Tooltip.RefreshCurrentStates">Refresh current states</system:String>
+    <system:String x:Key="Activity.RefreshFailed">Could not refresh states: {0}</system:String>
+    <system:String x:Key="Settings.ShowCurrentActionState">Show current action state</system:String>
     <system:String x:Key="ScriptType.AutoDetect">Auto detect</system:String>
     <system:String x:Key="ScriptType.PowerShell">PowerShell</system:String>
     <system:String x:Key="ScriptType.BatchCmd">Batch/CMD</system:String>
@@ -106,6 +131,7 @@
     <system:String x:Key="Common.UndoTooltip">Undo the last configuration change</system:String>
     <system:String x:Key="Restore.ChangesCount">Changes to restore: {0}</system:String>
     <system:String x:Key="Restore.ButtonCount">Restore • {0}</system:String>
+    <system:String x:Key="Restore.ButtonRunning">Restoring…</system:String>
     <system:String x:Key="Restore.ProfileCompleted">Profile completed • {0} changes saved for restore</system:String>
     <system:String x:Key="Restore.PreviousPending">Previous changes have not been restored yet</system:String>
     <system:String x:Key="Restore.Running">Restoring previous settings...</system:String>
@@ -113,6 +139,28 @@
     <system:String x:Key="Restore.Partial">Some settings could not be restored. You can try again.</system:String>
     <system:String x:Key="Restore.Failed">Restore failed: {0}</system:String>
     <system:String x:Key="Restore.Progress">Restoring {0} of {1}: {2}</system:String>
+    <system:String x:Key="Restore.PreviewHeading">Pending restore:</system:String>
+    <system:String x:Key="Restore.NoPendingPreview">No saved changes are waiting to be restored.</system:String>
+    <system:String x:Key="Restore.DiscardTooltip">Discard pending restore. This keeps an audit record but removes the automatic restore option.</system:String>
+    <system:String x:Key="Restore.DiscardTitle">Discard pending restore</system:String>
+    <system:String x:Key="Restore.DiscardConfirm">Discard saved restore data for this profile?</system:String>
+    <system:String x:Key="Restore.Discarded">Saved restore data was discarded.</system:String>
+    <system:String x:Key="Activity.RestoreDiscarded">Pending restore discarded: {0}</system:String>
+    <system:String x:Key="Result.ProgramRestoreSuccess">Verified: the program was closed. Closed {0} {1}.exe process(es); none remain.</system:String>
+    <system:String x:Key="Result.ProgramRestoreFailed">Could not close the program. {0} {1}.exe process(es) started by SwitchBoard remain.</system:String>
+    <system:String x:Key="Result.ServiceAdminRequired">Could not change service “{0}”: administrator privileges are required.</system:String>
+    <system:String x:Key="Result.ServiceAdminRequiredDetailed">Could not change service “{0}”: administrator privileges are required. Expected: status {1}, startup {2}. Actual: status {3}, startup {4}.</system:String>
+    <system:String x:Key="Result.ServiceRestarted">Service “{0}” reached Stopped, but Windows started it again. Current state: {1}.</system:String>
+    <system:String x:Key="Result.ServiceMismatch">Windows did not set service “{0}” to {1}. Current state: {2}. {3}</system:String>
+    <system:String x:Key="Result.ServiceVerified">{0}: {1} → {2} ✓</system:String>
+    <system:String x:Key="Result.ServiceSkipped">{0}: already {1} — skipped</system:String>
+    <system:String x:Key="Result.ServiceRestored">{0}: {1} → {2} — restored</system:String>
+    <system:String x:Key="Result.ServiceReadFailed">Could not read the state of service “{0}”.</system:String>
+    <system:String x:Key="Result.ServiceNothingRequested">{0}: no service property was selected for change.</system:String>
+    <system:String x:Key="Result.ServiceConfigurationMismatch">Windows did not apply the complete configuration of service “{0}”. Expected: status {1}, startup {2}. Actual: status {3}, startup {4}. {5}</system:String>
+    <system:String x:Key="Result.ServiceConfigurationSkipped">{0}: status {1}, startup {2} — already configured; skipped.</system:String>
+    <system:String x:Key="Result.ServiceConfigurationVerified">{0} — verified. Status: {1} → {2}; startup: {3} → {4}.</system:String>
+    <system:String x:Key="Result.ServiceConfigurationRestored">{0} — restored. Status: {1} → {2}; startup: {3} → {4}.</system:String>
     <system:String x:Key="SessionStatus.Preparing">Preparing</system:String>
     <system:String x:Key="SessionStatus.Executing">Executing</system:String>
     <system:String x:Key="SessionStatus.Executed">Executed</system:String>
@@ -225,10 +273,11 @@
     <system:String x:Key="CustomTheme.Color.MenuHover">Menu hover</system:String>
     <system:String x:Key="CustomTheme.AutomaticForegroundHint">Button and menu text colors are selected automatically to preserve readable contrast.</system:String>
     <system:String x:Key="CustomTheme.SurfaceOpacity">PANEL OPACITY</system:String>
-    <system:String x:Key="CustomTheme.SurfaceOpacityHint">100% means opaque panels. This also sets the three main blocks, which you can fine-tune separately below. It does not change the background image, text, icons, or borders.</system:String>
+    <system:String x:Key="CustomTheme.SurfaceOpacityHint">100% means opaque panels. This also sets the four main blocks, which you can fine-tune separately below. It does not change the background image, text, icons, or borders.</system:String>
     <system:String x:Key="CustomTheme.CategoriesOpacity">CATEGORIES BLOCK</system:String>
     <system:String x:Key="CustomTheme.ProfilesOpacity">PROFILES BLOCK</system:String>
     <system:String x:Key="CustomTheme.ProfileEditorOpacity">PROFILE EDITOR BLOCK</system:String>
+    <system:String x:Key="CustomTheme.ActivityOpacity">ACTIVITY BLOCK</system:String>
     <system:String x:Key="CustomTheme.ChooseColor">Choose color</system:String>
     <system:String x:Key="CustomTheme.BackgroundImage">BACKGROUND IMAGE</system:String>
     <system:String x:Key="CustomTheme.ChooseImage">Choose image</system:String>
@@ -337,4 +386,83 @@
     <system:String x:Key="Status.ProfileCancelled">Profile execution cancelled</system:String>
     <system:String x:Key="Status.ProfileFailed">Profile execution failed</system:String>
     <system:String x:Key="Status.SettingsSaveFailed">Settings could not be saved: {0}</system:String>
+    <system:String x:Key="Action.ProcessSettings">Process settings</system:String>
+    <system:String x:Key="Action.WaitProcess">Wait for process</system:String>
+    <system:String x:Key="Action.WaitProcessExit">Wait for process to exit</system:String>
+    <system:String x:Key="Action.WaitWindow">Wait for window</system:String>
+    <system:String x:Key="Action.AudioSettings">Audio settings</system:String>
+    <system:String x:Key="Action.DeviceState">Device state</system:String>
+    <system:String x:Key="Action.RunProfile">Run another profile</system:String>
+    <system:String x:Key="Action.If">IF condition</system:String>
+    <system:String x:Key="Action.Notification">Notification</system:String>
+    <system:String x:Key="Activity.Title">Activity</system:String>
+    <system:String x:Key="Activity.Clear">Clear</system:String>
+    <system:String x:Key="Activity.SystemChanges">System Changes</system:String>
+    <system:String x:Key="Activity.SystemChangesCount">System Changes {0}</system:String>
+    <system:String x:Key="Activity.History">History</system:String>
+    <system:String x:Key="Activity.UnrestoredChanges">{0} system changes have not been restored</system:String>
+    <system:String x:Key="Activity.ChangeDiscarded">{0}: restore discarded; change left in place.</system:String>
+    <system:String x:Key="Activity.ExternalChange">{0}: the state was changed later outside SwitchBoard.</system:String>
+    <system:String x:Key="SystemChange.Pending">Pending restore</system:String>
+    <system:String x:Key="SystemChange.Restored">Restored</system:String>
+    <system:String x:Key="SystemChange.Discarded">Restore discarded / change left in place</system:String>
+    <system:String x:Key="SystemChange.RestoreFailed">Restore failed</system:String>
+    <system:String x:Key="SystemChange.External">Changed again outside SwitchBoard</system:String>
+    <system:String x:Key="SystemChange.ServiceDetails">Status: {0} → {1}; startup: {2} → {3}</system:String>
+    <system:String x:Key="Activity.ProfileStarted">Profile started: {0}</system:String>
+    <system:String x:Key="Activity.ProfileCompleted">Profile completed: {0}</system:String>
+    <system:String x:Key="Activity.ProfileCancelled">Profile cancelled: {0}</system:String>
+    <system:String x:Key="Activity.ProfileCompletedWithErrors">Profile completed with errors: {0}</system:String>
+    <system:String x:Key="Activity.ProfileFailed">Profile failed: {0}</system:String>
+    <system:String x:Key="Activity.ActionStarted">Started: {0}</system:String>
+    <system:String x:Key="Activity.ActionCompleted">Success: {0}</system:String>
+    <system:String x:Key="Activity.ActionSkipped">Skipped: {0}</system:String>
+    <system:String x:Key="Activity.ActionFailed">Error: {0}</system:String>
+    <system:String x:Key="Activity.RestoreStarted">Restoring profile: {0}</system:String>
+    <system:String x:Key="Activity.RestoreActionStarted">Restoring: {0}</system:String>
+    <system:String x:Key="Activity.RestoreActionCompleted">Restored: {0}</system:String>
+    <system:String x:Key="Activity.RestoreActionFailed">Restore error: {0}</system:String>
+    <system:String x:Key="Activity.RestoreCompleted">Profile restored: {0}</system:String>
+    <system:String x:Key="Activity.RestorePartial">Profile partially restored: {0}</system:String>
+    <system:String x:Key="Activity.RestoreCancelled">Profile restore cancelled: {0}</system:String>
+    <system:String x:Key="Activity.RestoreFailed">Profile restore failed: {0}</system:String>
+    <system:String x:Key="Advanced.Retry">Retry</system:String>
+    <system:String x:Key="Advanced.RetryEnabled">Retry after an error</system:String>
+    <system:String x:Key="Advanced.MaximumAttempts">Maximum attempts</system:String>
+    <system:String x:Key="Advanced.RetryDelay">Delay between attempts (s)</system:String>
+    <system:String x:Key="Advanced.InstanceBehavior">If the program is already running</system:String>
+    <system:String x:Key="Advanced.WindowBehavior">Window behavior</system:String>
+    <system:String x:Key="Advanced.WindowWait">Wait for the window at most (s)</system:String>
+    <system:String x:Key="ActionEditor.CpuAffinity">CPU affinity</system:String>
+    <system:String x:Key="ActionEditor.SelectAll">Select all</system:String>
+    <system:String x:Key="ActionEditor.ClearAll">Clear all</system:String>
+    <system:String x:Key="ActionEditor.AllExceptCpu0">All except CPU0</system:String>
+    <system:String x:Key="ActionEditor.Priority">Process priority</system:String>
+    <system:String x:Key="ActionEditor.Condition">Condition</system:String>
+    <system:String x:Key="ActionEditor.Value">Value</system:String>
+    <system:String x:Key="ActionEditor.Message">Message</system:String>
+    <system:String x:Key="ActionEditor.Level">Level</system:String>
+    <system:String x:Key="Validation.ProcessSetting">Select affinity, priority, or both.</system:String>
+    <system:String x:Key="Validation.CpuAffinity">CPU affinity must contain at least one logical processor.</system:String>
+    <system:String x:Key="Validation.WindowTitle">Enter the window title to match.</system:String>
+    <system:String x:Key="Validation.Audio">Select at least one audio setting to change.</system:String>
+    <system:String x:Key="Validation.Device">Select a Windows device.</system:String>
+    <system:String x:Key="Validation.Profile">Select an existing profile.</system:String>
+    <system:String x:Key="Validation.Condition">Configure the IF condition.</system:String>
+    <system:String x:Key="Validation.Notification">Enter a notification message.</system:String>
+    <system:String x:Key="Priority.Idle">Idle</system:String><system:String x:Key="Priority.BelowNormal">Below Normal</system:String><system:String x:Key="Priority.Normal">Normal</system:String><system:String x:Key="Priority.AboveNormal">Above Normal</system:String><system:String x:Key="Priority.High">High</system:String>
+    <system:String x:Key="WindowMatch.Any">Any main window</system:String><system:String x:Key="WindowMatch.Contains">Title contains</system:String><system:String x:Key="WindowMatch.Exact">Exact title</system:String>
+    <system:String x:Key="WindowBehavior.None">No change</system:String><system:String x:Key="WindowBehavior.Minimize">Minimize</system:String><system:String x:Key="WindowBehavior.Maximize">Maximize</system:String><system:String x:Key="WindowBehavior.Restore">Restore</system:String><system:String x:Key="WindowBehavior.Hide">Hide</system:String>
+    <system:String x:Key="InstanceBehavior.DoNotStart">Do not start again</system:String><system:String x:Key="InstanceBehavior.StartAnother">Start another instance</system:String><system:String x:Key="InstanceBehavior.Restart">Restart existing instance</system:String>
+    <system:String x:Key="DeviceState.Enabled">Enabled</system:String><system:String x:Key="DeviceState.Disabled">Disabled</system:String><system:String x:Key="DeviceState.Unchanged">Unchanged</system:String>
+    <system:String x:Key="Condition.ProcessRunning">Process is running</system:String><system:String x:Key="Condition.ProcessNotRunning">Process is not running</system:String><system:String x:Key="Condition.ServiceRunning">Service is running</system:String><system:String x:Key="Condition.ServiceStopped">Service is stopped</system:String><system:String x:Key="Condition.FileExists">File exists</system:String><system:String x:Key="Condition.FileNotExists">File does not exist</system:String>
+    <system:String x:Key="NotificationLevel.Info">Info</system:String><system:String x:Key="NotificationLevel.Success">Success</system:String><system:String x:Key="NotificationLevel.Warning">Warning</system:String><system:String x:Key="NotificationLevel.Error">Error</system:String>
+    <system:String x:Key="RestoreBehavior.ProcessSettings">Restore previous process settings</system:String><system:String x:Key="RestoreBehavior.AudioSettings">Restore previous audio settings</system:String><system:String x:Key="RestoreBehavior.DeviceState">Restore previous device state</system:String>
+    <system:String x:Key="ActionEditor.WindowMatch">Window condition</system:String><system:String x:Key="ActionEditor.WindowTitle">Window title</system:String>
+    <system:String x:Key="ActionEditor.SelectOutput">Select output</system:String><system:String x:Key="ActionEditor.SelectInput">Select input</system:String><system:String x:Key="ActionEditor.DefaultDevice">Default device</system:String><system:String x:Key="ActionEditor.DefaultCommunications">Communications device</system:String><system:String x:Key="ActionEditor.Volume">Volume</system:String><system:String x:Key="ActionEditor.ChangeMute">Change mute</system:String><system:String x:Key="ActionEditor.Mute">Muted</system:String>
+    <system:String x:Key="ActionEditor.SelectDevice">Select device</system:String><system:String x:Key="ActionEditor.DeviceWarning">Disabling devices may require administrator rights. Critical devices are protected.</system:String><system:String x:Key="ActionEditor.Profile">Profile</system:String><system:String x:Key="ActionEditor.Then">THEN</system:String><system:String x:Key="ActionEditor.Else">ELSE</system:String>
+    <system:String x:Key="Dialog.SelectAudioInput">Select audio input</system:String><system:String x:Key="Dialog.SelectAudioOutput">Select audio output</system:String><system:String x:Key="Dialog.SelectDevice">Select Windows device</system:String>
+    <system:String x:Key="Picker.Name">Name</system:String><system:String x:Key="Picker.Type">Type</system:String><system:String x:Key="Picker.Default">Default</system:String><system:String x:Key="Picker.Class">Class</system:String><system:String x:Key="Picker.State">State</system:String><system:String x:Key="Picker.InstanceId">Instance ID</system:String>
+    <system:String x:Key="Validation.NestedAction">A nested THEN/ELSE action is incomplete.</system:String>
+    <system:String x:Key="Picker.Input">Input</system:String><system:String x:Key="Picker.Output">Output</system:String><system:String x:Key="Picker.Multimedia">Multimedia</system:String><system:String x:Key="Picker.Communications">Communications</system:String><system:String x:Key="Picker.BothRoles">Multimedia + communications</system:String>
 </ResourceDictionary>

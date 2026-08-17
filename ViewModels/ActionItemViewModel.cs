@@ -4,6 +4,8 @@ using System.Collections.ObjectModel;
 using SwitchBoard.Localization;
 using SwitchBoard.Models.Actions;
 using SwitchBoard.Services.Discovery;
+using System.Text.Json;
+using SwitchBoard.Services.Execution;
 
 namespace SwitchBoard.ViewModels;
 
@@ -26,6 +28,7 @@ public sealed class ActionItemViewModel : ObservableObject
     private string _serviceName;
     private string _serviceDisplayName;
     private string _desiredServiceState;
+    private string _desiredServiceStartupType;
     private string _powerPlanGuid;
     private string _powerPlanName;
     private string _scriptPath;
@@ -50,8 +53,42 @@ public sealed class ActionItemViewModel : ObservableObject
     private int _displayHeight;
     private int _displayRefreshRate;
     private DisplayResolutionOptionViewModel? _selectedDisplayResolution;
+    private bool _retryOnFailure;
+    private int _maximumAttempts;
+    private int _retryDelaySeconds;
+    private string _instanceBehavior;
+    private string _windowBehavior;
+    private int _windowWaitSeconds;
+    private bool _changeAffinity;
+    private bool _changePriority;
+    private string _processPriority;
+    private string _windowMatchMode;
+    private string _windowTitle;
+    private string _audioOutputDeviceId;
+    private string _audioOutputDeviceName;
+    private string _audioInputDeviceId;
+    private string _audioInputDeviceName;
+    private bool _setDefaultMultimedia;
+    private bool _setDefaultCommunications;
+    private bool _changeVolume;
+    private int _volumePercent;
+    private bool _changeMute;
+    private bool _mute;
+    private string _deviceInstanceId;
+    private string _deviceFriendlyName;
+    private string _deviceClass;
+    private string _deviceState;
+    private string _targetProfileId;
+    private string _targetProfileName;
+    private string _conditionType;
+    private string _conditionValue;
+    private string _notificationMessage;
+    private string _notificationLevel;
+    private string _currentStatusText = string.Empty;
+    private string _currentStatusTooltip = string.Empty;
+    private DateTimeOffset? _lastChecked;
 
-    public ActionItemViewModel(ActionDefinition action, ILocalizationService localizationService)
+    public ActionItemViewModel(ActionDefinition action, ILocalizationService localizationService, int nestingDepth = 0)
     {
         _localizationService = localizationService;
         _displayNameResourceKey = GetDisplayNameResourceKey(action.Type);
@@ -82,6 +119,8 @@ public sealed class ActionItemViewModel : ObservableObject
         _serviceName = ReadString(ActionParameterNames.ServiceName);
         _serviceDisplayName = ReadString(ActionParameterNames.ServiceDisplayName);
         _desiredServiceState = DefaultIfEmpty(ReadString(ActionParameterNames.DesiredState), ServiceDesiredStateIds.Unchanged);
+        _desiredServiceStartupType = DefaultIfEmpty(ReadString(ActionParameterNames.ServiceStartupType),
+            ServiceStartupTypeIds.Unchanged);
         _powerPlanGuid = ReadString(ActionParameterNames.PowerPlanGuid);
         _powerPlanName = ReadString(ActionParameterNames.PowerPlanName);
         _scriptPath = ReadString(ActionParameterNames.ScriptPath);
@@ -103,6 +142,58 @@ public sealed class ActionItemViewModel : ObservableObject
         _displayWidth = ReadInt32(ActionParameterNames.DisplayWidth, 0);
         _displayHeight = ReadInt32(ActionParameterNames.DisplayHeight, 0);
         _displayRefreshRate = ReadInt32(ActionParameterNames.DisplayRefreshRate, 0);
+        _retryOnFailure = action.RetryOnFailure;
+        _maximumAttempts = Math.Clamp(action.MaximumAttempts, 1, 10);
+        _retryDelaySeconds = Math.Clamp((int)Math.Round(action.RetryDelay.TotalSeconds), 0, 3600);
+        _instanceBehavior = DefaultIfEmpty(ReadString(ActionParameterNames.InstanceBehavior),
+            _startOnlyIfNotAlreadyRunning ? InstanceBehaviorIds.DoNotStartAgain : InstanceBehaviorIds.StartAnother);
+        _windowBehavior = DefaultIfEmpty(ReadString(ActionParameterNames.WindowBehavior), WindowBehaviorIds.None);
+        _windowWaitSeconds = Math.Clamp(ReadInt32(ActionParameterNames.WindowWaitSeconds, 10), 1, 300);
+        _changeAffinity = ReadBoolean(ActionParameterNames.ChangeAffinity, false);
+        _changePriority = ReadBoolean(ActionParameterNames.ChangePriority, false);
+        _processPriority = DefaultIfEmpty(ReadString(ActionParameterNames.ProcessPriority), ProcessPriorityIds.Normal);
+        _windowMatchMode = DefaultIfEmpty(ReadString(ActionParameterNames.WindowMatchMode), WindowMatchModeIds.Any);
+        _windowTitle = ReadString(ActionParameterNames.WindowTitle);
+        _audioOutputDeviceId = ReadString(ActionParameterNames.AudioOutputDeviceId);
+        _audioOutputDeviceName = ReadString("audioOutputDeviceName");
+        _audioInputDeviceId = ReadString(ActionParameterNames.AudioInputDeviceId);
+        _audioInputDeviceName = ReadString("audioInputDeviceName");
+        _setDefaultMultimedia = ReadBoolean(ActionParameterNames.SetDefaultMultimedia, true);
+        _setDefaultCommunications = ReadBoolean(ActionParameterNames.SetDefaultCommunications, false);
+        _changeVolume = Parameters.ContainsKey(ActionParameterNames.VolumePercent);
+        _volumePercent = Math.Clamp(ReadInt32(ActionParameterNames.VolumePercent, 100), 0, 100);
+        _changeMute = Parameters.ContainsKey(ActionParameterNames.Mute);
+        _mute = ReadBoolean(ActionParameterNames.Mute, false);
+        _deviceInstanceId = ReadString(ActionParameterNames.DeviceInstanceId);
+        _deviceFriendlyName = ReadString(ActionParameterNames.DeviceFriendlyName);
+        _deviceClass = ReadString(ActionParameterNames.DeviceClass);
+        _deviceState = DefaultIfEmpty(ReadString(ActionParameterNames.DesiredState), DeviceStateIds.Unchanged);
+        _targetProfileId = ReadString(ActionParameterNames.ProfileId);
+        _targetProfileName = ReadString("profileName");
+        _conditionType = DefaultIfEmpty(ReadString(ActionParameterNames.ConditionType), ConditionTypeIds.ProcessRunning);
+        _conditionValue = ReadString(ActionParameterNames.ConditionValue);
+        _notificationMessage = ReadString(ActionParameterNames.NotificationMessage);
+        _notificationLevel = DefaultIfEmpty(ReadString(ActionParameterNames.NotificationLevel), NotificationLevelIds.Info);
+
+        LogicalCpus = [];
+        var selectedCpus = ReadIntArray(ActionParameterNames.CpuIndices).ToHashSet();
+        for (var index = 0; index < Math.Min(Environment.ProcessorCount, IntPtr.Size * 8); index++)
+        {
+            var option = new LogicalCpuOptionViewModel(index, selectedCpus.Count == 0 || selectedCpus.Contains(index));
+            option.PropertyChanged += (_, _) =>
+            {
+                NotifyValidation();
+                OnPropertyChanged("CpuSelection");
+            };
+            LogicalCpus.Add(option);
+        }
+        ThenActions = [];
+        ElseActions = [];
+        if (nestingDepth < ProfileRunner.MaximumNestingDepth)
+        {
+            LoadNestedActions(ActionParameterNames.ThenActions, ThenActions, nestingDepth + 1);
+            LoadNestedActions(ActionParameterNames.ElseActions, ElseActions, nestingDepth + 1);
+        }
 
         AvailableDisplayResolutions = [];
         AvailableDisplayRefreshRates = [];
@@ -128,9 +219,17 @@ public sealed class ActionItemViewModel : ObservableObject
         ];
         AvailableServiceStates =
         [
+            new(ServiceDesiredStateIds.Unchanged, "ServiceState.Unchanged", localizationService),
             new(ServiceDesiredStateIds.Running, "ServiceState.Running", localizationService),
-            new(ServiceDesiredStateIds.Stopped, "ServiceState.Stopped", localizationService),
-            new(ServiceDesiredStateIds.Unchanged, "ServiceState.Unchanged", localizationService)
+            new(ServiceDesiredStateIds.Stopped, "ServiceState.Stopped", localizationService)
+        ];
+        AvailableServiceStartupTypes =
+        [
+            new(ServiceStartupTypeIds.Unchanged, "ServiceStartupType.Unchanged", localizationService),
+            new(ServiceStartupTypeIds.Automatic, "ServiceStartupType.Automatic", localizationService),
+            new(ServiceStartupTypeIds.AutomaticDelayed, "ServiceStartupType.AutomaticDelayed", localizationService),
+            new(ServiceStartupTypeIds.Manual, "ServiceStartupType.Manual", localizationService),
+            new(ServiceStartupTypeIds.Disabled, "ServiceStartupType.Disabled", localizationService)
         ];
         AvailableScriptTypes =
         [
@@ -144,6 +243,41 @@ public sealed class ActionItemViewModel : ObservableObject
             new("stop", "FailurePolicy.Stop", localizationService)
         ];
         AvailableRestoreBehaviors = BuildRestoreBehaviors(action.Type, localizationService);
+        AvailableProcessPriorities = BuildOptions(localizationService,
+            (ProcessPriorityIds.Idle, "Priority.Idle"), (ProcessPriorityIds.BelowNormal, "Priority.BelowNormal"),
+            (ProcessPriorityIds.Normal, "Priority.Normal"), (ProcessPriorityIds.AboveNormal, "Priority.AboveNormal"),
+            (ProcessPriorityIds.High, "Priority.High"));
+        AvailableWindowMatchModes = BuildOptions(localizationService,
+            (WindowMatchModeIds.Any, "WindowMatch.Any"), (WindowMatchModeIds.Contains, "WindowMatch.Contains"),
+            (WindowMatchModeIds.Exact, "WindowMatch.Exact"));
+        AvailableWindowBehaviors = BuildOptions(localizationService,
+            (WindowBehaviorIds.None, "WindowBehavior.None"), (WindowBehaviorIds.Minimize, "WindowBehavior.Minimize"),
+            (WindowBehaviorIds.Maximize, "WindowBehavior.Maximize"), (WindowBehaviorIds.Restore, "WindowBehavior.Restore"),
+            (WindowBehaviorIds.Hide, "WindowBehavior.Hide"));
+        AvailableInstanceBehaviors = BuildOptions(localizationService,
+            (InstanceBehaviorIds.DoNotStartAgain, "InstanceBehavior.DoNotStart"),
+            (InstanceBehaviorIds.StartAnother, "InstanceBehavior.StartAnother"),
+            (InstanceBehaviorIds.RestartExisting, "InstanceBehavior.Restart"));
+        AvailableDeviceStates = BuildOptions(localizationService,
+            (DeviceStateIds.Enabled, "DeviceState.Enabled"), (DeviceStateIds.Disabled, "DeviceState.Disabled"),
+            (DeviceStateIds.Unchanged, "DeviceState.Unchanged"));
+        AvailableConditions = BuildOptions(localizationService,
+            (ConditionTypeIds.ProcessRunning, "Condition.ProcessRunning"),
+            (ConditionTypeIds.ProcessNotRunning, "Condition.ProcessNotRunning"),
+            (ConditionTypeIds.ServiceRunning, "Condition.ServiceRunning"),
+            (ConditionTypeIds.ServiceStopped, "Condition.ServiceStopped"),
+            (ConditionTypeIds.FileExists, "Condition.FileExists"),
+            (ConditionTypeIds.FileNotExists, "Condition.FileNotExists"));
+        AvailableNotificationLevels = BuildOptions(localizationService,
+            (NotificationLevelIds.Info, "NotificationLevel.Info"),
+            (NotificationLevelIds.Success, "NotificationLevel.Success"),
+            (NotificationLevelIds.Warning, "NotificationLevel.Warning"),
+            (NotificationLevelIds.Error, "NotificationLevel.Error"));
+        AddThenNotificationCommand = new RelayCommand(() => AddNested(ThenActions, ActionTypeIds.NotificationShow));
+        AddThenProgramCommand = new RelayCommand(() => AddNested(ThenActions, ActionTypeIds.ProgramRun));
+        AddElseNotificationCommand = new RelayCommand(() => AddNested(ElseActions, ActionTypeIds.NotificationShow));
+        AddElseProgramCommand = new RelayCommand(() => AddNested(ElseActions, ActionTypeIds.ProgramRun));
+        DeleteNestedActionCommand = new RelayCommand<ActionItemViewModel>(DeleteNestedAction, item => item is not null);
     }
 
     public Guid Id { get; }
@@ -153,9 +287,25 @@ public sealed class ActionItemViewModel : ObservableObject
     public JsonObject Parameters { get; }
     public IReadOnlyList<LocalizedValueOptionViewModel> AvailableProcessStates { get; }
     public IReadOnlyList<LocalizedValueOptionViewModel> AvailableServiceStates { get; }
+    public IReadOnlyList<LocalizedValueOptionViewModel> AvailableServiceStartupTypes { get; }
     public IReadOnlyList<LocalizedValueOptionViewModel> AvailableScriptTypes { get; }
     public IReadOnlyList<LocalizedValueOptionViewModel> AvailableFailurePolicies { get; }
     public IReadOnlyList<LocalizedValueOptionViewModel> AvailableRestoreBehaviors { get; }
+    public IReadOnlyList<LocalizedValueOptionViewModel> AvailableProcessPriorities { get; }
+    public IReadOnlyList<LocalizedValueOptionViewModel> AvailableWindowMatchModes { get; }
+    public IReadOnlyList<LocalizedValueOptionViewModel> AvailableWindowBehaviors { get; }
+    public IReadOnlyList<LocalizedValueOptionViewModel> AvailableInstanceBehaviors { get; }
+    public IReadOnlyList<LocalizedValueOptionViewModel> AvailableDeviceStates { get; }
+    public IReadOnlyList<LocalizedValueOptionViewModel> AvailableConditions { get; }
+    public IReadOnlyList<LocalizedValueOptionViewModel> AvailableNotificationLevels { get; }
+    public ObservableCollection<LogicalCpuOptionViewModel> LogicalCpus { get; }
+    public ObservableCollection<ActionItemViewModel> ThenActions { get; }
+    public ObservableCollection<ActionItemViewModel> ElseActions { get; }
+    public RelayCommand AddThenNotificationCommand { get; }
+    public RelayCommand AddThenProgramCommand { get; }
+    public RelayCommand AddElseNotificationCommand { get; }
+    public RelayCommand AddElseProgramCommand { get; }
+    public RelayCommand<ActionItemViewModel> DeleteNestedActionCommand { get; }
 
     public string? Name
     {
@@ -189,10 +339,25 @@ public sealed class ActionItemViewModel : ObservableObject
         ActionTypeIds.ScriptRun => _localizationService.Format("ActionSummary.Script", GetFileSummary(ScriptPath)),
         ActionTypeIds.DisplayConfigure => _localizationService.Format("ActionSummary.Display", GetDisplaySummaryTarget()),
         ActionTypeIds.Delay => _localizationService.Format("ActionSummary.Delay", DelaySeconds),
+        ActionTypeIds.ProcessConfigure or ActionTypeIds.WaitProcessStart or ActionTypeIds.WaitProcessExit or ActionTypeIds.WaitWindow
+            => GetProcessSummaryTarget(),
+        ActionTypeIds.AudioConfigure => string.IsNullOrWhiteSpace(AudioOutputDeviceName) ? AudioInputDeviceName : AudioOutputDeviceName,
+        ActionTypeIds.DeviceSetState => string.IsNullOrWhiteSpace(DeviceFriendlyName) ? DeviceInstanceId : DeviceFriendlyName,
+        ActionTypeIds.ProfileRun => string.IsNullOrWhiteSpace(TargetProfileName) ? TargetProfileId : TargetProfileName,
+        ActionTypeIds.ConditionIf => ConditionValue,
+        ActionTypeIds.NotificationShow => NotificationMessage,
         _ => DisplayName
     };
 
-    public bool IsExpanded { get => _isExpanded; set => SetProperty(ref _isExpanded, value); }
+    public bool IsExpanded
+    {
+        get => _isExpanded;
+        set
+        {
+            if (!SetProperty(ref _isExpanded, value)) return;
+            if (!value) IsAdvancedOptionsExpanded = false;
+        }
+    }
     public bool IsAdvancedOptionsExpanded { get => _isAdvancedOptionsExpanded; set => SetProperty(ref _isAdvancedOptionsExpanded, value); }
     public bool IsEnabled
     {
@@ -214,7 +379,8 @@ public sealed class ActionItemViewModel : ObservableObject
     {
         ActionTypeIds.ProgramRun => IsFullExecutablePath(Target),
         ActionTypeIds.ProcessSetState => IsFullExecutablePath(ExecutablePath),
-        ActionTypeIds.ServiceSetState or ActionTypeIds.PowerSetPlan or ActionTypeIds.DisplayConfigure or ActionTypeIds.ScriptRun => true,
+        ActionTypeIds.ServiceSetState or ActionTypeIds.PowerSetPlan or ActionTypeIds.DisplayConfigure or ActionTypeIds.ScriptRun or
+            ActionTypeIds.ProcessConfigure or ActionTypeIds.AudioConfigure or ActionTypeIds.DeviceSetState => true,
         _ => false
     };
     public bool IsRestoreScriptEnabled => Type == ActionTypeIds.ScriptRun && RestoreBehaviorId == "restoreScript";
@@ -231,6 +397,97 @@ public sealed class ActionItemViewModel : ObservableObject
     public bool RestoreScriptRunAsAdministrator { get => _restoreScriptRunAsAdministrator; set => SetProperty(ref _restoreScriptRunAsAdministrator, value); }
     public int RestoreScriptTimeoutSeconds { get => _restoreScriptTimeoutSeconds; set => SetProperty(ref _restoreScriptTimeoutSeconds, Math.Clamp(value, 0, 86400)); }
     public int TimeoutSeconds { get => _timeoutSeconds; set => SetProperty(ref _timeoutSeconds, Math.Clamp(value, 0, 86400)); }
+    public bool RetryOnFailure { get => _retryOnFailure; set => SetProperty(ref _retryOnFailure, value); }
+    public int MaximumAttempts { get => _maximumAttempts; set => SetProperty(ref _maximumAttempts, Math.Clamp(value, 1, 10)); }
+    public int RetryDelaySeconds { get => _retryDelaySeconds; set => SetProperty(ref _retryDelaySeconds, Math.Clamp(value, 0, 3600)); }
+    public string InstanceBehavior { get => _instanceBehavior; set => SetProperty(ref _instanceBehavior, value); }
+    public string WindowBehavior { get => _windowBehavior; set => SetProperty(ref _windowBehavior, value); }
+    public int WindowWaitSeconds { get => _windowWaitSeconds; set => SetProperty(ref _windowWaitSeconds, Math.Clamp(value, 1, 300)); }
+    public bool ChangeAffinity { get => _changeAffinity; set { if (SetProperty(ref _changeAffinity, value)) NotifyValidation(); } }
+    public bool ChangePriority { get => _changePriority; set { if (SetProperty(ref _changePriority, value)) NotifyValidation(); } }
+    public string ProcessPriority { get => _processPriority; set => SetProperty(ref _processPriority, value); }
+    public string WindowMatchMode { get => _windowMatchMode; set { if (SetProperty(ref _windowMatchMode, value)) NotifyValidation(); } }
+    public string WindowTitle { get => _windowTitle; set => SetValidationProperty(ref _windowTitle, value); }
+    public string AudioOutputDeviceId { get => _audioOutputDeviceId; set => SetValidationProperty(ref _audioOutputDeviceId, value); }
+    public string AudioOutputDeviceName { get => _audioOutputDeviceName; set => SetWithSummary(ref _audioOutputDeviceName, value); }
+    public string AudioInputDeviceId { get => _audioInputDeviceId; set => SetValidationProperty(ref _audioInputDeviceId, value); }
+    public string AudioInputDeviceName { get => _audioInputDeviceName; set => SetWithSummary(ref _audioInputDeviceName, value); }
+    public bool SetDefaultMultimedia { get => _setDefaultMultimedia; set => SetProperty(ref _setDefaultMultimedia, value); }
+    public bool SetDefaultCommunications { get => _setDefaultCommunications; set => SetProperty(ref _setDefaultCommunications, value); }
+    public bool ChangeVolume { get => _changeVolume; set { if (SetProperty(ref _changeVolume, value)) NotifyValidation(); } }
+    public int VolumePercent { get => _volumePercent; set => SetProperty(ref _volumePercent, Math.Clamp(value, 0, 100)); }
+    public bool ChangeMute { get => _changeMute; set { if (SetProperty(ref _changeMute, value)) NotifyValidation(); } }
+    public bool Mute { get => _mute; set => SetProperty(ref _mute, value); }
+    public string DeviceInstanceId { get => _deviceInstanceId; set => SetValidationProperty(ref _deviceInstanceId, value); }
+    public string DeviceFriendlyName { get => _deviceFriendlyName; set => SetWithSummary(ref _deviceFriendlyName, value); }
+    public string DeviceClass { get => _deviceClass; set => SetProperty(ref _deviceClass, value); }
+    public string DeviceState { get => _deviceState; set => SetProperty(ref _deviceState, value); }
+    public string TargetProfileId
+    {
+        get => _targetProfileId;
+        set
+        {
+            if (!SetProperty(ref _targetProfileId, value)) return;
+            OnPropertyChanged(nameof(TargetProfileGuid));
+            NotifyValidation();
+        }
+    }
+    public Guid? TargetProfileGuid
+    {
+        get => Guid.TryParse(TargetProfileId, out var id) ? id : null;
+        set => TargetProfileId = value?.ToString("D") ?? string.Empty;
+    }
+    public string TargetProfileName { get => _targetProfileName; set => SetWithSummary(ref _targetProfileName, value); }
+    public string ConditionType { get => _conditionType; set => SetValidationProperty(ref _conditionType, value); }
+    public string ConditionValue { get => _conditionValue; set => SetValidationProperty(ref _conditionValue, value); }
+    public string NotificationMessage { get => _notificationMessage; set => SetValidationProperty(ref _notificationMessage, value); }
+    public string NotificationLevel { get => _notificationLevel; set => SetProperty(ref _notificationLevel, value); }
+
+    public void SelectAllCpus(bool selected)
+    {
+        foreach (var cpu in LogicalCpus) cpu.IsSelected = selected;
+        NotifyValidation();
+    }
+
+    public void SelectAllExceptCpu0()
+    {
+        foreach (var cpu in LogicalCpus) cpu.IsSelected = cpu.Index != 0;
+        NotifyValidation();
+    }
+
+    private void AddNested(ObservableCollection<ActionItemViewModel> target, string type)
+    {
+        var parameters = type == ActionTypeIds.NotificationShow
+            ? new JsonObject { [ActionParameterNames.NotificationLevel] = NotificationLevelIds.Info }
+            : new JsonObject
+            {
+                [ActionParameterNames.StartOnlyIfNotAlreadyRunning] = true,
+                [ActionParameterNames.InstanceBehavior] = InstanceBehaviorIds.DoNotStartAgain
+            };
+        var item = new ActionItemViewModel(new ActionDefinition
+        {
+            Type = type, SortOrder = target.Count, Parameters = parameters
+        }, _localizationService, 1);
+        SubscribeNested(item);
+        target.Add(item);
+        NotifyValidation();
+        OnPropertyChanged("NestedConfiguration");
+    }
+
+    private void DeleteNestedAction(ActionItemViewModel? item)
+    {
+        if (item is null) return;
+        ThenActions.Remove(item);
+        ElseActions.Remove(item);
+        NotifyValidation();
+        OnPropertyChanged("NestedConfiguration");
+    }
+
+    private void SubscribeNested(ActionItemViewModel item) => item.PropertyChanged += (_, _) =>
+    {
+        NotifyValidation();
+        OnPropertyChanged("NestedConfiguration");
+    };
 
     public string Target { get => _target; set => SetWithSummary(ref _target, value); }
     public string ProcessName { get => _processName; set => SetWithSummary(ref _processName, value); }
@@ -240,6 +497,7 @@ public sealed class ActionItemViewModel : ObservableObject
     public string ServiceName { get => _serviceName; set => SetWithSummary(ref _serviceName, value); }
     public string ServiceDisplayName { get => _serviceDisplayName; set => SetWithSummary(ref _serviceDisplayName, value); }
     public string DesiredServiceState { get => _desiredServiceState; set => SetWithSummary(ref _desiredServiceState, value); }
+    public string DesiredServiceStartupType { get => _desiredServiceStartupType; set => SetWithSummary(ref _desiredServiceStartupType, value); }
     public string PowerPlanGuid { get => _powerPlanGuid; set => SetWithSummary(ref _powerPlanGuid, value); }
     public string PowerPlanName { get => _powerPlanName; set => SetWithSummary(ref _powerPlanName, value); }
     public string ScriptPath { get => _scriptPath; set => SetWithSummary(ref _scriptPath, value); }
@@ -283,10 +541,50 @@ public sealed class ActionItemViewModel : ObservableObject
     }
 
     public bool IsValid => !IsEnabled || ValidationMessage.Length == 0;
+    public string CurrentStatusText
+    {
+        get => _currentStatusText;
+        private set => SetProperty(ref _currentStatusText, value);
+    }
+    public string CurrentStatusTooltip
+    {
+        get => _currentStatusTooltip;
+        private set => SetProperty(ref _currentStatusTooltip, value);
+    }
+    public DateTimeOffset? LastChecked => _lastChecked;
+
+    public void SetCurrentStatus(string? status, string? technicalDetails, DateTimeOffset checkedAt)
+    {
+        CurrentStatusText = string.IsNullOrWhiteSpace(status)
+            ? _localizationService.GetString("ActionStatus.Unavailable")
+            : status;
+        _lastChecked = checkedAt;
+        OnPropertyChanged(nameof(LastChecked));
+        CurrentStatusTooltip = string.IsNullOrWhiteSpace(technicalDetails)
+            ? _localizationService.Format("ActionStatus.LastChecked", checkedAt.ToLocalTime().ToString("HH:mm:ss"))
+            : technicalDetails + Environment.NewLine +
+              _localizationService.Format("ActionStatus.LastChecked", checkedAt.ToLocalTime().ToString("HH:mm:ss"));
+    }
     public string ValidationMessage => Type switch
     {
         ActionTypeIds.ProgramRun when string.IsNullOrWhiteSpace(Target) => _localizationService.GetString("Validation.ProgramTarget"),
         ActionTypeIds.ProcessSetState when string.IsNullOrWhiteSpace(ProcessName) => _localizationService.GetString("Validation.ProcessName"),
+        ActionTypeIds.ProcessConfigure when string.IsNullOrWhiteSpace(ProcessName) => _localizationService.GetString("Validation.ProcessName"),
+        ActionTypeIds.ProcessConfigure when !ChangeAffinity && !ChangePriority => _localizationService.GetString("Validation.ProcessSetting"),
+        ActionTypeIds.ProcessConfigure when ChangeAffinity && !LogicalCpus.Any(cpu => cpu.IsSelected) => _localizationService.GetString("Validation.CpuAffinity"),
+        ActionTypeIds.WaitProcessStart or ActionTypeIds.WaitProcessExit when string.IsNullOrWhiteSpace(ProcessName) => _localizationService.GetString("Validation.ProcessName"),
+        ActionTypeIds.WaitWindow when string.IsNullOrWhiteSpace(ProcessName) => _localizationService.GetString("Validation.ProcessName"),
+        ActionTypeIds.WaitWindow when WindowMatchMode is WindowMatchModeIds.Contains or WindowMatchModeIds.Exact && string.IsNullOrWhiteSpace(WindowTitle)
+            => _localizationService.GetString("Validation.WindowTitle"),
+        ActionTypeIds.AudioConfigure when string.IsNullOrWhiteSpace(AudioOutputDeviceId) && string.IsNullOrWhiteSpace(AudioInputDeviceId) && !ChangeVolume && !ChangeMute
+            => _localizationService.GetString("Validation.Audio"),
+        ActionTypeIds.DeviceSetState when string.IsNullOrWhiteSpace(DeviceInstanceId) => _localizationService.GetString("Validation.Device"),
+        ActionTypeIds.ProfileRun when !Guid.TryParse(TargetProfileId, out _) => _localizationService.GetString("Validation.Profile"),
+        ActionTypeIds.ConditionIf when string.IsNullOrWhiteSpace(ConditionType) || string.IsNullOrWhiteSpace(ConditionValue)
+            => _localizationService.GetString("Validation.Condition"),
+        ActionTypeIds.ConditionIf when ThenActions.Concat(ElseActions).Any(action => !action.IsValid)
+            => _localizationService.GetString("Validation.NestedAction"),
+        ActionTypeIds.NotificationShow when string.IsNullOrWhiteSpace(NotificationMessage) => _localizationService.GetString("Validation.Notification"),
         ActionTypeIds.ServiceSetState when string.IsNullOrWhiteSpace(ServiceName) => _localizationService.GetString("Validation.ServiceName"),
         ActionTypeIds.PowerSetPlan when !Guid.TryParse(PowerPlanGuid, out _) => _localizationService.GetString("Validation.PowerPlan"),
         ActionTypeIds.DisplayConfigure when string.IsNullOrWhiteSpace(DisplayDeviceName) || _displayWidth <= 0 || _displayHeight <= 0 || DisplayRefreshRate <= 0
@@ -318,8 +616,11 @@ public sealed class ActionItemViewModel : ObservableObject
         OnPropertyChanged(nameof(DisplayName));
         OnPropertyChanged(nameof(Summary));
         NotifyValidation();
-        foreach (var option in AvailableProcessStates.Concat(AvailableServiceStates)
-                     .Concat(AvailableScriptTypes).Concat(AvailableFailurePolicies).Concat(AvailableRestoreBehaviors))
+        foreach (var option in AvailableProcessStates.Concat(AvailableServiceStates).Concat(AvailableServiceStartupTypes)
+                     .Concat(AvailableScriptTypes).Concat(AvailableFailurePolicies).Concat(AvailableRestoreBehaviors)
+                     .Concat(AvailableProcessPriorities).Concat(AvailableWindowMatchModes).Concat(AvailableWindowBehaviors)
+                     .Concat(AvailableInstanceBehaviors).Concat(AvailableDeviceStates).Concat(AvailableConditions)
+                     .Concat(AvailableNotificationLevels))
         {
             option.RefreshDisplayName();
         }
@@ -405,6 +706,7 @@ public sealed class ActionItemViewModel : ObservableObject
                 SetString(parameters, ActionParameterNames.ServiceName, ServiceName);
                 SetString(parameters, ActionParameterNames.ServiceDisplayName, ServiceDisplayName);
                 parameters[ActionParameterNames.DesiredState] = DesiredServiceState;
+                parameters[ActionParameterNames.ServiceStartupType] = DesiredServiceStartupType;
                 break;
             case ActionTypeIds.PowerSetPlan:
                 SetString(parameters, ActionParameterNames.PowerPlanGuid, PowerPlanGuid);
@@ -435,6 +737,66 @@ public sealed class ActionItemViewModel : ObservableObject
             case ActionTypeIds.Delay:
                 parameters[ActionParameterNames.DelaySeconds] = DelaySeconds;
                 break;
+            case ActionTypeIds.ProcessConfigure:
+                SetString(parameters, ActionParameterNames.ProcessName, ProcessName);
+                SetString(parameters, ActionParameterNames.ExecutablePath, ExecutablePath);
+                parameters[ActionParameterNames.ChangeAffinity] = ChangeAffinity;
+                parameters[ActionParameterNames.ChangePriority] = ChangePriority;
+                parameters[ActionParameterNames.CpuIndices] = new JsonArray(LogicalCpus.Where(cpu => cpu.IsSelected)
+                    .Select(cpu => (JsonNode?)JsonValue.Create(cpu.Index)).ToArray());
+                parameters[ActionParameterNames.ProcessPriority] = ProcessPriority;
+                break;
+            case ActionTypeIds.WaitProcessStart:
+            case ActionTypeIds.WaitProcessExit:
+                SetString(parameters, ActionParameterNames.ProcessName, ProcessName);
+                SetString(parameters, ActionParameterNames.ExecutablePath, ExecutablePath);
+                break;
+            case ActionTypeIds.WaitWindow:
+                SetString(parameters, ActionParameterNames.ProcessName, ProcessName);
+                SetString(parameters, ActionParameterNames.ExecutablePath, ExecutablePath);
+                parameters[ActionParameterNames.WindowMatchMode] = WindowMatchMode;
+                SetString(parameters, ActionParameterNames.WindowTitle, WindowTitle);
+                break;
+            case ActionTypeIds.AudioConfigure:
+                SetString(parameters, ActionParameterNames.AudioOutputDeviceId, AudioOutputDeviceId);
+                SetString(parameters, "audioOutputDeviceName", AudioOutputDeviceName);
+                SetString(parameters, ActionParameterNames.AudioInputDeviceId, AudioInputDeviceId);
+                SetString(parameters, "audioInputDeviceName", AudioInputDeviceName);
+                parameters[ActionParameterNames.SetDefaultMultimedia] = SetDefaultMultimedia;
+                parameters[ActionParameterNames.SetDefaultCommunications] = SetDefaultCommunications;
+                if (ChangeVolume) parameters[ActionParameterNames.VolumePercent] = VolumePercent;
+                else parameters.Remove(ActionParameterNames.VolumePercent);
+                if (ChangeMute) parameters[ActionParameterNames.Mute] = Mute;
+                else parameters.Remove(ActionParameterNames.Mute);
+                break;
+            case ActionTypeIds.DeviceSetState:
+                SetString(parameters, ActionParameterNames.DeviceInstanceId, DeviceInstanceId);
+                SetString(parameters, ActionParameterNames.DeviceFriendlyName, DeviceFriendlyName);
+                SetString(parameters, ActionParameterNames.DeviceClass, DeviceClass);
+                parameters[ActionParameterNames.DesiredState] = DeviceState;
+                break;
+            case ActionTypeIds.ProfileRun:
+                SetString(parameters, ActionParameterNames.ProfileId, TargetProfileId);
+                SetString(parameters, "profileName", TargetProfileName);
+                break;
+            case ActionTypeIds.ConditionIf:
+                parameters[ActionParameterNames.ConditionType] = ConditionType;
+                SetString(parameters, ActionParameterNames.ConditionValue, ConditionValue);
+                parameters[ActionParameterNames.ThenActions] = SerializeNested(ThenActions);
+                parameters[ActionParameterNames.ElseActions] = SerializeNested(ElseActions);
+                break;
+            case ActionTypeIds.NotificationShow:
+                SetString(parameters, ActionParameterNames.NotificationMessage, NotificationMessage);
+                parameters[ActionParameterNames.NotificationLevel] = NotificationLevel;
+                break;
+        }
+
+        if (Type == ActionTypeIds.ProgramRun)
+        {
+            parameters[ActionParameterNames.InstanceBehavior] = InstanceBehavior;
+            parameters[ActionParameterNames.WindowBehavior] = WindowBehavior;
+            parameters[ActionParameterNames.WindowWaitSeconds] = WindowWaitSeconds;
+            parameters[ActionParameterNames.RunAsAdministrator] = RunAsAdministrator;
         }
 
         return new ActionDefinition
@@ -457,6 +819,9 @@ public sealed class ActionItemViewModel : ObservableObject
                 _ => ActionRestoreBehavior.DoNotRestore
             },
             Timeout = TimeoutSeconds > 0 ? TimeSpan.FromSeconds(TimeoutSeconds) : null,
+            RetryOnFailure = RetryOnFailure,
+            MaximumAttempts = RetryOnFailure ? MaximumAttempts : 1,
+            RetryDelay = TimeSpan.FromSeconds(RetryDelaySeconds),
             RuntimeProcessIdHint = RuntimeProcessIdHint,
             Parameters = parameters
         };
@@ -508,6 +873,39 @@ public sealed class ActionItemViewModel : ObservableObject
         catch (InvalidOperationException) { return defaultValue; }
     }
 
+    private IReadOnlyList<int> ReadIntArray(string propertyName)
+    {
+        if (Parameters[propertyName] is not JsonArray array) return [];
+        var result = new List<int>();
+        foreach (var node in array)
+        {
+            try { if (node is not null) result.Add(node.GetValue<int>()); }
+            catch (InvalidOperationException) { }
+        }
+        return result;
+    }
+
+    private void LoadNestedActions(string propertyName, ObservableCollection<ActionItemViewModel> target, int depth)
+    {
+        if (Parameters[propertyName] is not JsonArray array) return;
+        foreach (var node in array)
+        {
+            try
+            {
+                if (node?.Deserialize<ActionDefinition>() is { } action)
+                {
+                    var item = new ActionItemViewModel(action, _localizationService, depth);
+                    SubscribeNested(item);
+                    target.Add(item);
+                }
+            }
+            catch (JsonException) { }
+        }
+    }
+
+    private static JsonArray SerializeNested(IEnumerable<ActionItemViewModel> actions) =>
+        new(actions.Select(action => JsonSerializer.SerializeToNode(action.ToModel())).ToArray());
+
     private static void SetString(JsonObject parameters, string propertyName, string? value)
     {
         if (string.IsNullOrWhiteSpace(value)) parameters.Remove(propertyName);
@@ -558,6 +956,12 @@ public sealed class ActionItemViewModel : ObservableObject
         [new("none", "RestoreBehavior.None", localization), new("previous", "RestoreBehavior.PreviousDisplay", localization)],
         ActionTypeIds.ScriptRun =>
         [new("none", "RestoreBehavior.None", localization), new("restoreScript", "RestoreBehavior.RestoreScript", localization)],
+        ActionTypeIds.ProcessConfigure =>
+        [new("none", "RestoreBehavior.None", localization), new("previous", "RestoreBehavior.ProcessSettings", localization)],
+        ActionTypeIds.AudioConfigure =>
+        [new("none", "RestoreBehavior.None", localization), new("previous", "RestoreBehavior.AudioSettings", localization)],
+        ActionTypeIds.DeviceSetState =>
+        [new("none", "RestoreBehavior.None", localization), new("previous", "RestoreBehavior.DeviceState", localization)],
         _ => [new("none", "RestoreBehavior.None", localization), new("previous", "RestoreBehavior.Previous", localization)]
     };
 
@@ -570,6 +974,19 @@ public sealed class ActionItemViewModel : ObservableObject
         ActionTypeIds.PowerSetPlan => "Action.PowerPlan",
         ActionTypeIds.ScriptRun => "Action.RunScript",
         ActionTypeIds.Delay => "Action.Delay",
+        ActionTypeIds.ProcessConfigure => "Action.ProcessSettings",
+        ActionTypeIds.WaitProcessStart => "Action.WaitProcess",
+        ActionTypeIds.WaitProcessExit => "Action.WaitProcessExit",
+        ActionTypeIds.WaitWindow => "Action.WaitWindow",
+        ActionTypeIds.AudioConfigure => "Action.AudioSettings",
+        ActionTypeIds.DeviceSetState => "Action.DeviceState",
+        ActionTypeIds.ProfileRun => "Action.RunProfile",
+        ActionTypeIds.ConditionIf => "Action.If",
+        ActionTypeIds.NotificationShow => "Action.Notification",
         _ => null
     };
+
+    private static IReadOnlyList<LocalizedValueOptionViewModel> BuildOptions(ILocalizationService localization,
+        params (string Value, string ResourceKey)[] values) =>
+        values.Select(value => new LocalizedValueOptionViewModel(value.Value, value.ResourceKey, localization)).ToList();
 }

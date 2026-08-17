@@ -62,7 +62,8 @@ public sealed class JsonExecutionSessionRepository(AppDataPaths paths) : IExecut
                 try { candidate = await ReadAsync(file, cancellationToken); }
                 catch (JsonException) { continue; }
                 catch (InvalidDataException) { continue; }
-                if (candidate?.ProfileId != profileId || candidate.PendingRestoreCount == 0) continue;
+                if (candidate?.ProfileId != profileId || candidate.Status == PersistentSessionStatus.Discarded ||
+                    candidate.PendingRestoreCount == 0) continue;
                 if (latest is null || candidate.UpdatedAt > latest.UpdatedAt) latest = candidate;
             }
             return latest;

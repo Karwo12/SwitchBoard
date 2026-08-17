@@ -26,6 +26,7 @@ public sealed class CustomThemeSettings
     public double CategoriesPanelOpacity { get; set; } = 1.0;
     public double ProfilesPanelOpacity { get; set; } = 1.0;
     public double ProfileEditorPanelOpacity { get; set; } = 1.0;
+    public double ActivityPanelOpacity { get; set; } = 1.0;
     public string? BackgroundAssetFileName { get; set; }
     public string ImageFit { get; set; } = "uniformToFill";
     public double BackgroundOpacity { get; set; } = 0.42;
@@ -62,6 +63,7 @@ public sealed class CustomThemeSettings
         CategoriesPanelOpacity = Math.Clamp(CategoriesPanelOpacity, 0, 1);
         ProfilesPanelOpacity = Math.Clamp(ProfilesPanelOpacity, 0, 1);
         ProfileEditorPanelOpacity = Math.Clamp(ProfileEditorPanelOpacity, 0, 1);
+        ActivityPanelOpacity = Math.Clamp(ActivityPanelOpacity, 0, 1);
     }
 
     public void MigrateSurfaceOpacityFromLegacyAlpha()
@@ -74,8 +76,11 @@ public sealed class CustomThemeSettings
             CategoriesPanelOpacity = SurfaceOpacity;
             ProfilesPanelOpacity = SurfaceOpacity;
             ProfileEditorPanelOpacity = SurfaceOpacity;
+            ActivityPanelOpacity = SurfaceOpacity;
         }
     }
+
+    public void MigrateActivityOpacity() => ActivityPanelOpacity = SurfaceOpacity;
 
     public CustomThemeSettings Clone()
     {
@@ -96,6 +101,7 @@ public sealed class CustomThemeSettings
             CategoriesPanelOpacity = CategoriesPanelOpacity,
             ProfilesPanelOpacity = ProfilesPanelOpacity,
             ProfileEditorPanelOpacity = ProfileEditorPanelOpacity,
+            ActivityPanelOpacity = ActivityPanelOpacity,
             BackgroundAssetFileName = BackgroundAssetFileName, ImageFit = ImageFit,
             BackgroundOpacity = BackgroundOpacity, DarkOverlay = DarkOverlay,
             PreviewBackgroundPath = PreviewBackgroundPath

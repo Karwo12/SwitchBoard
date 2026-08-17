@@ -21,12 +21,12 @@ public sealed class DelayActionHandler : IActionHandler
         }
 
         await Task.Delay(TimeSpan.FromSeconds(seconds), cancellationToken);
-        return ActionExecutionResult.Success();
+        return ActionExecutionResult.Success($"Waited {seconds} second(s).");
     }
 
-    public Task RestoreAsync(
+    public Task<ActionExecutionResult> RestoreAsync(
         ActionDefinition action,
         System.Text.Json.Nodes.JsonObject restoreState,
         ActionExecutionContext context,
-        CancellationToken cancellationToken) => Task.CompletedTask;
+        CancellationToken cancellationToken) => Task.FromResult(ActionExecutionResult.Skipped("No restore is required."));
 }

@@ -18,6 +18,7 @@ using SwitchBoard.Models.Categories;
 using SwitchBoard.Services.Profiles;
 using SwitchBoard.Themes;
 using SwitchBoard.Services.Logging;
+using SwitchBoard.Services.Activity;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 
@@ -33,6 +34,182 @@ if (args is ["--program-run-tree-helper", var childPidPath])
     if (child is null) return 2;
     await File.WriteAllTextAsync(childPidPath, child.Id.ToString(System.Globalization.CultureInfo.InvariantCulture));
     await Task.Delay(1000);
+    return 0;
+}
+
+if (args is ["--service-status", .. var serviceNames])
+{
+    var statusManager = new WindowsServiceManager();
+    foreach (var serviceName in serviceNames)
+    {
+        try
+        {
+            var snapshot = await statusManager.GetSnapshotAsync(serviceName);
+            Console.WriteLine($"{serviceName}|{snapshot.RuntimeState}|{snapshot.StartupType}");
+        }
+        catch (Exception exception) { Console.WriteLine($"{serviceName}|ERROR|{exception.GetType().Name}|{exception.Message}"); }
+    }
+    return 0;
+}
+
+if (args is ["--service-configuration-test", var configurationService, var runtimeTarget, var startupTarget])
+{
+    var configurationManager = new WindowsServiceManager();
+    var before = await configurationManager.GetSnapshotAsync(configurationService);
+    var result = await configurationManager.SetConfigurationAsync(configurationService, runtimeTarget,
+        startupTarget, TimeSpan.FromSeconds(30));
+    var after = await configurationManager.GetSnapshotAsync(configurationService);
+    Console.WriteLine($"BEFORE_STATUS={before.RuntimeState}");
+    Console.WriteLine($"BEFORE_STARTUP={before.StartupType}");
+    Console.WriteLine($"RESULT_SUCCESS={result.IsSuccessful}");
+    Console.WriteLine($"RESULT_SKIPPED={result.IsSkipped}");
+    Console.WriteLine($"RESULT_ERROR={result.Win32Error?.ToString() ?? "none"}");
+    Console.WriteLine($"RESULT_MESSAGE={result.Message}");
+    Console.WriteLine($"AFTER_STATUS={after.RuntimeState}");
+    Console.WriteLine($"AFTER_STARTUP={after.StartupType}");
+    return 0;
+}
+
+if (args is ["--service-profile-test", var testedService, var testedDisplayName])
+{
+    var serviceTestManager = new WindowsServiceManager();
+    var before = await serviceTestManager.GetSnapshotAsync(testedService);
+    var serviceTestRoot = Path.Combine(Path.GetTempPath(), $"SwitchBoard-service-test-{Guid.NewGuid():N}");
+    var serviceTestPaths = new AppDataPaths(serviceTestRoot);
+    using var serviceTestRepository = new JsonExecutionSessionRepository(serviceTestPaths);
+    var serviceTestActivity = new ActivityService(serviceTestPaths);
+    var serviceTestRegistry = new ActionRegistry([
+        new ServiceSetStateActionHandler(serviceTestManager), new DelayActionHandler()
+    ]);
+    var serviceAction = Action(ActionTypeIds.ServiceSetState, new JsonObject
+    {
+        [ActionParameterNames.ServiceName] = testedService,
+        [ActionParameterNames.ServiceDisplayName] = testedDisplayName,
+        [ActionParameterNames.DesiredState] = ServiceDesiredStateIds.Stopped,
+        [ActionParameterNames.ServiceStartupType] = ServiceStartupTypeIds.Disabled
+    });
+    serviceAction.Name = testedDisplayName;
+    serviceAction.RestoreBehavior = ActionRestoreBehavior.RestorePreviousState;
+    var serviceProfile = new ProfileDefinition
+    {
+        CategoryId = Guid.NewGuid(), Name = $"{testedService} physical test", Actions = [serviceAction]
+    };
+    var execution = await new ProfileRunner(serviceTestRegistry, serviceTestRepository,
+        activity: serviceTestActivity).RunAsync(serviceProfile);
+    var pendingSession = await serviceTestRepository.GetLatestPendingAsync(serviceProfile.Id);
+    var savedAction = (pendingSession ??
+        throw new InvalidOperationException("No pending service session was created.")).Actions.Single();
+    Console.WriteLine($"BEFORE_STATUS={before.RuntimeState}");
+    Console.WriteLine($"BEFORE_STARTUP={before.StartupType}");
+    var afterExecute = await serviceTestManager.GetSnapshotAsync(testedService);
+    Console.WriteLine($"AFTER_EXECUTE_STATUS={afterExecute.RuntimeState}");
+    Console.WriteLine($"AFTER_EXECUTE_STARTUP={afterExecute.StartupType}");
+    Console.WriteLine($"EXECUTION_STATUS={execution.Status}");
+    Console.WriteLine($"PREVIOUS_STATE={savedAction.PreviousState?["previousState"]?.GetValue<string>()}");
+    Console.WriteLine($"PREVIOUS_STARTUP={savedAction.PreviousState?["previousStartupType"]?.GetValue<string>()}");
+    Console.WriteLine($"REQUESTED_STATE={savedAction.RequestedState}");
+    Console.WriteLine($"EXECUTION_ATTEMPTED={savedAction.ExecutionAttempted}");
+    Console.WriteLine($"EXECUTION_VERIFIED={savedAction.ExecutionVerified}");
+    Console.WriteLine($"RESTORE_REQUIRED={savedAction.RequiresRestore}");
+    Console.WriteLine($"PENDING_COUNT={pendingSession.PendingRestoreCount}");
+    Console.WriteLine($"SYSTEM_CHANGE_STATUS={serviceTestActivity.SystemChanges.Single().Status}");
+    Console.WriteLine($"PENDING_NAMES={string.Join("|", pendingSession.GetPendingRestoreEntries().Select(item =>
+        item.Parameters[ActionParameterNames.ServiceDisplayName]?.GetValue<string>() ?? item.ActionName ?? item.ActionType))}");
+    var restored = await new ProfileRestoreRunner(serviceTestRegistry, serviceTestRepository,
+        activity: serviceTestActivity).RunAsync(pendingSession);
+    var afterRestore = await serviceTestManager.GetSnapshotAsync(testedService);
+    Console.WriteLine($"AFTER_RESTORE_STATUS={afterRestore.RuntimeState}");
+    Console.WriteLine($"AFTER_RESTORE_STARTUP={afterRestore.StartupType}");
+    Console.WriteLine($"RESTORE_STATUS={restored.Status}");
+    Console.WriteLine($"PENDING_AFTER_RESTORE={restored.PendingRestoreCount}");
+    var restartedActivity = new ActivityService(serviceTestPaths);
+    Console.WriteLine($"SYSTEM_CHANGE_AFTER_RESTART={restartedActivity.SystemChanges.Single().Status}");
+    Console.WriteLine($"HISTORY_AFTER_RESTART={restartedActivity.HistoryEntries.Count}");
+    return 0;
+}
+
+if (args is ["--service-discard-test", var discardService, var discardDisplayName])
+{
+    var discardManager = new WindowsServiceManager();
+    var original = await discardManager.GetSnapshotAsync(discardService);
+    var discardRoot = Path.Combine(Path.GetTempPath(), $"SwitchBoard-service-discard-{Guid.NewGuid():N}");
+    var discardPaths = new AppDataPaths(discardRoot);
+    try
+    {
+        using var discardRepository = new JsonExecutionSessionRepository(discardPaths);
+        var discardActivity = new ActivityService(discardPaths);
+        var discardRegistry = new ActionRegistry([new ServiceSetStateActionHandler(discardManager)]);
+        var discardAction = Action(ActionTypeIds.ServiceSetState, new JsonObject
+        {
+            [ActionParameterNames.ServiceName] = discardService,
+            [ActionParameterNames.ServiceDisplayName] = discardDisplayName,
+            [ActionParameterNames.DesiredState] = ServiceDesiredStateIds.Stopped,
+            [ActionParameterNames.ServiceStartupType] = ServiceStartupTypeIds.Disabled
+        });
+        discardAction.Name = discardDisplayName;
+        discardAction.RestoreBehavior = ActionRestoreBehavior.RestorePreviousState;
+        var discardProfile = new ProfileDefinition
+        {
+            CategoryId = Guid.NewGuid(), Name = $"{discardService} discard test", Actions = [discardAction]
+        };
+        await new ProfileRunner(discardRegistry, discardRepository, activity: discardActivity)
+            .RunAsync(discardProfile);
+        var discardSession = await discardRepository.GetLatestPendingAsync(discardProfile.Id) ??
+                             throw new InvalidOperationException("Discard test did not create pending Restore.");
+        var discarded = discardSession.DiscardPendingRestore();
+        foreach (var item in discarded)
+        {
+            item.RestoreStatus = PersistentActionRestoreStatus.NotRequired;
+            item.RestoreMessage = "Discarded by physical test.";
+            discardActivity.Record(new PersistentActivityRecord
+            {
+                SessionId = discardSession.SessionId,
+                ProfileId = discardSession.ProfileId,
+                ProfileName = discardSession.ProfileName,
+                ActionId = item.ActionId,
+                ActionType = item.ActionType,
+                FriendlyName = item.ActionName ?? discardDisplayName,
+                EventType = ActivityEventTypes.Discard,
+                Level = ActivityLevel.Warning,
+                StateBefore = item.PreviousState?.DeepClone().AsObject(),
+                StateAfter = item.StateAfter?.DeepClone().AsObject(),
+                Result = "discarded",
+                RestoreStatus = SystemChangeStatuses.Discarded,
+                Message = $"{discardDisplayName}: restore discarded; change left in place."
+            });
+        }
+        await discardRepository.SaveAsync(discardSession);
+        var changed = await discardManager.GetSnapshotAsync(discardService);
+        var reloaded = new ActivityService(discardPaths);
+        Console.WriteLine($"BEFORE_STATUS={original.RuntimeState}");
+        Console.WriteLine($"BEFORE_STARTUP={original.StartupType}");
+        Console.WriteLine($"AFTER_DISCARD_STATUS={changed.RuntimeState}");
+        Console.WriteLine($"AFTER_DISCARD_STARTUP={changed.StartupType}");
+        Console.WriteLine($"PENDING_AFTER_DISCARD={discardSession.PendingRestoreCount}");
+        Console.WriteLine($"RELOADED_CHANGE_STATUS={reloaded.SystemChanges.Single().Status}");
+        Console.WriteLine($"RELOADED_HISTORY_COUNT={reloaded.HistoryEntries.Count}");
+        Console.WriteLine($"JSONL_COUNT={Directory.EnumerateFiles(discardPaths.LogsDirectory, "activity-*.jsonl").Count()}");
+    }
+    finally
+    {
+        var runtime = original.RuntimeState == "Running"
+            ? ServiceDesiredStateIds.Running
+            : ServiceDesiredStateIds.Stopped;
+        var startup = original.StartupType switch
+        {
+            "Automatic" => ServiceStartupTypeIds.Automatic,
+            "Automatic (Delayed Start)" => ServiceStartupTypeIds.AutomaticDelayed,
+            "Manual" => ServiceStartupTypeIds.Manual,
+            "Disabled" => ServiceStartupTypeIds.Disabled,
+            _ => ServiceStartupTypeIds.Unchanged
+        };
+        var cleanup = await discardManager.SetConfigurationAsync(discardService, runtime, startup,
+            TimeSpan.FromSeconds(30));
+        var final = await discardManager.GetSnapshotAsync(discardService);
+        Console.WriteLine($"CLEANUP_SUCCESS={cleanup.IsSuccessful}");
+        Console.WriteLine($"FINAL_STATUS={final.RuntimeState}");
+        Console.WriteLine($"FINAL_STARTUP={final.StartupType}");
+    }
     return 0;
 }
 
@@ -126,6 +303,243 @@ try
           failedSession.Journal[1].Status == ActionJournalStatus.Success,
         "ProfileRunner continues and reports CompletedWithErrors", failures);
 
+    var probePath = Path.Combine(testRoot, "sbwaitprobe.exe");
+    File.Copy(Path.Combine(Environment.SystemDirectory, "cmd.exe"), probePath);
+    var waitStartHandler = new WaitProcessActionHandler(ActionTypeIds.WaitProcessStart);
+    using (var waitStartCts = new CancellationTokenSource(TimeSpan.FromSeconds(8)))
+    {
+        var waitAction = Action(ActionTypeIds.WaitProcessStart, new JsonObject
+        { [ActionParameterNames.ProcessName] = "sbwaitprobe" });
+        var waitTask = waitStartHandler.ExecuteAsync(waitAction, new(Guid.NewGuid(), Guid.NewGuid()), waitStartCts.Token);
+        await Task.Delay(250, waitStartCts.Token);
+        using var probe = Process.Start(new ProcessStartInfo(probePath)
+        { UseShellExecute = false, Arguments = "/c ping -n 30 127.0.0.1 > nul" });
+        var waitResult = await waitTask;
+        Check(waitResult.IsSuccessful, "wait.processStart observes a process asynchronously", failures);
+        if (probe is not null)
+        {
+            var waitExitHandler = new WaitProcessActionHandler(ActionTypeIds.WaitProcessExit);
+            var exitTask = waitExitHandler.ExecuteAsync(Action(ActionTypeIds.WaitProcessExit, new JsonObject
+                { [ActionParameterNames.ProcessName] = "sbwaitprobe" }), new(Guid.NewGuid(), Guid.NewGuid()), waitStartCts.Token);
+            await Task.Delay(250, waitStartCts.Token);
+            probe.Kill(entireProcessTree: true);
+            var exitResult = await exitTask;
+            Check(exitResult.IsSuccessful, "wait.processExit observes exact process-name disappearance", failures);
+        }
+    }
+
+    using (var cancelWait = new CancellationTokenSource(180))
+    {
+        try
+        {
+            await waitStartHandler.ExecuteAsync(Action(ActionTypeIds.WaitProcessStart, new JsonObject
+                { [ActionParameterNames.ProcessName] = $"missing-{Guid.NewGuid():N}" }),
+                new(Guid.NewGuid(), Guid.NewGuid()), cancelWait.Token);
+            Check(false, "wait.processStart cancellation", failures);
+        }
+        catch (OperationCanceledException) { Check(true, "wait.processStart cancellation", failures); }
+    }
+
+    using (var windowProcess = Process.Start(new ProcessStartInfo("notepad.exe") { UseShellExecute = true }))
+    {
+        if (windowProcess is not null)
+        {
+            using var windowCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            var windowResult = await new WaitWindowActionHandler().ExecuteAsync(
+                Action(ActionTypeIds.WaitWindow, new JsonObject
+                {
+                    [ActionParameterNames.ProcessName] = "notepad",
+                    [ActionParameterNames.WindowMatchMode] = WindowMatchModeIds.Any
+                }), new(Guid.NewGuid(), Guid.NewGuid()), windowCts.Token);
+            Check(windowResult.IsSuccessful, "wait.window detects a visible main window", failures);
+            try { if (!windowProcess.HasExited) windowProcess.Kill(entireProcessTree: true); } catch { }
+        }
+        else Console.WriteLine("SKIP wait.window: Notepad could not start.");
+    }
+
+    var affinityPath = Path.Combine(testRoot, "sbaffinity.exe");
+    File.Copy(Path.Combine(Environment.SystemDirectory, "cmd.exe"), affinityPath);
+    using (var affinityProcess = Process.Start(new ProcessStartInfo(affinityPath)
+    { UseShellExecute = false, Arguments = "/c ping -n 30 127.0.0.1 > nul" }))
+    {
+        if (affinityProcess is not null)
+        {
+            var affinityHandler = new ProcessConfigureActionHandler();
+            var cpus = Enumerable.Range(0, Math.Min(Environment.ProcessorCount, IntPtr.Size * 8))
+                .Where(cpu => cpu != 0 || Environment.ProcessorCount == 1).ToArray();
+            var affinityAction = Action(ActionTypeIds.ProcessConfigure, new JsonObject
+            {
+                [ActionParameterNames.ProcessName] = "sbaffinity",
+                [ActionParameterNames.ExecutablePath] = affinityPath,
+                [ActionParameterNames.ChangeAffinity] = true,
+                [ActionParameterNames.ChangePriority] = true,
+                [ActionParameterNames.ProcessPriority] = ProcessPriorityIds.BelowNormal,
+                [ActionParameterNames.CpuIndices] = new JsonArray(cpus.Select(cpu => (JsonNode?)JsonValue.Create(cpu)).ToArray())
+            });
+            affinityAction.RuntimeProcessIdHint = affinityProcess.Id;
+            var affinityContext = new ActionExecutionContext(Guid.NewGuid(), Guid.NewGuid());
+            var oldState = await affinityHandler.CaptureStateAsync(affinityAction, affinityContext, CancellationToken.None);
+            var affinityResult = await affinityHandler.ExecuteAsync(affinityAction, affinityContext, CancellationToken.None);
+            affinityProcess.Refresh();
+            var expectedMask = unchecked((long)ProcessConfigureActionHandler.ReadAffinityMask(
+                affinityAction.Parameters[ActionParameterNames.CpuIndices] as JsonArray));
+            Check(affinityResult.IsSuccessful && affinityProcess.ProcessorAffinity.ToInt64() == expectedMask &&
+                  affinityProcess.PriorityClass == ProcessPriorityClass.BelowNormal,
+                "process.configure applies all-except-CPU0 affinity and priority", failures);
+            if (oldState is not null)
+            {
+                await affinityHandler.RestoreAsync(affinityAction, oldState, affinityContext, CancellationToken.None);
+                affinityProcess.Refresh();
+                Check(affinityProcess.ProcessorAffinity.ToInt64() == oldState["affinityMask"]!.GetValue<long>(),
+                    "process.configure restores previous affinity", failures);
+            }
+            try { affinityProcess.Kill(entireProcessTree: true); } catch { }
+        }
+    }
+
+    var activity = new ActivityService();
+    var flaky = new TestFlakyHandler();
+    var automationRegistry = new ActionRegistry([
+        new ProfileRunActionHandler(), new NotificationShowActionHandler(activity),
+        new ConditionIfActionHandler(serviceManager),
+        new WaitProcessActionHandler(ActionTypeIds.WaitProcessStart), new ProgramRunActionHandler(), flaky
+    ]);
+    var profileA = new ProfileDefinition { Name = "A", CategoryId = Guid.NewGuid() };
+    profileA.Actions.Add(Action(ActionTypeIds.NotificationShow, new JsonObject
+    {
+        [ActionParameterNames.NotificationMessage] = "Notification A",
+        [ActionParameterNames.NotificationLevel] = NotificationLevelIds.Info
+    }));
+    var profileB = new ProfileDefinition { Name = "B", CategoryId = profileA.CategoryId };
+    profileB.Actions.Add(Action(ActionTypeIds.ProfileRun, new JsonObject
+        { [ActionParameterNames.ProfileId] = profileA.Id.ToString("D") }));
+    profileB.Actions.Add(Action(ActionTypeIds.NotificationShow, new JsonObject
+    {
+        [ActionParameterNames.NotificationMessage] = "Notification B",
+        [ActionParameterNames.NotificationLevel] = NotificationLevelIds.Success
+    }));
+    profileB.Actions[0].SortOrder = 0; profileB.Actions[1].SortOrder = 1;
+    var automationProfiles = new Dictionary<Guid, ProfileDefinition> { [profileA.Id] = profileA, [profileB.Id] = profileB };
+    var automationRunner = new ProfileRunner(automationRegistry, sessionRepository, profileResolver: id => automationProfiles.GetValueOrDefault(id), activity: activity);
+    var nestedSession = await automationRunner.RunAsync(profileB);
+    var notificationMessages = activity.Entries.Where(entry => entry.Message.StartsWith("Notification ")).Select(entry => entry.Message).ToList();
+    Check(nestedSession.Status == ExecutionSessionStatus.Completed &&
+          notificationMessages.IndexOf("Notification A") < notificationMessages.IndexOf("Notification B") &&
+          nestedSession.Journal.Any(item => item.ParentActionId == profileB.Actions[0].Id),
+        "profile.run executes nested profile in order and journals parent action", failures);
+    Check(activity.Entries.Any(entry => entry.Message == "Profile started: B") &&
+          activity.Entries.Any(entry => entry.Message == "Profile started: A") &&
+          activity.Entries.Any(entry => entry.Message.StartsWith("Action: ")) &&
+          activity.Entries.Any(entry => entry.Message == "Profile completed: B"),
+        "Activity identifies profile and action execution events", failures);
+
+    profileA.Actions.Clear();
+    profileA.Actions.Add(Action(ActionTypeIds.ProfileRun, new JsonObject
+        { [ActionParameterNames.ProfileId] = profileB.Id.ToString("D") }));
+    var cycleSession = await automationRunner.RunAsync(profileA);
+    Check(cycleSession.Status == ExecutionSessionStatus.CompletedWithErrors &&
+          cycleSession.Journal.Any(item => item.Status == ActionJournalStatus.Failed),
+        "profile.run detects A-B-A cycle without recursion", failures);
+
+    var thenAction = Action(ActionTypeIds.NotificationShow, new JsonObject
+    { [ActionParameterNames.NotificationMessage] = "running", [ActionParameterNames.NotificationLevel] = NotificationLevelIds.Info });
+    var elseAction = Action(ActionTypeIds.NotificationShow, new JsonObject
+    { [ActionParameterNames.NotificationMessage] = "not running", [ActionParameterNames.NotificationLevel] = NotificationLevelIds.Info });
+    var ifAction = Action(ActionTypeIds.ConditionIf, new JsonObject
+    {
+        [ActionParameterNames.ConditionType] = ConditionTypeIds.ProcessNotRunning,
+        [ActionParameterNames.ConditionValue] = $"missing-{Guid.NewGuid():N}",
+        [ActionParameterNames.ThenActions] = new JsonArray(JsonSerializer.SerializeToNode(thenAction)),
+        [ActionParameterNames.ElseActions] = new JsonArray(JsonSerializer.SerializeToNode(elseAction))
+    });
+    var ifProfile = new ProfileDefinition { Name = "IF", CategoryId = Guid.NewGuid(), Actions = [ifAction] };
+    automationProfiles[ifProfile.Id] = ifProfile;
+    var ifSession = await automationRunner.RunAsync(ifProfile);
+    Check(ifSession.Status == ExecutionSessionStatus.Completed && ifSession.Journal.Any(item => item.Branch == "then") &&
+          activity.Entries.Any(entry => entry.Message == "running"), "condition.if executes only the selected branch", failures);
+
+    ifAction.Parameters[ActionParameterNames.ConditionType] = ConditionTypeIds.ProcessRunning;
+    var elseSession = await automationRunner.RunAsync(ifProfile);
+    Check(elseSession.Status == ExecutionSessionStatus.Completed && elseSession.Journal.Any(item => item.Branch == "else") &&
+          activity.Entries.Any(entry => entry.Message == "not running"), "condition.if executes ELSE when the condition is false", failures);
+
+    var ifProgramOutput = Path.Combine(testRoot, "if-program.txt");
+    var nestedProgram = Action(ActionTypeIds.ProgramRun, new JsonObject
+    {
+        [ActionParameterNames.Target] = Path.Combine(Environment.SystemDirectory, "cmd.exe"),
+        [ActionParameterNames.Arguments] = $"/c echo nested> \"{ifProgramOutput}\"",
+        [ActionParameterNames.InstanceBehavior] = InstanceBehaviorIds.StartAnother
+    });
+    ifAction.Parameters[ActionParameterNames.ConditionType] = ConditionTypeIds.FileNotExists;
+    ifAction.Parameters[ActionParameterNames.ConditionValue] = ifProgramOutput;
+    ifAction.Parameters[ActionParameterNames.ThenActions] = new JsonArray(JsonSerializer.SerializeToNode(nestedProgram));
+    var ifProgramSession = await automationRunner.RunAsync(ifProfile);
+    for (var wait = 0; wait < 30 && !File.Exists(ifProgramOutput); wait++) await Task.Delay(50);
+    Check(ifProgramSession.Status == ExecutionSessionStatus.Completed && File.Exists(ifProgramOutput),
+        "condition.if executes a normal nested program.run action", failures);
+
+    var retryProfile = new ProfileDefinition { Name = "Retry", CategoryId = Guid.NewGuid(), Actions =
+    [new ActionDefinition { Type = TestFlakyHandler.TypeId, RetryOnFailure = true, MaximumAttempts = 3,
+        RetryDelay = TimeSpan.FromMilliseconds(20), FailurePolicy = ActionFailurePolicy.Stop }] };
+    var retrySession = await automationRunner.RunAsync(retryProfile);
+    Check(retrySession.Status == ExecutionSessionStatus.Completed && flaky.Attempts == 3 &&
+          retrySession.Journal.Single().AttemptCount == 3, "central retry fails twice and succeeds on attempt three", failures);
+
+    var exhaustedProfile = new ProfileDefinition { Name = "Retry exhausted", CategoryId = Guid.NewGuid(), Actions =
+    [new ActionDefinition { Type = TestFlakyHandler.TypeId, RetryOnFailure = true, MaximumAttempts = 3,
+        RetryDelay = TimeSpan.FromMilliseconds(10), FailurePolicy = ActionFailurePolicy.Stop,
+        Parameters = new JsonObject { ["failAlways"] = true } }] };
+    var attemptsBefore = flaky.Attempts;
+    var exhaustedSession = await automationRunner.RunAsync(exhaustedProfile);
+    Check(exhaustedSession.Status == ExecutionSessionStatus.Failed && flaky.Attempts - attemptsBefore == 3,
+        "central retry exhausts attempts before applying Stop profile", failures);
+
+    var timeoutProfile = new ProfileDefinition { Name = "Timeout", CategoryId = Guid.NewGuid(), Actions =
+    [new ActionDefinition { Type = ActionTypeIds.WaitProcessStart, Timeout = TimeSpan.FromMilliseconds(250),
+        FailurePolicy = ActionFailurePolicy.Stop, Parameters = new JsonObject
+        { [ActionParameterNames.ProcessName] = $"missing-{Guid.NewGuid():N}" } }] };
+    var timeoutSession = await automationRunner.RunAsync(timeoutProfile);
+    Check(timeoutSession.Status == ExecutionSessionStatus.Failed &&
+          timeoutSession.Journal.Single().ErrorMessage?.Contains("timed out", StringComparison.OrdinalIgnoreCase) == true,
+        "wait action timeout is enforced by the central pipeline", failures);
+
+    for (var index = 0; index < 600; index++) activity.Add(ActivityLevel.Info, $"event {index}");
+    Check(activity.Entries.Count == 300 && activity.Entries[0].Message == "event 300",
+        "Activity keeps a bounded 300-entry session buffer", failures);
+    activity.Clear();
+    Check(activity.Entries.Count == 0, "Activity Clear removes the user-facing session history", failures);
+
+    var audioManager = new WindowsAudioManager();
+    try
+    {
+        var audioDevices = await audioManager.GetDevicesAsync();
+        Check(audioDevices.All(item => !string.IsNullOrWhiteSpace(item.Id) && !string.IsNullOrWhiteSpace(item.FriendlyName)),
+            "audio device discovery returns friendly names and stable IDs", failures);
+        if (audioDevices.Count == 0) Console.WriteLine("SKIP audio endpoint verification: VM exposes no compatible Core Audio endpoints.");
+        if (audioDevices.Any(item => !item.IsInput && item.IsDefaultMultimedia))
+        {
+            var currentVolume = await audioManager.GetMasterVolumeAsync();
+            var testVolume = currentVolume.Volume > 0.02f ? currentVolume.Volume - 0.01f : currentVolume.Volume + 0.01f;
+            await audioManager.SetMasterVolumeAsync(testVolume, currentVolume.Muted);
+            var changedVolume = await audioManager.GetMasterVolumeAsync();
+            await audioManager.SetMasterVolumeAsync(currentVolume.Volume, currentVolume.Muted);
+            Check(Math.Abs(changedVolume.Volume - testVolume) < 0.02f,
+                "audio master volume changes safely and restores", failures);
+        }
+        else Console.WriteLine("SKIP audio volume change: VM exposes no default output endpoint.");
+    }
+    catch (Exception exception) { Console.WriteLine($"LIMIT audio discovery/control unavailable: {exception.Message}"); }
+
+    try
+    {
+        var devices = await new WindowsDeviceManager().GetDevicesAsync();
+        Check(devices.Count > 0 && devices.All(item => !string.IsNullOrWhiteSpace(item.InstanceId)),
+            "Windows device discovery returns instance IDs", failures);
+        Check(devices.Where(item => item.DeviceClass is "System" or "DiskDrive" or "Display").All(item => item.IsCritical),
+            "critical Windows device classes are protected", failures);
+    }
+    catch (Exception exception) { Console.WriteLine($"LIMIT Windows device discovery unavailable: {exception.Message}"); }
+
     var reversibleProfile = new ProfileDefinition
     {
         CategoryId = Guid.NewGuid(), Name = "Persistent restore test",
@@ -149,11 +563,17 @@ try
         "CaptureState is persisted before Execute", failures);
     if (pending is not null)
     {
-        await new ProfileRestoreRunner(registry, sessionRepository).RunAsync(pending);
+        var restoreActivity = new ActivityService();
+        await new ProfileRestoreRunner(registry, sessionRepository, activity: restoreActivity).RunAsync(pending);
         Check(restoreOrder.SequenceEqual(["second", "first"]), "Restore runs in reverse action order", failures);
         var restored = await sessionRepository.LoadAsync(pending.SessionId);
         Check(restored?.Status == PersistentSessionStatus.Restored && restored.PendingRestoreCount == 0,
             "successful Restore atomically clears pending actions", failures);
+        Check(restoreActivity.Entries.Any(entry => entry.Message == "Restoring profile: Persistent restore test") &&
+              restoreActivity.Entries.Count(entry => entry.Message.StartsWith("Restoring action: ")) == 2 &&
+              restoreActivity.Entries.Count(entry => entry.Message.StartsWith("Action restored: ")) == 2 &&
+              restoreActivity.Entries.Any(entry => entry.Message == "Profile restored: Persistent restore test"),
+            "Activity reports profile and action restore events", failures);
     }
 
     var partialProfile = new ProfileDefinition
@@ -185,6 +605,179 @@ try
             "Restore retry skips actions already restored", failures);
     }
 
+    var combinedServiceRoot = Path.Combine(testRoot, "service-combined");
+    var combinedPaths = new AppDataPaths(combinedServiceRoot);
+    var combinedServiceManager = new TestServiceManager(ServiceDesiredStateIds.Running, changeSucceeds: true);
+    using (var combinedRepository = new JsonExecutionSessionRepository(combinedPaths))
+    {
+        var combinedActivity = new ActivityService(combinedPaths);
+        var combinedRegistry = new ActionRegistry([new ServiceSetStateActionHandler(combinedServiceManager)]);
+        var combinedAction = Action(ActionTypeIds.ServiceSetState, new JsonObject
+        {
+            [ActionParameterNames.ServiceName] = "Spooler",
+            [ActionParameterNames.ServiceDisplayName] = "Print Spooler",
+            [ActionParameterNames.DesiredState] = ServiceDesiredStateIds.Stopped,
+            [ActionParameterNames.ServiceStartupType] = ServiceStartupTypeIds.Disabled
+        });
+        combinedAction.Name = "Print Spooler";
+        combinedAction.RestoreBehavior = ActionRestoreBehavior.RestorePreviousState;
+        var combinedProfile = new ProfileDefinition
+        {
+            CategoryId = Guid.NewGuid(), Name = "Combined service configuration", Actions = [combinedAction]
+        };
+        await new ProfileRunner(combinedRegistry, combinedRepository, activity: combinedActivity)
+            .RunAsync(combinedProfile);
+        var combinedPending = await combinedRepository.GetLatestPendingAsync(combinedProfile.Id);
+        var combinedSaved = combinedPending?.Actions.Single();
+        Check(combinedServiceManager.Snapshot == new WindowsServiceSnapshot("Stopped", "Disabled") &&
+              combinedSaved?.PreviousState?["previousState"]?.GetValue<string>() == ServiceDesiredStateIds.Running &&
+              combinedSaved.PreviousState?["previousStartupType"]?.GetValue<string>() == ServiceStartupTypeIds.Automatic &&
+              combinedSaved.RequiresRestore && combinedPending?.PendingRestoreCount == 1,
+            "service status and startup type are captured, verified and pending Restore", failures);
+
+        var reloadedActivity = new ActivityService(combinedPaths);
+        Check(reloadedActivity.SystemChanges.Count == 1 &&
+              reloadedActivity.SystemChanges[0].Status == SystemChangeStatuses.Pending &&
+              reloadedActivity.HistoryEntries.Count > 0 &&
+              Directory.EnumerateFiles(combinedPaths.LogsDirectory, "activity-*.jsonl").Any(),
+            "persistent Activity JSONL reloads pending system changes after restart", failures);
+
+        if (combinedPending is not null)
+        {
+            await new ProfileRestoreRunner(combinedRegistry, combinedRepository, activity: combinedActivity)
+                .RunAsync(combinedPending);
+            Check(combinedServiceManager.Snapshot == new WindowsServiceSnapshot("Running", "Automatic") &&
+                  combinedActivity.SystemChanges.Single().Status == SystemChangeStatuses.Restored,
+                "service Restore verifies runtime status and startup type", failures);
+        }
+
+        await new ProfileRunner(combinedRegistry, combinedRepository, activity: combinedActivity)
+            .RunAsync(combinedProfile);
+        var discardSession = await combinedRepository.GetLatestPendingAsync(combinedProfile.Id);
+        if (discardSession is not null)
+        {
+            foreach (var item in discardSession.GetPendingRestoreEntries())
+            {
+                combinedActivity.Record(new PersistentActivityRecord
+                {
+                    SessionId = discardSession.SessionId,
+                    ProfileId = discardSession.ProfileId,
+                    ProfileName = discardSession.ProfileName,
+                    ActionId = item.ActionId,
+                    ActionType = item.ActionType,
+                    FriendlyName = item.ActionName ?? item.ActionType,
+                    EventType = ActivityEventTypes.Discard,
+                    Level = ActivityLevel.Warning,
+                    StateBefore = item.PreviousState?.DeepClone().AsObject(),
+                    StateAfter = item.StateAfter?.DeepClone().AsObject(),
+                    RestoreStatus = SystemChangeStatuses.Discarded,
+                    Result = "discarded",
+                    Message = "Restore discarded by persistence test."
+                });
+            }
+            discardSession.Status = PersistentSessionStatus.Discarded;
+            await combinedRepository.SaveAsync(discardSession);
+            var afterRestart = new ActivityService(combinedPaths);
+            Check(combinedServiceManager.Snapshot == new WindowsServiceSnapshot("Stopped", "Disabled") &&
+                  afterRestart.SystemChanges.Any(change => change.SessionId == discardSession.SessionId &&
+                      change.Status == SystemChangeStatuses.Discarded),
+                "Discard leaves the service changed and persists System Changes across restart", failures);
+            await combinedServiceManager.SetConfigurationAsync("Spooler", ServiceDesiredStateIds.Running,
+                ServiceStartupTypeIds.Automatic, TimeSpan.FromSeconds(1));
+        }
+    }
+
+    var resolvedRetentionPaths = new AppDataPaths(Path.Combine(testRoot, "activity-retention-resolved"));
+    var resolvedRetentionActivity = new ActivityService(resolvedRetentionPaths);
+    resolvedRetentionActivity.Record(new PersistentActivityRecord
+    {
+        Timestamp = DateTimeOffset.UtcNow.AddDays(-100),
+        SessionId = Guid.NewGuid(), ProfileId = Guid.NewGuid(), ActionId = Guid.NewGuid(),
+        ActionType = ActionTypeIds.PowerSetPlan, FriendlyName = "Old resolved change",
+        EventType = ActivityEventTypes.Restore, Level = ActivityLevel.Success,
+        RestoreStatus = SystemChangeStatuses.Restored, Message = "Old change restored."
+    });
+    _ = new ActivityService(resolvedRetentionPaths);
+    Check(!Directory.EnumerateFiles(resolvedRetentionPaths.LogsDirectory, "activity-*.jsonl").Any(),
+        "Activity retention removes resolved history older than 90 days", failures);
+
+    var pendingRetentionPaths = new AppDataPaths(Path.Combine(testRoot, "activity-retention-pending"));
+    var pendingRetentionActivity = new ActivityService(pendingRetentionPaths);
+    pendingRetentionActivity.Record(new PersistentActivityRecord
+    {
+        Timestamp = DateTimeOffset.UtcNow.AddDays(-100),
+        SessionId = Guid.NewGuid(), ProfileId = Guid.NewGuid(), ActionId = Guid.NewGuid(),
+        ActionType = ActionTypeIds.PowerSetPlan, FriendlyName = "Old pending change",
+        EventType = ActivityEventTypes.Verify, Level = ActivityLevel.Success,
+        StateBefore = new JsonObject { ["previousPowerPlanGuid"] = Guid.NewGuid().ToString() },
+        RestoreStatus = SystemChangeStatuses.Pending, Message = "Old change still pending."
+    });
+    _ = new ActivityService(pendingRetentionPaths);
+    Check(Directory.EnumerateFiles(pendingRetentionPaths.LogsDirectory, "activity-*.jsonl").Any(),
+        "Activity retention preserves unresolved changes older than 90 days", failures);
+
+    var unchangedServiceManager = new TestServiceManager(ServiceDesiredStateIds.Running, changeSucceeds: false);
+    using (var serviceJournalRepository = new JsonExecutionSessionRepository(
+               new AppDataPaths(Path.Combine(testRoot, "service-journal"))))
+    {
+        var serviceJournalRegistry = new ActionRegistry([
+            new ServiceSetStateActionHandler(unchangedServiceManager)
+        ]);
+        var failedServiceAction = Action(ActionTypeIds.ServiceSetState, new JsonObject
+        {
+            [ActionParameterNames.ServiceName] = "TestSvc",
+            [ActionParameterNames.ServiceDisplayName] = "Test service",
+            [ActionParameterNames.DesiredState] = ServiceDesiredStateIds.Stopped
+        });
+        failedServiceAction.RestoreBehavior = ActionRestoreBehavior.RestorePreviousState;
+        var failedServiceProfile = new ProfileDefinition
+        {
+            CategoryId = Guid.NewGuid(), Name = "Service no-change failure", Actions = [failedServiceAction]
+        };
+        var failedServiceExecution = await new ProfileRunner(serviceJournalRegistry, serviceJournalRepository)
+            .RunAsync(failedServiceProfile);
+        var failedServiceSaved = await serviceJournalRepository.LoadAsync(failedServiceExecution.Id);
+        Check(failedServiceSaved?.Actions.Single().ExecutionAttempted == true &&
+              failedServiceSaved.Actions.Single().ExecutionVerified &&
+              !failedServiceSaved.Actions.Single().RequiresRestore &&
+              failedServiceSaved.PendingRestoreCount == 0,
+            "service failure without observed state change does not create pending Restore", failures);
+    }
+
+    var cancelledProfile = new ProfileDefinition
+    {
+        CategoryId = Guid.NewGuid(), Name = "Cancelled restore test",
+        Actions =
+        [
+            Action(TestReversibleHandler.TypeId, new JsonObject { ["key"] = "cancel-first" }),
+            Action(TestReversibleHandler.TypeId, new JsonObject { ["key"] = "cancel-slow", ["restoreDelayMs"] = 2000 }),
+            Action(TestReversibleHandler.TypeId, new JsonObject { ["key"] = "cancel-last" })
+        ]
+    };
+    for (var index = 0; index < cancelledProfile.Actions.Count; index++)
+    {
+        cancelledProfile.Actions[index].SortOrder = index;
+        cancelledProfile.Actions[index].RestoreBehavior = ActionRestoreBehavior.RestorePreviousState;
+    }
+    await runner.RunAsync(cancelledProfile);
+    var cancellable = await sessionRepository.GetLatestPendingAsync(cancelledProfile.Id);
+    if (cancellable is not null)
+    {
+        using var restoreCancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(350));
+        try
+        {
+            await new ProfileRestoreRunner(registry, sessionRepository).RunAsync(cancellable,
+                cancellationToken: restoreCancellation.Token);
+            failures.Add("Restore cancellation should throw OperationCanceledException");
+        }
+        catch (OperationCanceledException) { }
+        var afterCancel = await sessionRepository.LoadAsync(cancellable.SessionId);
+        Check(afterCancel?.Status == PersistentSessionStatus.RestoreCancelled &&
+              afterCancel.PendingRestoreCount == 2 &&
+              afterCancel.Actions.Single(item => item.PreviousState?["key"]?.GetValue<string>() == "cancel-last").IsRestored,
+            "Restore cancellation preserves completed restores and keeps remaining actions pending", failures);
+    }
+
     var recoverySession = new PersistentExecutionSession
     {
         ProfileId = Guid.NewGuid(), ProfileName = "Interrupted", Status = PersistentSessionStatus.Executing,
@@ -199,6 +792,38 @@ try
     var recovered = await sessionRepository.LoadAsync(recoverySession.SessionId);
     Check(recovered?.Status == PersistentSessionStatus.RecoveryRequired && recovered.PendingRestoreCount == 1,
         "startup recovery preserves interrupted pending state", failures);
+
+    var discardedActions = recovered!.DiscardPendingRestore();
+    discardedActions[0].RestoreMessage = "discarded by test";
+    await sessionRepository.SaveAsync(recovered);
+    var discardedReloaded = await sessionRepository.LoadAsync(recovered.SessionId);
+    Check(discardedActions.Count == 1 && discardedReloaded?.Status == PersistentSessionStatus.Discarded &&
+          discardedReloaded.PendingRestoreCount == 0 &&
+          await sessionRepository.GetLatestPendingAsync(recovered.ProfileId) is null,
+        "discard pending Restore keeps JSON audit record and suppresses future Restore", failures);
+
+    var counterSession = new PersistentExecutionSession
+    {
+        ProfileId = Guid.NewGuid(), ProfileName = "Restore counter selector",
+        Status = PersistentSessionStatus.RestorePending,
+        Actions =
+        [
+            new PersistentSessionAction { ActionType = ActionTypeIds.ProgramRun, ActionName = "Microsoft Edge",
+                RequiresRestore = true, ExecutionAttempted = true, ExecutionVerified = true },
+            new PersistentSessionAction { ActionType = ActionTypeIds.ProcessSetState, ActionName = "Notatnik",
+                RequiresRestore = true, ExecutionAttempted = true, ExecutionVerified = true },
+            new PersistentSessionAction { ActionType = ActionTypeIds.ServiceSetState, ActionName = "Bufor wydruku",
+                RequiresRestore = true, ExecutionAttempted = true, ExecutionVerified = true,
+                Parameters = new JsonObject { [ActionParameterNames.ServiceName] = "Spooler",
+                    [ActionParameterNames.ServiceDisplayName] = "Bufor wydruku" } },
+            new PersistentSessionAction { ActionType = ActionTypeIds.ServiceSetState, ActionName = "Skipped service",
+                RequiresRestore = false, ExecutionAttempted = true, ExecutionVerified = true }
+        ]
+    };
+    Check(counterSession.PendingRestoreCount == 3 &&
+          counterSession.GetPendingRestoreEntries().Select(item => item.ActionName)
+              .SequenceEqual(["Microsoft Edge", "Notatnik", "Bufor wydruku"]),
+        "Restore counter and preview selector include exactly three verified changed actions", failures);
 
     var oldRestored = new PersistentExecutionSession
     {
@@ -222,6 +847,7 @@ try
     persistedTheme.Colors.CategoriesPanelOpacity = 0.51;
     persistedTheme.Colors.ProfilesPanelOpacity = 0.63;
     persistedTheme.Colors.ProfileEditorPanelOpacity = 0.84;
+    persistedTheme.Colors.ActivityPanelOpacity = 0.47;
     persistedTheme.Colors.BackgroundAssetFileName = "background-test.gif";
     var customSettings = new UserSettings
     {
@@ -239,6 +865,7 @@ try
           Math.Abs(customReloaded.CustomThemes[0].Colors.CategoriesPanelOpacity - 0.51) < 0.001 &&
           Math.Abs(customReloaded.CustomThemes[0].Colors.ProfilesPanelOpacity - 0.63) < 0.001 &&
           Math.Abs(customReloaded.CustomThemes[0].Colors.ProfileEditorPanelOpacity - 0.84) < 0.001 &&
+          Math.Abs(customReloaded.CustomThemes[0].Colors.ActivityPanelOpacity - 0.47) < 0.001 &&
           customReloaded.CustomThemes[0].Colors.BackgroundAssetFileName == "background-test.gif" &&
           customReloaded.CustomThemes[0].CreatedAt != default && customReloaded.CustomThemes[0].UpdatedAt != default,
         "Custom Theme collection, metadata, colors, and background persist", failures);
@@ -248,7 +875,8 @@ try
     Check(Math.Abs(legacyOpacity.SurfaceOpacity - 128d / 255) < 0.001 &&
           legacyOpacity.CategoriesPanelOpacity == legacyOpacity.SurfaceOpacity &&
           legacyOpacity.ProfilesPanelOpacity == legacyOpacity.SurfaceOpacity &&
-          legacyOpacity.ProfileEditorPanelOpacity == legacyOpacity.SurfaceOpacity,
+          legacyOpacity.ProfileEditorPanelOpacity == legacyOpacity.SurfaceOpacity &&
+          legacyOpacity.ActivityPanelOpacity == legacyOpacity.SurfaceOpacity,
         "legacy custom surface alpha migrates to all opacity controls", failures);
     settingsRepository.Dispose();
     var logPaths = new AppDataPaths(Path.Combine(testRoot, "logging-appdata"));
@@ -281,7 +909,7 @@ try
                     "SecondaryButtonDisabledBackground", "SecondaryButtonDisabledForeground", "MenuBackground",
                     "MenuForeground", "MenuHoverBackground", "MenuHoverForeground", "MenuDisabledForeground",
                     "SelectionForeground", "HoverForeground", "DisabledInputBackground", "DisabledInputForeground",
-                    "CategoriesSurfaceBrush", "ProfilesSurfaceBrush", "ProfileEditorSurfaceBrush",
+                    "CategoriesSurfaceBrush", "ProfilesSurfaceBrush", "ProfileEditorSurfaceBrush", "ActivitySurfaceBrush",
                     "IconPrimary", "IconAccent", "IconMuted" };
                 var complete = required.All(key => app.TryFindResource(key) is Brush);
                 var readable = SemanticContrastIsAccessible(app);
@@ -336,6 +964,7 @@ try
             transparentSurfaces.CategoriesPanelOpacity = 0.25;
             transparentSurfaces.ProfilesPanelOpacity = 0.50;
             transparentSurfaces.ProfileEditorPanelOpacity = 0.85;
+            transparentSurfaces.ActivityPanelOpacity = 0.40;
             transparentSurfaces.BackgroundOpacity = 0.37;
             manager.ApplyTheme("surface-opacity", transparentSurfaces);
             themeTestResults.Add((
@@ -346,9 +975,10 @@ try
                 ((SolidColorBrush)app.TryFindResource("CategoriesSurfaceBrush")!).Color.A == 64 &&
                 ((SolidColorBrush)app.TryFindResource("ProfilesSurfaceBrush")!).Color.A == 128 &&
                 ((SolidColorBrush)app.TryFindResource("ProfileEditorSurfaceBrush")!).Color.A == 217 &&
+                ((SolidColorBrush)app.TryFindResource("ActivitySurfaceBrush")!).Color.A == 102 &&
                 ((SolidColorBrush)app.TryFindResource("BorderBrush")!).Color.A == 170 &&
                 Math.Abs((double)app.TryFindResource("CustomBackgroundOpacity")! - 0.37) < 0.001,
-                "surface opacity changes only surface alpha and supports three independent main blocks"));
+                "surface opacity changes only surface alpha and supports four independent main blocks"));
             using var gifStream = File.OpenRead(Path.Combine(themePaths.CustomThemeDirectory, "test.gif"));
             var gifDecoder = new GifBitmapDecoder(gifStream, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad);
             themeTestResults.Add((gifDecoder.Frames.Count == 2, "animated GIF decodes and caches two frames"));
@@ -383,11 +1013,14 @@ try
                 "theme editor draft updates the real application resources live"));
             editor.ViewModel.SurfaceOpacityPercent = 68;
             editor.ViewModel.CategoriesPanelOpacityPercent = 31;
+            editor.ViewModel.ActivityPanelOpacityPercent = 44;
             themeTestResults.Add((Math.Abs(editor.ViewModel.Settings.SurfaceOpacity - 0.68) < 0.001 &&
                                   Math.Abs(editor.ViewModel.Settings.CategoriesPanelOpacity - 0.31) < 0.001 &&
                                   Math.Abs(editor.ViewModel.Settings.ProfilesPanelOpacity - 0.68) < 0.001 &&
+                                  Math.Abs(editor.ViewModel.Settings.ActivityPanelOpacity - 0.44) < 0.001 &&
                                   ((SolidColorBrush)app.TryFindResource("CategoriesSurfaceBrush")!).Color.A == 79 &&
-                                  ((SolidColorBrush)app.TryFindResource("ProfilesSurfaceBrush")!).Color.A == 173,
+                                  ((SolidColorBrush)app.TryFindResource("ProfilesSurfaceBrush")!).Color.A == 173 &&
+                                  ((SolidColorBrush)app.TryFindResource("ActivitySurfaceBrush")!).Color.A == 112,
                 "global and per-column opacity sliders live-apply independently"));
             var originalName = editor.ViewModel.Name;
             editor.ViewModel.Colors.First(item => item.Key == "accent").Color = "#FFFF0000";
@@ -813,7 +1446,11 @@ try
                 "program.run records only the instance started by SwitchBoard", failures);
             if (programPending is not null)
             {
-                await new ProfileRestoreRunner(registry, sessionRepository).RunAsync(programPending);
+                // Reload the session from JSON to prove Restore does not depend on in-memory process objects.
+                var persistedProgramPending = await sessionRepository.LoadAsync(programPending.SessionId);
+                Check(persistedProgramPending?.PendingRestoreCount == 1,
+                    "program.run pending Restore survives session reload", failures);
+                await new ProfileRestoreRunner(registry, sessionRepository).RunAsync(persistedProgramPending!);
                 await Task.Delay(250);
                 var launchedStillAlive = true;
                 try { using var launched = Process.GetProcessById(launchedPid); launchedStillAlive = !launched.HasExited; }
@@ -824,6 +1461,52 @@ try
             if (!preexisting.HasExited) preexisting.Kill();
         }
     }
+
+    var edgePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
+        "Microsoft", "Edge", "Application", "msedge.exe");
+    if (File.Exists(edgePath))
+    {
+        var edgeBaseline = Process.GetProcessesByName("msedge");
+        var edgeBaselineIds = edgeBaseline.Select(process => process.Id).ToHashSet();
+        foreach (var process in edgeBaseline) process.Dispose();
+        var edgeData = Path.Combine(testRoot, "edge-profile");
+        var edgeAction = Action(ActionTypeIds.ProgramRun, new JsonObject
+        {
+            [ActionParameterNames.Target] = edgePath,
+            [ActionParameterNames.Arguments] = $"--user-data-dir=\"{edgeData}\" --no-first-run about:blank",
+            [ActionParameterNames.InstanceBehavior] = InstanceBehaviorIds.StartAnother
+        });
+        edgeAction.RestoreBehavior = ActionRestoreBehavior.CloseIfStartedBySwitchBoard;
+        var edgeProfile = new ProfileDefinition
+        {
+            CategoryId = Guid.NewGuid(), Name = "Microsoft Edge restore test", Actions = [edgeAction]
+        };
+        var edgeSession = await runner.RunAsync(edgeProfile);
+        var edgePending = await sessionRepository.GetLatestPendingAsync(edgeProfile.Id);
+        var edgeState = edgePending?.Actions.Single().PreviousState;
+        var edgeTracked = edgeState?["launchedProcesses"] as JsonArray;
+        Check(edgeSession.Status == ExecutionSessionStatus.Completed &&
+              edgeState?["startedBySwitchBoard"]?.GetValue<bool>() == true && edgeTracked?.Count > 1,
+            "program.run identifies Microsoft Edge multi-process launch", failures);
+        if (edgePending is not null)
+        {
+            var reloaded = await sessionRepository.LoadAsync(edgePending.SessionId);
+            var edgeRestoreResult = await new ProfileRestoreRunner(registry, sessionRepository).RunAsync(reloaded!);
+            await Task.Delay(500);
+            var afterEdge = Process.GetProcessesByName("msedge");
+            var afterIds = afterEdge.Select(process => process.Id).ToHashSet();
+            foreach (var process in afterEdge) process.Dispose();
+            var trackedIds = edgeTracked?.OfType<JsonObject>()
+                .Select(item => item["processId"]?.GetValue<int>() ?? 0).Where(id => id > 0).ToHashSet() ?? [];
+            var persistedBaselineIds = (edgeState?["preExistingProcesses"] as JsonArray)?.OfType<JsonObject>()
+                .Select(item => item["processId"]?.GetValue<int>() ?? 0).Where(id => id > 0).ToHashSet() ?? [];
+            Check(edgeRestoreResult.PendingRestoreCount == 0 && !trackedIds.Overlaps(afterIds),
+                "program.run Restore verifies all tracked Microsoft Edge processes exited", failures);
+            Check(!trackedIds.Overlaps(persistedBaselineIds) && edgeBaselineIds.SetEquals(persistedBaselineIds),
+                "program.run Restore target set excludes Microsoft Edge processes present before profile", failures);
+        }
+    }
+    else Console.WriteLine("SKIP Microsoft Edge restore test: msedge.exe was not found.");
 
     var treeHelperPath = Environment.ProcessPath;
     var treeChildPidPath = Path.Combine(testRoot, "program-run-child.pid");
@@ -1060,6 +1743,37 @@ try
         }
     }
 
+    var dusm = services.FirstOrDefault(service => string.Equals(service.ServiceName, "DusmSvc", StringComparison.OrdinalIgnoreCase));
+    if (dusm is not null)
+    {
+        var initialDusmState = await serviceManager.GetStateAsync("DusmSvc");
+        var stopDusm = await serviceManager.SetStateAsync("DusmSvc", ServiceDesiredStateIds.Stopped,
+            TimeSpan.FromSeconds(15));
+        if (stopDusm.IsSuccessful)
+        {
+            await Task.Delay(1100);
+            var stableDusmState = await serviceManager.GetStateAsync("DusmSvc");
+            Check(stableDusmState == ServiceDesiredStateIds.Stopped,
+                "DusmSvc Stop is verified again after stability delay", failures);
+        }
+        else
+        {
+            Check(stopDusm.CurrentState != ServiceDesiredStateIds.Stopped || stopDusm.Win32Error is not null ||
+                  stopDusm.WasRestartedByWindows,
+                "DusmSvc failed Stop reports actual state or Windows error", failures);
+            Console.WriteLine($"LIMIT DusmSvc Stop: {stopDusm.Message}");
+        }
+        if (initialDusmState == ServiceDesiredStateIds.Running)
+        {
+            var restoreDusm = await serviceManager.SetStateAsync("DusmSvc", ServiceDesiredStateIds.Running,
+                TimeSpan.FromSeconds(15));
+            Check(restoreDusm.IsSuccessful, "DusmSvc restored to original Running state", failures);
+        }
+        else
+            Check(await serviceManager.GetStateAsync("DusmSvc") == ServiceDesiredStateIds.Stopped,
+                "DusmSvc remains in original Stopped state", failures);
+    }
+
     var advancedAction = new ActionItemViewModel(new ActionDefinition
     {
         Type = ActionTypeIds.ServiceSetState,
@@ -1076,6 +1790,12 @@ try
           advancedReloaded.RestoreBehavior == ActionRestoreBehavior.RestorePreviousState &&
           !advancedJson.Contains("AdvancedOptions", StringComparison.OrdinalIgnoreCase),
         "advanced options default collapsed and values persist", failures);
+    advancedAction.IsExpanded = true;
+    advancedAction.IsAdvancedOptionsExpanded = true;
+    advancedAction.IsExpanded = false;
+    Check(!advancedAction.IsAdvancedOptionsExpanded && advancedAction.TimeoutSeconds == 17 &&
+          advancedAction.FailurePolicyId == "stop",
+        "collapsing action resets Advanced visibility without resetting values", failures);
     var validationLocalization = new TestLocalizationService();
     var invalidProgram = new ActionItemViewModel(Action(ActionTypeIds.ProgramRun, []), validationLocalization);
     var delayWithoutRestore = new ActionItemViewModel(Action(ActionTypeIds.Delay,
@@ -1453,6 +2173,60 @@ sealed class TestDialogService : IUserDialogService
     public SwitchBoard.Services.Discovery.PowerPlanCandidate? SelectPowerPlan(string title) => null;
     public SwitchBoard.Services.Discovery.DisplayCandidate? SelectDisplay(string title) => null;
     public SwitchBoard.Services.Discovery.ProgramCandidate? FindProgram(string title) => null;
+    public SwitchBoard.Services.Discovery.AudioDeviceCandidate? SelectAudioDevice(string title, bool input) => null;
+    public SwitchBoard.Services.Discovery.DeviceCandidate? SelectDevice(string title) => null;
+}
+
+sealed class TestServiceManager(string initialState, bool changeSucceeds,
+    string initialStartupType = ServiceStartupTypeIds.Automatic) : IWindowsServiceManager
+{
+    private string _state = initialState;
+    private string _startupType = initialStartupType;
+    public WindowsServiceSnapshot Snapshot => new(ToDisplay(_state), StartupDisplay(_startupType));
+    public Task<IReadOnlyList<SwitchBoard.Services.Discovery.ServiceCandidate>> GetServicesAsync(
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<SwitchBoard.Services.Discovery.ServiceCandidate>>([]);
+    public Task<string> GetStateAsync(string serviceName, CancellationToken cancellationToken = default) =>
+        Task.FromResult(_state);
+    public Task<WindowsServiceSnapshot> GetSnapshotAsync(string serviceName,
+        CancellationToken cancellationToken = default) => Task.FromResult(Snapshot);
+    public Task<WindowsServiceOperationResult> SetStateAsync(string serviceName, string desiredState, TimeSpan timeout,
+        CancellationToken cancellationToken = default)
+    {
+        var before = ToDisplay(_state);
+        if (string.Equals(_state, desiredState, StringComparison.OrdinalIgnoreCase))
+            return Task.FromResult(new WindowsServiceOperationResult(true, true, StateBefore: before,
+                CurrentState: before, ExpectedState: ToDisplay(desiredState)));
+        if (!changeSucceeds)
+            return Task.FromResult(new WindowsServiceOperationResult(false, false, "Access denied.", before,
+                before, ToDisplay(desiredState), 5));
+        _state = desiredState;
+        return Task.FromResult(new WindowsServiceOperationResult(true, false, StateBefore: before,
+            CurrentState: ToDisplay(_state), ExpectedState: ToDisplay(desiredState)));
+    }
+    public Task<WindowsServiceConfigurationResult> SetConfigurationAsync(string serviceName, string desiredState,
+        string desiredStartupType, TimeSpan timeout, CancellationToken cancellationToken = default)
+    {
+        var before = new WindowsServiceSnapshot(ToDisplay(_state), StartupDisplay(_startupType));
+        if (!changeSucceeds)
+            return Task.FromResult(new WindowsServiceConfigurationResult(false, false, before, before,
+                desiredState, desiredStartupType, "Access denied.", 5));
+        if (desiredState != ServiceDesiredStateIds.Unchanged) _state = desiredState;
+        if (desiredStartupType != ServiceStartupTypeIds.Unchanged) _startupType = desiredStartupType;
+        var current = new WindowsServiceSnapshot(ToDisplay(_state), StartupDisplay(_startupType));
+        return Task.FromResult(new WindowsServiceConfigurationResult(true, before == current, before, current,
+            desiredState, desiredStartupType));
+    }
+    private static string ToDisplay(string state) =>
+        string.Equals(state, ServiceDesiredStateIds.Running, StringComparison.OrdinalIgnoreCase) ? "Running" : "Stopped";
+    private static string StartupDisplay(string value) => value switch
+    {
+        ServiceStartupTypeIds.Automatic => "Automatic",
+        ServiceStartupTypeIds.AutomaticDelayed => "Automatic (Delayed Start)",
+        ServiceStartupTypeIds.Manual => "Manual",
+        ServiceStartupTypeIds.Disabled => "Disabled",
+        _ => value
+    };
 }
 
 sealed class TestDisplayManager(DisplayModeState initialState) : IDisplayManager
@@ -1479,7 +2253,8 @@ sealed class TestReversibleHandler(List<string> restoreOrder, IExecutionSessionR
         CancellationToken cancellationToken) => Task.FromResult<JsonObject?>(new JsonObject
         {
             ["key"] = action.Parameters["key"]?.GetValue<string>(),
-            ["failOnce"] = action.Parameters["failOnce"]?.GetValue<bool>() ?? false
+            ["failOnce"] = action.Parameters["failOnce"]?.GetValue<bool>() ?? false,
+            ["restoreDelayMs"] = action.Parameters["restoreDelayMs"]?.GetValue<int>() ?? 0
         });
 
     public async Task<ActionExecutionResult> ExecuteAsync(ActionDefinition action, ActionExecutionContext context,
@@ -1491,7 +2266,7 @@ sealed class TestReversibleHandler(List<string> restoreOrder, IExecutionSessionR
         return ActionExecutionResult.Success();
     }
 
-    public Task RestoreAsync(ActionDefinition action, JsonObject restoreState, ActionExecutionContext context,
+    public async Task<ActionExecutionResult> RestoreAsync(ActionDefinition action, JsonObject restoreState, ActionExecutionContext context,
         CancellationToken cancellationToken)
     {
         var key = restoreState["key"]?.GetValue<string>() ?? string.Empty;
@@ -1499,6 +2274,8 @@ sealed class TestReversibleHandler(List<string> restoreOrder, IExecutionSessionR
         RestoreAttempts[key] = RestoreAttempts.GetValueOrDefault(key) + 1;
         if ((restoreState["failOnce"]?.GetValue<bool>() ?? false) && _failedOnce.Add(key))
             throw new InvalidOperationException("Simulated first restore failure.");
-        return Task.CompletedTask;
+        var delay = restoreState["restoreDelayMs"]?.GetValue<int>() ?? 0;
+        if (delay > 0) await Task.Delay(delay, cancellationToken);
+        return ActionExecutionResult.Success("Verified test restore.");
     }
 }

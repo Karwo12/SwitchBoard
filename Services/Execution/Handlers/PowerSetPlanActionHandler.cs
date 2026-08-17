@@ -35,7 +35,7 @@ public sealed class PowerSetPlanActionHandler(IPowerPlanManager powerPlanManager
                 return ActionExecutionResult.Failure("Windows did not activate the selected power plan.");
             }
 
-            return ActionExecutionResult.Success();
+            return ActionExecutionResult.Success($"Verified: power plan {targetPlan:D} is active.");
         }
         catch (Win32Exception exception)
         {
@@ -55,17 +55,19 @@ public sealed class PowerSetPlanActionHandler(IPowerPlanManager powerPlanManager
         return new JsonObject { ["previousPowerPlanGuid"] = active.ToString("D") };
     }
 
-    public async Task RestoreAsync(
+    public async Task<ActionExecutionResult> RestoreAsync(
         ActionDefinition action,
         JsonObject restoreState,
         ActionExecutionContext context,
         CancellationToken cancellationToken)
     {
         var value = restoreState["previousPowerPlanGuid"]?.GetValue<string>();
-        if (!Guid.TryParse(value, out var previous)) throw new InvalidOperationException("The saved power plan is invalid.");
-        if (await powerPlanManager.GetActivePlanAsync(cancellationToken) == previous) return;
+        if (!Guid.TryParse(value, out var previous)) return ActionExecutionResult.Failure("The saved power plan is invalid.", false);
+        if (await powerPlanManager.GetActivePlanAsync(cancellationToken) == previous)
+            return ActionExecutionResult.Success("The previous power plan was already active.");
         await powerPlanManager.SetActivePlanAsync(previous, cancellationToken);
         if (await powerPlanManager.GetActivePlanAsync(cancellationToken) != previous)
-            throw new InvalidOperationException("Windows did not restore the previous power plan.");
+            return ActionExecutionResult.Failure("Windows did not restore the previous power plan.");
+        return ActionExecutionResult.Success("Verified: the previous power plan is active.");
     }
 }

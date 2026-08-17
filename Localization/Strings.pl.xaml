@@ -71,6 +71,31 @@
     <system:String x:Key="ServiceState.Running">Uruchomiona</system:String>
     <system:String x:Key="ServiceState.Stopped">Zatrzymana</system:String>
     <system:String x:Key="ServiceState.Unchanged">Bez zmian</system:String>
+    <system:String x:Key="ServiceStartupType.Unchanged">Bez zmian</system:String>
+    <system:String x:Key="ServiceStartupType.Automatic">Automatyczny</system:String>
+    <system:String x:Key="ServiceStartupType.AutomaticDelayed">Automatyczny (opóźniony start)</system:String>
+    <system:String x:Key="ServiceStartupType.Manual">Ręczny</system:String>
+    <system:String x:Key="ServiceStartupType.Disabled">Wyłączony</system:String>
+    <system:String x:Key="ActionEditor.ServiceRuntimeState">STAN USŁUGI</system:String>
+    <system:String x:Key="ActionEditor.ServiceStartupType">TYP URUCHOMIENIA</system:String>
+    <system:String x:Key="ActionStatus.Unavailable">? Stan niedostępny</system:String>
+    <system:String x:Key="ActionStatus.LastChecked">Ostatnie sprawdzenie: {0}</system:String>
+    <system:String x:Key="ActionStatus.Service">{0}; uruchamianie: {1}</system:String>
+    <system:String x:Key="ActionStatus.Running">Uruchomiony</system:String>
+    <system:String x:Key="ActionStatus.Stopped">Nie działa</system:String>
+    <system:String x:Key="ActionStatus.Active">Aktywny</system:String>
+    <system:String x:Key="ActionStatus.Inactive">Nieaktywny</system:String>
+    <system:String x:Key="ActionStatus.Enabled">Włączone</system:String>
+    <system:String x:Key="ActionStatus.Disabled">Wyłączone</system:String>
+    <system:String x:Key="ActionStatus.Muted">wyciszony</system:String>
+    <system:String x:Key="ActionStatus.Unmuted">nie wyciszony</system:String>
+    <system:String x:Key="ActionStatus.Audio">{0}, {1:0}%</system:String>
+    <system:String x:Key="ActionStatus.Display">{0}×{1} @ {2} Hz</system:String>
+    <system:String x:Key="ActionStatus.NotApplicable">—</system:String>
+    <system:String x:Key="Status.Refreshing">Odświeżanie...</system:String>
+    <system:String x:Key="Tooltip.RefreshCurrentStates">Odśwież aktualne stany</system:String>
+    <system:String x:Key="Activity.RefreshFailed">Nie udało się odświeżyć stanów: {0}</system:String>
+    <system:String x:Key="Settings.ShowCurrentActionState">Pokazuj aktualny stan akcji</system:String>
     <system:String x:Key="ScriptType.AutoDetect">Wykryj automatycznie</system:String>
     <system:String x:Key="ScriptType.PowerShell">PowerShell</system:String>
     <system:String x:Key="ScriptType.BatchCmd">Batch/CMD</system:String>
@@ -106,6 +131,7 @@
     <system:String x:Key="Common.UndoTooltip">Cofnij ostatnią zmianę w konfiguracji</system:String>
     <system:String x:Key="Restore.ChangesCount">Zmiany do przywrócenia: {0}</system:String>
     <system:String x:Key="Restore.ButtonCount">Przywróć • {0}</system:String>
+    <system:String x:Key="Restore.ButtonRunning">Przywracanie…</system:String>
     <system:String x:Key="Restore.ProfileCompleted">Profil wykonany • zapisano {0} zmiany do przywrócenia</system:String>
     <system:String x:Key="Restore.PreviousPending">Poprzednie zmiany nie zostały jeszcze przywrócone</system:String>
     <system:String x:Key="Restore.Running">Przywracanie poprzednich ustawień...</system:String>
@@ -113,6 +139,28 @@
     <system:String x:Key="Restore.Partial">Nie udało się przywrócić wszystkich ustawień. Możesz spróbować ponownie.</system:String>
     <system:String x:Key="Restore.Failed">Przywracanie nie powiodło się: {0}</system:String>
     <system:String x:Key="Restore.Progress">Przywracanie {0} z {1}: {2}</system:String>
+    <system:String x:Key="Restore.PreviewHeading">Oczekujące przywracanie:</system:String>
+    <system:String x:Key="Restore.NoPendingPreview">Brak zapisanych zmian oczekujących na przywrócenie.</system:String>
+    <system:String x:Key="Restore.DiscardTooltip">Odrzuć oczekujące przywracanie. Zapis audytowy pozostanie, ale automatyczne przywracanie nie będzie już dostępne.</system:String>
+    <system:String x:Key="Restore.DiscardTitle">Odrzuć oczekujące przywracanie</system:String>
+    <system:String x:Key="Restore.DiscardConfirm">Odrzucić zapisane dane przywracania dla tego profilu?</system:String>
+    <system:String x:Key="Restore.Discarded">Zapisane dane przywracania zostały odrzucone.</system:String>
+    <system:String x:Key="Activity.RestoreDiscarded">Odrzucono oczekujące przywracanie: {0}</system:String>
+    <system:String x:Key="Result.ProgramRestoreSuccess">Zweryfikowano: program został zamknięty. Zamknięto {0} procesów {1}.exe; żaden nie pozostał.</system:String>
+    <system:String x:Key="Result.ProgramRestoreFailed">Nie udało się zamknąć programu. Pozostało {0} procesów {1}.exe uruchomionych przez SwitchBoard.</system:String>
+    <system:String x:Key="Result.ServiceAdminRequired">Nie udało się zmienić stanu usługi „{0}”: wymagane są uprawnienia administratora.</system:String>
+    <system:String x:Key="Result.ServiceAdminRequiredDetailed">Nie udało się zmienić usługi „{0}”: wymagane są uprawnienia administratora. Oczekiwano: stan {1}, uruchamianie {2}. Odczytano: stan {3}, uruchamianie {4}.</system:String>
+    <system:String x:Key="Result.ServiceRestarted">Usługa „{0}” osiągnęła stan Stopped, ale Windows uruchomił ją ponownie. Aktualny stan: {1}.</system:String>
+    <system:String x:Key="Result.ServiceMismatch">Windows nie ustawił usługi „{0}” w stan {1}. Aktualny stan: {2}. {3}</system:String>
+    <system:String x:Key="Result.ServiceVerified">{0}: {1} → {2} ✓</system:String>
+    <system:String x:Key="Result.ServiceSkipped">{0}: już {1} — pominięto</system:String>
+    <system:String x:Key="Result.ServiceRestored">{0}: {1} → {2} — przywrócono</system:String>
+    <system:String x:Key="Result.ServiceReadFailed">Nie udało się odczytać stanu usługi „{0}”.</system:String>
+    <system:String x:Key="Result.ServiceNothingRequested">{0}: nie wybrano żadnej właściwości usługi do zmiany.</system:String>
+    <system:String x:Key="Result.ServiceConfigurationMismatch">Windows nie zastosował pełnej konfiguracji usługi „{0}”. Oczekiwano: stan {1}, uruchamianie {2}. Odczytano: stan {3}, uruchamianie {4}. {5}</system:String>
+    <system:String x:Key="Result.ServiceConfigurationSkipped">{0}: stan {1}, uruchamianie {2} — już skonfigurowano; pominięto.</system:String>
+    <system:String x:Key="Result.ServiceConfigurationVerified">{0} — zweryfikowano. Stan: {1} → {2}; uruchamianie: {3} → {4}.</system:String>
+    <system:String x:Key="Result.ServiceConfigurationRestored">{0} — przywrócono. Stan: {1} → {2}; uruchamianie: {3} → {4}.</system:String>
     <system:String x:Key="SessionStatus.Preparing">Przygotowywanie</system:String>
     <system:String x:Key="SessionStatus.Executing">Wykonywanie</system:String>
     <system:String x:Key="SessionStatus.Executed">Wykonano</system:String>
@@ -225,10 +273,11 @@
     <system:String x:Key="CustomTheme.Color.MenuHover">Wskazanie w menu</system:String>
     <system:String x:Key="CustomTheme.AutomaticForegroundHint">Kolory tekstu przycisków i menu są dobierane automatycznie, aby zachować czytelny kontrast.</system:String>
     <system:String x:Key="CustomTheme.SurfaceOpacity">PRZEZROCZYSTOŚĆ PANELI</system:String>
-    <system:String x:Key="CustomTheme.SurfaceOpacityHint">100% oznacza nieprzezroczyste panele. Suwak ustawia też trzy główne bloki, które możesz dostroić osobno poniżej. Nie zmienia tła obrazu, tekstu, ikon ani obramowań.</system:String>
+    <system:String x:Key="CustomTheme.SurfaceOpacityHint">100% oznacza nieprzezroczyste panele. Suwak ustawia też cztery główne bloki, które możesz dostroić osobno poniżej. Nie zmienia tła obrazu, tekstu, ikon ani obramowań.</system:String>
     <system:String x:Key="CustomTheme.CategoriesOpacity">BLOK KATEGORII</system:String>
     <system:String x:Key="CustomTheme.ProfilesOpacity">BLOK PROFILI</system:String>
     <system:String x:Key="CustomTheme.ProfileEditorOpacity">BLOK EDYTORA PROFILU</system:String>
+    <system:String x:Key="CustomTheme.ActivityOpacity">BLOK AKTYWNOŚCI</system:String>
     <system:String x:Key="CustomTheme.ChooseColor">Wybierz kolor</system:String>
     <system:String x:Key="CustomTheme.BackgroundImage">TŁO OBRAZU</system:String>
     <system:String x:Key="CustomTheme.ChooseImage">Wybierz obraz</system:String>
@@ -337,4 +386,83 @@
     <system:String x:Key="Status.ProfileCancelled">Anulowano wykonywanie profilu</system:String>
     <system:String x:Key="Status.ProfileFailed">Wykonywanie profilu zakończyło się błędem</system:String>
     <system:String x:Key="Status.SettingsSaveFailed">Nie można zapisać ustawień: {0}</system:String>
+    <system:String x:Key="Action.ProcessSettings">Ustawienia procesu</system:String>
+    <system:String x:Key="Action.WaitProcess">Czekaj na proces</system:String>
+    <system:String x:Key="Action.WaitProcessExit">Czekaj na zamknięcie procesu</system:String>
+    <system:String x:Key="Action.WaitWindow">Czekaj na okno</system:String>
+    <system:String x:Key="Action.AudioSettings">Ustawienia audio</system:String>
+    <system:String x:Key="Action.DeviceState">Stan urządzenia</system:String>
+    <system:String x:Key="Action.RunProfile">Uruchom inny profil</system:String>
+    <system:String x:Key="Action.If">Warunek IF</system:String>
+    <system:String x:Key="Action.Notification">Powiadomienie</system:String>
+    <system:String x:Key="Activity.Title">Aktywność</system:String>
+    <system:String x:Key="Activity.Clear">Wyczyść</system:String>
+    <system:String x:Key="Activity.SystemChanges">Zmiany systemu</system:String>
+    <system:String x:Key="Activity.SystemChangesCount">Zmiany systemu {0}</system:String>
+    <system:String x:Key="Activity.History">Historia</system:String>
+    <system:String x:Key="Activity.UnrestoredChanges">{0} zmian systemu nie zostało przywróconych</system:String>
+    <system:String x:Key="Activity.ChangeDiscarded">{0}: odrzucono przywracanie; pozostawiono zmianę.</system:String>
+    <system:String x:Key="Activity.ExternalChange">{0}: stan został później zmieniony poza SwitchBoardem.</system:String>
+    <system:String x:Key="SystemChange.Pending">Oczekuje na przywrócenie</system:String>
+    <system:String x:Key="SystemChange.Restored">Przywrócono</system:String>
+    <system:String x:Key="SystemChange.Discarded">Przywracanie odrzucone / pozostawiono zmianę</system:String>
+    <system:String x:Key="SystemChange.RestoreFailed">Przywrócenie nie powiodło się</system:String>
+    <system:String x:Key="SystemChange.External">Stan zmieniono ponownie poza SwitchBoardem</system:String>
+    <system:String x:Key="SystemChange.ServiceDetails">Stan: {0} → {1}; uruchamianie: {2} → {3}</system:String>
+    <system:String x:Key="Activity.ProfileStarted">Uruchomienie profilu: {0}</system:String>
+    <system:String x:Key="Activity.ProfileCompleted">Profil zakończony: {0}</system:String>
+    <system:String x:Key="Activity.ProfileCancelled">Profil anulowany: {0}</system:String>
+    <system:String x:Key="Activity.ProfileCompletedWithErrors">Profil zakończony z błędami: {0}</system:String>
+    <system:String x:Key="Activity.ProfileFailed">Błąd profilu: {0}</system:String>
+    <system:String x:Key="Activity.ActionStarted">Rozpoczęto: {0}</system:String>
+    <system:String x:Key="Activity.ActionCompleted">Sukces: {0}</system:String>
+    <system:String x:Key="Activity.ActionSkipped">Pominięto: {0}</system:String>
+    <system:String x:Key="Activity.ActionFailed">Błąd: {0}</system:String>
+    <system:String x:Key="Activity.RestoreStarted">Przywracanie profilu: {0}</system:String>
+    <system:String x:Key="Activity.RestoreActionStarted">Przywracanie: {0}</system:String>
+    <system:String x:Key="Activity.RestoreActionCompleted">Przywrócono: {0}</system:String>
+    <system:String x:Key="Activity.RestoreActionFailed">Błąd przywracania: {0}</system:String>
+    <system:String x:Key="Activity.RestoreCompleted">Profil przywrócony: {0}</system:String>
+    <system:String x:Key="Activity.RestorePartial">Profil częściowo przywrócony: {0}</system:String>
+    <system:String x:Key="Activity.RestoreCancelled">Przywracanie profilu anulowane: {0}</system:String>
+    <system:String x:Key="Activity.RestoreFailed">Nie udało się przywrócić profilu: {0}</system:String>
+    <system:String x:Key="Advanced.Retry">Ponawianie</system:String>
+    <system:String x:Key="Advanced.RetryEnabled">Ponów po błędzie</system:String>
+    <system:String x:Key="Advanced.MaximumAttempts">Maksymalna liczba prób</system:String>
+    <system:String x:Key="Advanced.RetryDelay">Odstęp między próbami (s)</system:String>
+    <system:String x:Key="Advanced.InstanceBehavior">Jeśli program już działa</system:String>
+    <system:String x:Key="Advanced.WindowBehavior">Zachowanie okna</system:String>
+    <system:String x:Key="Advanced.WindowWait">Czekaj na okno maksymalnie (s)</system:String>
+    <system:String x:Key="ActionEditor.CpuAffinity">Koligacja CPU</system:String>
+    <system:String x:Key="ActionEditor.SelectAll">Zaznacz wszystkie</system:String>
+    <system:String x:Key="ActionEditor.ClearAll">Odznacz wszystkie</system:String>
+    <system:String x:Key="ActionEditor.AllExceptCpu0">Wszystkie oprócz CPU0</system:String>
+    <system:String x:Key="ActionEditor.Priority">Priorytet procesu</system:String>
+    <system:String x:Key="ActionEditor.Condition">Warunek</system:String>
+    <system:String x:Key="ActionEditor.Value">Wartość</system:String>
+    <system:String x:Key="ActionEditor.Message">Wiadomość</system:String>
+    <system:String x:Key="ActionEditor.Level">Poziom</system:String>
+    <system:String x:Key="Validation.ProcessSetting">Wybierz affinity, priorytet albo obie zmiany.</system:String>
+    <system:String x:Key="Validation.CpuAffinity">Affinity CPU musi zawierać co najmniej jeden procesor logiczny.</system:String>
+    <system:String x:Key="Validation.WindowTitle">Wpisz tytuł okna do dopasowania.</system:String>
+    <system:String x:Key="Validation.Audio">Wybierz co najmniej jedno ustawienie audio do zmiany.</system:String>
+    <system:String x:Key="Validation.Device">Wybierz urządzenie Windows.</system:String>
+    <system:String x:Key="Validation.Profile">Wybierz istniejący profil.</system:String>
+    <system:String x:Key="Validation.Condition">Skonfiguruj warunek IF.</system:String>
+    <system:String x:Key="Validation.Notification">Wpisz treść powiadomienia.</system:String>
+    <system:String x:Key="Priority.Idle">Bezczynny</system:String><system:String x:Key="Priority.BelowNormal">Poniżej normalnego</system:String><system:String x:Key="Priority.Normal">Normalny</system:String><system:String x:Key="Priority.AboveNormal">Powyżej normalnego</system:String><system:String x:Key="Priority.High">Wysoki</system:String>
+    <system:String x:Key="WindowMatch.Any">Dowolne główne okno</system:String><system:String x:Key="WindowMatch.Contains">Tytuł zawiera</system:String><system:String x:Key="WindowMatch.Exact">Dokładny tytuł</system:String>
+    <system:String x:Key="WindowBehavior.None">Bez zmian</system:String><system:String x:Key="WindowBehavior.Minimize">Minimalizuj</system:String><system:String x:Key="WindowBehavior.Maximize">Maksymalizuj</system:String><system:String x:Key="WindowBehavior.Restore">Przywróć</system:String><system:String x:Key="WindowBehavior.Hide">Ukryj</system:String>
+    <system:String x:Key="InstanceBehavior.DoNotStart">Nie uruchamiaj ponownie</system:String><system:String x:Key="InstanceBehavior.StartAnother">Uruchom kolejną instancję</system:String><system:String x:Key="InstanceBehavior.Restart">Zakończ istniejącą i uruchom ponownie</system:String>
+    <system:String x:Key="DeviceState.Enabled">Włączone</system:String><system:String x:Key="DeviceState.Disabled">Wyłączone</system:String><system:String x:Key="DeviceState.Unchanged">Bez zmian</system:String>
+    <system:String x:Key="Condition.ProcessRunning">Proces jest uruchomiony</system:String><system:String x:Key="Condition.ProcessNotRunning">Proces nie jest uruchomiony</system:String><system:String x:Key="Condition.ServiceRunning">Usługa jest uruchomiona</system:String><system:String x:Key="Condition.ServiceStopped">Usługa jest zatrzymana</system:String><system:String x:Key="Condition.FileExists">Plik istnieje</system:String><system:String x:Key="Condition.FileNotExists">Plik nie istnieje</system:String>
+    <system:String x:Key="NotificationLevel.Info">Informacja</system:String><system:String x:Key="NotificationLevel.Success">Sukces</system:String><system:String x:Key="NotificationLevel.Warning">Ostrzeżenie</system:String><system:String x:Key="NotificationLevel.Error">Błąd</system:String>
+    <system:String x:Key="RestoreBehavior.ProcessSettings">Przywróć poprzednie ustawienia procesu</system:String><system:String x:Key="RestoreBehavior.AudioSettings">Przywróć poprzednie ustawienia audio</system:String><system:String x:Key="RestoreBehavior.DeviceState">Przywróć poprzedni stan urządzenia</system:String>
+    <system:String x:Key="ActionEditor.WindowMatch">Warunek okna</system:String><system:String x:Key="ActionEditor.WindowTitle">Tytuł okna</system:String>
+    <system:String x:Key="ActionEditor.SelectOutput">Wybierz wyjście</system:String><system:String x:Key="ActionEditor.SelectInput">Wybierz wejście</system:String><system:String x:Key="ActionEditor.DefaultDevice">Urządzenie domyślne</system:String><system:String x:Key="ActionEditor.DefaultCommunications">Urządzenie komunikacyjne</system:String><system:String x:Key="ActionEditor.Volume">Głośność</system:String><system:String x:Key="ActionEditor.ChangeMute">Zmień wyciszenie</system:String><system:String x:Key="ActionEditor.Mute">Wyciszone</system:String>
+    <system:String x:Key="ActionEditor.SelectDevice">Wybierz urządzenie</system:String><system:String x:Key="ActionEditor.DeviceWarning">Wyłączenie urządzeń może wymagać administratora. Urządzenia krytyczne są chronione.</system:String><system:String x:Key="ActionEditor.Profile">Profil</system:String><system:String x:Key="ActionEditor.Then">WTEDY</system:String><system:String x:Key="ActionEditor.Else">INACZEJ</system:String>
+    <system:String x:Key="Dialog.SelectAudioInput">Wybierz wejście audio</system:String><system:String x:Key="Dialog.SelectAudioOutput">Wybierz wyjście audio</system:String><system:String x:Key="Dialog.SelectDevice">Wybierz urządzenie Windows</system:String>
+    <system:String x:Key="Picker.Name">Nazwa</system:String><system:String x:Key="Picker.Type">Typ</system:String><system:String x:Key="Picker.Default">Domyślne</system:String><system:String x:Key="Picker.Class">Klasa</system:String><system:String x:Key="Picker.State">Stan</system:String><system:String x:Key="Picker.InstanceId">Identyfikator instancji</system:String>
+    <system:String x:Key="Validation.NestedAction">Zagnieżdżona akcja WTEDY/INACZEJ jest niekompletna.</system:String>
+    <system:String x:Key="Picker.Input">Wejście</system:String><system:String x:Key="Picker.Output">Wyjście</system:String><system:String x:Key="Picker.Multimedia">Multimedia</system:String><system:String x:Key="Picker.Communications">Komunikacja</system:String><system:String x:Key="Picker.BothRoles">Multimedia + komunikacja</system:String>
 </ResourceDictionary>

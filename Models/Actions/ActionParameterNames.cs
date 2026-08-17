@@ -12,6 +12,7 @@ public static class ActionParameterNames
     public const string DelaySeconds = "delaySeconds";
     public const string ServiceName = "serviceName";
     public const string ServiceDisplayName = "serviceDisplayName";
+    public const string ServiceStartupType = "serviceStartupType";
     public const string PowerPlanGuid = "powerPlanGuid";
     public const string PowerPlanName = "powerPlanName";
     public const string ScriptPath = "scriptPath";
@@ -32,4 +33,29 @@ public static class ActionParameterNames
     public const string RestoreScriptWaitForExit = "restoreScriptWaitForExit";
     public const string RestoreScriptRunAsAdministrator = "restoreScriptRunAsAdministrator";
     public const string RestoreScriptTimeoutSeconds = "restoreScriptTimeoutSeconds";
+    public const string CpuIndices = "cpuIndices";
+    public const string ChangeAffinity = "changeAffinity";
+    public const string ProcessPriority = "processPriority";
+    public const string ChangePriority = "changePriority";
+    public const string WindowMatchMode = "windowMatchMode";
+    public const string WindowTitle = "windowTitle";
+    public const string WindowBehavior = "windowBehavior";
+    public const string WindowWaitSeconds = "windowWaitSeconds";
+    public const string InstanceBehavior = "instanceBehavior";
+    public const string AudioOutputDeviceId = "audioOutputDeviceId";
+    public const string AudioInputDeviceId = "audioInputDeviceId";
+    public const string SetDefaultMultimedia = "setDefaultMultimedia";
+    public const string SetDefaultCommunications = "setDefaultCommunications";
+    public const string VolumePercent = "volumePercent";
+    public const string Mute = "mute";
+    public const string DeviceInstanceId = "deviceInstanceId";
+    public const string DeviceFriendlyName = "deviceFriendlyName";
+    public const string DeviceClass = "deviceClass";
+    public const string ProfileId = "profileId";
+    public const string ConditionType = "conditionType";
+    public const string ConditionValue = "conditionValue";
+    public const string ThenActions = "thenActions";
+    public const string ElseActions = "elseActions";
+    public const string NotificationMessage = "notificationMessage";
+    public const string NotificationLevel = "notificationLevel";
 }

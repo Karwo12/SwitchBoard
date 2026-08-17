@@ -82,7 +82,12 @@
             </StackPanel>
         </Grid>
 
-        <Grid Grid.Row="1" Margin="16,0,16,16">
+        <Grid x:Name="MainContentGrid" Grid.Row="1" Margin="16,0,16,16">
+            <Grid.RowDefinitions>
+                <RowDefinition x:Name="ContentRow" Height="{Binding TopContentRowHeight}" MinHeight="170" />
+                <RowDefinition Height="6" />
+                <RowDefinition x:Name="ActivityRow" Height="{Binding ActivityContentRowHeight}" MinHeight="{Binding ActivityMinimumHeight}" />
+            </Grid.RowDefinitions>
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="0.8*" MinWidth="180" MaxWidth="280" />
                 <ColumnDefinition Width="6" />
@@ -91,7 +96,7 @@
                 <ColumnDefinition Width="2.4*" MinWidth="420" />
             </Grid.ColumnDefinitions>
 
-            <ContentControl Grid.Column="0" Background="{DynamicResource CategoriesSurfaceBrush}"
+            <ContentControl Grid.Row="0" Grid.Column="0" Background="{DynamicResource CategoriesSurfaceBrush}"
                             Style="{StaticResource GlassPanel}">
                 <Grid>
                     <Grid.RowDefinitions>
@@ -175,10 +180,10 @@
                 </Grid>
             </ContentControl>
 
-            <GridSplitter Grid.Column="1" Width="6" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+            <GridSplitter Grid.Row="0" Grid.Column="1" Width="6" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
                           Background="Transparent" Cursor="SizeWE" ShowsPreview="True" />
 
-            <ContentControl Grid.Column="2" Background="{DynamicResource ProfilesSurfaceBrush}"
+            <ContentControl Grid.Row="0" Grid.Column="2" Background="{DynamicResource ProfilesSurfaceBrush}"
                             Style="{StaticResource GlassPanel}">
                 <Grid>
                     <Grid.RowDefinitions>
@@ -275,10 +280,104 @@
                 </Grid>
             </ContentControl>
 
-            <GridSplitter Grid.Column="3" Width="6" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+            <GridSplitter Grid.Row="0" Grid.Column="3" Width="6" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
                           Background="Transparent" Cursor="SizeWE" ShowsPreview="True" />
 
-            <controls:ActionEditorControl Grid.Column="4" />
+            <GridSplitter x:Name="ActivityLayoutSplitter" Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3"
+                          Height="6" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                          Background="Transparent" Cursor="SizeNS" ShowsPreview="False"
+                          DragCompleted="ActivityLayoutSplitter_OnDragCompleted"
+                          MouseDoubleClick="ActivityLayoutSplitter_OnMouseDoubleClick" />
+
+            <controls:ActionEditorControl Grid.RowSpan="3" Grid.Column="4" />
+
+            <Border Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="3"
+                    Margin="0,6,0,0" Padding="10,7" Background="{DynamicResource ActivitySurfaceBrush}"
+                    BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="12">
+                <Grid>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                    <Grid Visibility="Collapsed">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <Button Padding="4,1" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
+                                Background="Transparent" BorderThickness="0" Cursor="Hand"
+                                Command="{Binding ToggleActivityCommand}">
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock FontWeight="SemiBold" Text="{DynamicResource Activity.Title}" />
+                                    <TextBlock Margin="7,0,0,0" Foreground="{DynamicResource DangerBrush}" Text="{Binding ActivityAlertText}" />
+                                </StackPanel>
+                                <TextBlock Grid.Column="1" Margin="12,0,6,0" VerticalAlignment="Center"
+                                           FontSize="18" Foreground="{DynamicResource TextTertiaryBrush}">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Text" Value="⌃"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsActivityExpanded}" Value="False">
+                                                    <Setter Property="Text" Value="⌄"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </Grid>
+                        </Button>
+                        <Button Grid.Column="1" Margin="6,0,0,0" Padding="5,2" Background="Transparent" BorderThickness="0"
+                                Command="{Binding SelectActivityTabCommand}" CommandParameter="1"
+                                Content="{Binding SystemChangeNoticeText}" Foreground="{DynamicResource DangerBrush}" />
+                        <Button Grid.Column="2" Margin="6,0,0,0" Command="{Binding ClearActivityCommand}"
+                                Content="{DynamicResource Activity.Clear}">
+                            <Button.Style><Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding ActivityTabIndex}" Value="0"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Button.Style>
+                        </Button>
+                    </Grid>
+                    <StackPanel Grid.Row="0" Margin="2,0,2,0" Orientation="Horizontal">
+                        <Button Padding="8,3" Command="{Binding SelectActivityTabCommand}" CommandParameter="0" Content="{DynamicResource Activity.Title}"/>
+                        <Button Margin="5,0,0,0" Padding="8,3" Command="{Binding SelectActivityTabCommand}" CommandParameter="1" Content="{Binding SystemChangeTabText}"/>
+                        <Button Margin="5,0,0,0" Padding="8,3" Command="{Binding SelectActivityTabCommand}" CommandParameter="2" Content="{DynamicResource Activity.History}"/>
+                    </StackPanel>
+                    <ScrollViewer x:Name="ActivityScrollViewer" Grid.Row="2" Margin="2,6,2,0"
+                                  VerticalScrollBarVisibility="Auto" ScrollChanged="ActivityScrollViewer_OnScrollChanged">
+                        <ScrollViewer.Style>
+                            <Style TargetType="ScrollViewer">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <MultiDataTrigger><MultiDataTrigger.Conditions><Condition Binding="{Binding IsActivityExpanded}" Value="True"/><Condition Binding="{Binding ActivityTabIndex}" Value="0"/></MultiDataTrigger.Conditions><Setter Property="Visibility" Value="Visible"/></MultiDataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </ScrollViewer.Style>
+                        <ItemsControl ItemsSource="{Binding ActivityEntries}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Margin="2,2">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="45"/><ColumnDefinition Width="18"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                        <TextBlock Style="{StaticResource CaptionText}" Text="{Binding Timestamp, StringFormat={}{0:HH:mm}}" />
+                                        <TextBlock Grid.Column="1" Text="•">
+                                            <TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/><Style.Triggers><DataTrigger Binding="{Binding Level}" Value="Success"><Setter Property="Text" Value="✓"/><Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/></DataTrigger><DataTrigger Binding="{Binding Level}" Value="Warning"><Setter Property="Text" Value="!"/><Setter Property="Foreground" Value="{DynamicResource DangerBrush}"/></DataTrigger><DataTrigger Binding="{Binding Level}" Value="Error"><Setter Property="Text" Value="×"/><Setter Property="Foreground" Value="{DynamicResource DangerBrush}"/></DataTrigger></Style.Triggers></Style></TextBlock.Style>
+                                        </TextBlock>
+                                        <TextBlock Grid.Column="2" Text="{Binding Message}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Message}" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                    <ScrollViewer Grid.Row="2" Margin="2,6,2,0" VerticalScrollBarVisibility="Auto">
+                        <ScrollViewer.Style><Style TargetType="ScrollViewer"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><MultiDataTrigger><MultiDataTrigger.Conditions><Condition Binding="{Binding IsActivityExpanded}" Value="True"/><Condition Binding="{Binding ActivityTabIndex}" Value="1"/></MultiDataTrigger.Conditions><Setter Property="Visibility" Value="Visible"/></MultiDataTrigger></Style.Triggers></Style></ScrollViewer.Style>
+                        <ItemsControl ItemsSource="{Binding SystemChangeEntries}">
+                            <ItemsControl.ItemTemplate><DataTemplate>
+                                <Grid Margin="2,4"><Grid.ColumnDefinitions><ColumnDefinition Width="45"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                    <TextBlock Style="{StaticResource CaptionText}" Text="{Binding Timestamp, StringFormat={}{0:dd.MM HH:mm}}"/>
+                                    <StackPanel Grid.Column="1" Margin="7,0,10,0"><TextBlock FontWeight="SemiBold" Text="{Binding FriendlyName}"/><TextBlock Style="{StaticResource CaptionText}" Text="{Binding Details}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Details}"/></StackPanel>
+                                    <TextBlock Grid.Column="2" VerticalAlignment="Center" Text="{Binding StatusText}"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/><Style.Triggers><DataTrigger Binding="{Binding Status}" Value="pending"><Setter Property="Foreground" Value="{DynamicResource DangerBrush}"/></DataTrigger><DataTrigger Binding="{Binding Status}" Value="restore-failed"><Setter Property="Foreground" Value="{DynamicResource DangerBrush}"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
+                                </Grid>
+                            </DataTemplate></ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                    <ScrollViewer Grid.Row="2" Margin="2,6,2,0" VerticalScrollBarVisibility="Auto">
+                        <ScrollViewer.Style><Style TargetType="ScrollViewer"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><MultiDataTrigger><MultiDataTrigger.Conditions><Condition Binding="{Binding IsActivityExpanded}" Value="True"/><Condition Binding="{Binding ActivityTabIndex}" Value="2"/></MultiDataTrigger.Conditions><Setter Property="Visibility" Value="Visible"/></MultiDataTrigger></Style.Triggers></Style></ScrollViewer.Style>
+                        <ItemsControl ItemsSource="{Binding HistoryEntries}"><ItemsControl.ItemTemplate><DataTemplate><Grid Margin="2,2"><Grid.ColumnDefinitions><ColumnDefinition Width="92"/><ColumnDefinition Width="18"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock Style="{StaticResource CaptionText}" Text="{Binding Timestamp, StringFormat={}{0:dd.MM HH:mm}}"/><TextBlock Grid.Column="1" Text="•"/><TextBlock Grid.Column="2" Text="{Binding Message}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Message}"/></Grid></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+                    </ScrollViewer>
+                </Grid>
+            </Border>
         </Grid>
 
         <Grid Grid.Row="1"
@@ -399,6 +498,8 @@
                         <Border Height="1" Margin="0,18" Background="{DynamicResource BorderBrush}" />
 
                         <TextBlock Style="{StaticResource EyebrowText}" Text="{DynamicResource Settings.Language}" />
+                        <CheckBox Margin="0,14,0,0" IsChecked="{Binding ShowCurrentActionState, Mode=TwoWay}"
+                                  Content="{DynamicResource Settings.ShowCurrentActionState}" />
                         <ComboBox Margin="0,7,0,0"
                                   ItemsSource="{Binding LanguageOptions}"
                                   DisplayMemberPath="DisplayName"

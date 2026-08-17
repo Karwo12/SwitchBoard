@@ -4,10 +4,11 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Text.Json.Nodes;
 using SwitchBoard.Models.Actions;
+using SwitchBoard.Localization;
 
 namespace SwitchBoard.Services.Execution.Handlers;
 
-public sealed class ProgramRunActionHandler : IReversibleActionHandler
+public sealed class ProgramRunActionHandler(ILocalizationService? localization = null) : IReversibleActionHandler
 {
     private static readonly TimeSpan IdentityTolerance = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan DiscoveryWindow = TimeSpan.FromSeconds(2);
@@ -27,19 +28,42 @@ public sealed class ProgramRunActionHandler : IReversibleActionHandler
         if (string.IsNullOrWhiteSpace(target))
             return ActionExecutionResult.Failure("Program target is required.");
 
-        var startOnlyIfNotAlreadyRunning = ActionParameterReader.ReadBoolean(
+        var legacyStartOnly = ActionParameterReader.ReadBoolean(
             action.Parameters, ActionParameterNames.StartOnlyIfNotAlreadyRunning, defaultValue: true);
-        if (startOnlyIfNotAlreadyRunning && !IsProtocolTarget(target) && IsAlreadyRunning(target))
+        var instanceBehavior = ActionParameterReader.ReadString(action.Parameters,
+            ActionParameterNames.InstanceBehavior);
+        if (string.IsNullOrWhiteSpace(instanceBehavior))
+            instanceBehavior = legacyStartOnly ? InstanceBehaviorIds.DoNotStartAgain : InstanceBehaviorIds.StartAnother;
+        if (instanceBehavior == InstanceBehaviorIds.DoNotStartAgain && !IsProtocolTarget(target) && IsAlreadyRunning(target))
             return ActionExecutionResult.Skipped("The program is already running.");
 
         try
         {
+            if (instanceBehavior == InstanceBehaviorIds.RestartExisting)
+                await StopExistingExactAsync(target, cancellationToken);
             if (action.RestoreBehavior != ActionRestoreBehavior.CloseIfStartedBySwitchBoard)
             {
                 using var untrackedProcess = Process.Start(CreateStartInfo(action, target));
-                return untrackedProcess is null
-                    ? ActionExecutionResult.Failure("Windows did not start the requested target.")
-                    : ActionExecutionResult.Success();
+                if (untrackedProcess is null)
+                    return ActionExecutionResult.Failure("Windows did not start the requested target.");
+                var windowResult = await ApplyWindowBehaviorAsync(action, target, cancellationToken);
+                if (windowResult is not null) return windowResult;
+                if (IsProtocolTarget(target) || string.Equals(Path.GetExtension(target), ".lnk", StringComparison.OrdinalIgnoreCase))
+                    return ActionExecutionResult.Success(
+                        "Windows accepted the shell handoff. The target application cannot be identified reliably for full verification.");
+                var expectedName = Path.GetFileNameWithoutExtension(target);
+                var expectedPath = Path.IsPathRooted(target) &&
+                                   string.Equals(Path.GetExtension(target), ".exe", StringComparison.OrdinalIgnoreCase)
+                    ? Path.GetFullPath(target) : null;
+                var verification = ProcessTargetResolver.Find(expectedName, expectedPath);
+                try
+                {
+                    return verification.Count > 0
+                        ? ActionExecutionResult.Success($"Verified: '{expectedName}' is running.")
+                        : ActionExecutionResult.Failure(
+                            $"Windows accepted the start request, but no matching '{expectedName}' process was found.");
+                }
+                finally { foreach (var process in verification) process.Dispose(); }
             }
 
             var fullPath = ValidateRestorableTarget(target);
@@ -62,20 +86,29 @@ public sealed class ProgramRunActionHandler : IReversibleActionHandler
                 baseline, tracked, cancellationToken);
 
             if (tracked.Count == 0)
-                return ActionExecutionResult.Failure(
-                    "The program started, but SwitchBoard could not identify a new process that can be closed safely.");
+                return baseline.Count > 0
+                    ? ActionExecutionResult.Skipped(
+                        "Windows handed the request to the already running application; no new instance was identified for restore.")
+                    : ActionExecutionResult.Failure(
+                        "The program start request completed, but SwitchBoard could not verify a new process that can be closed safely.");
 
+            var windowBehaviorResult = await ApplyWindowBehaviorAsync(action, target, cancellationToken);
+            if (windowBehaviorResult is not null && !windowBehaviorResult.IsSuccessful) return windowBehaviorResult;
             var ordered = tracked.Values
                 .OrderBy(identity => identity.StartedAtUtcTicks)
                 .ThenBy(identity => identity.ProcessId)
                 .ToList();
             var primary = ordered.FirstOrDefault(identity => identity.ProcessId == directProcessId) ?? ordered[0];
-            return ActionExecutionResult.Success(restoreState: new JsonObject
+            return ActionExecutionResult.Success(
+                $"Verified: identified {ordered.Count} new '{primary.ProcessName}' process(es) started by SwitchBoard.",
+                new JsonObject
             {
                 ["startedBySwitchBoard"] = true,
                 ["processId"] = primary.ProcessId,
                 ["startedAtUtcTicks"] = primary.StartedAtUtcTicks,
                 ["executablePath"] = fullPath,
+                ["processName"] = Path.GetFileNameWithoutExtension(fullPath),
+                ["captureAtUtcTicks"] = context.CapturedState?["captureAtUtcTicks"]?.GetValue<long>() ?? launchedAfterTicks,
                 ["launchedProcesses"] = new JsonArray(ordered.Select(ToJson).ToArray())
             });
         }
@@ -92,7 +125,9 @@ public sealed class ProgramRunActionHandler : IReversibleActionHandler
         var workingDirectory = ActionParameterReader.ReadString(
             action.Parameters, ActionParameterNames.WorkingDirectory).Trim();
         var useShellExecute = IsProtocolTarget(target) ||
-                              string.Equals(Path.GetExtension(target), ".lnk", StringComparison.OrdinalIgnoreCase);
+                              string.Equals(Path.GetExtension(target), ".lnk", StringComparison.OrdinalIgnoreCase) ||
+                              ActionParameterReader.ReadBoolean(action.Parameters,
+                                  ActionParameterNames.RunAsAdministrator, false);
 
         var startInfo = new ProcessStartInfo
         {
@@ -100,6 +135,8 @@ public sealed class ProgramRunActionHandler : IReversibleActionHandler
             Arguments = arguments,
             UseShellExecute = useShellExecute
         };
+        if (ActionParameterReader.ReadBoolean(action.Parameters, ActionParameterNames.RunAsAdministrator, false))
+            startInfo.Verb = "runas";
         if (!string.IsNullOrWhiteSpace(workingDirectory))
             startInfo.WorkingDirectory = workingDirectory;
         else if (!useShellExecute && Path.IsPathRooted(target))
@@ -145,6 +182,52 @@ public sealed class ProgramRunActionHandler : IReversibleActionHandler
         }
     }
 
+    private static async Task StopExistingExactAsync(string target, CancellationToken cancellationToken)
+    {
+        if (IsProtocolTarget(target) || !Path.IsPathRooted(target) ||
+            !string.Equals(Path.GetExtension(target), ".exe", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Restart requires a full path to an EXE so the existing process can be identified safely.");
+        var fullPath = Path.GetFullPath(target);
+        var matches = ProcessTargetResolver.Find(Path.GetFileNameWithoutExtension(fullPath), fullPath);
+        try
+        {
+            foreach (var process in matches)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (process.HasExited) continue;
+                process.Kill(entireProcessTree: true);
+                await process.WaitForExitAsync(cancellationToken).WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
+            }
+        }
+        finally { foreach (var process in matches) process.Dispose(); }
+    }
+
+    private static async Task<ActionExecutionResult?> ApplyWindowBehaviorAsync(ActionDefinition action,
+        string target, CancellationToken cancellationToken)
+    {
+        var behavior = ActionParameterReader.ReadString(action.Parameters, ActionParameterNames.WindowBehavior);
+        if (string.IsNullOrWhiteSpace(behavior) || behavior == WindowBehaviorIds.None) return null;
+        if (IsProtocolTarget(target))
+            return ActionExecutionResult.Failure("Window behavior for protocol targets requires a separate Wait for window action.", false);
+        var processName = Path.GetFileNameWithoutExtension(target);
+        var path = Path.IsPathRooted(target) ? Path.GetFullPath(target) : null;
+        var seconds = Math.Clamp(ActionParameterReader.ReadInt32(action.Parameters,
+            ActionParameterNames.WindowWaitSeconds, 10), 1, 300);
+        var deadline = DateTime.UtcNow.AddSeconds(seconds);
+        while (DateTime.UtcNow < deadline)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var windows = WindowInterop.FindWindows(processName, path, WindowMatchModeIds.Any, string.Empty);
+            if (windows.Count > 0)
+            {
+                WindowInterop.ApplyBehavior(windows[0].Handle, behavior);
+                return null;
+            }
+            await Task.Delay(150, cancellationToken);
+        }
+        return ActionExecutionResult.Failure($"The program window did not appear within {seconds} seconds.");
+    }
+
     public Task<JsonObject?> CaptureStateAsync(ActionDefinition action, ActionExecutionContext context,
         CancellationToken cancellationToken)
     {
@@ -156,62 +239,123 @@ public sealed class ProgramRunActionHandler : IReversibleActionHandler
         {
             ["wasRunningBefore"] = existing.Count > 0,
             ["executablePath"] = fullPath,
+            ["processName"] = Path.GetFileNameWithoutExtension(fullPath),
+            ["captureAtUtcTicks"] = DateTime.UtcNow.Ticks,
             ["startedBySwitchBoard"] = false,
             ["preExistingProcesses"] = new JsonArray(existing.Select(ToJson).ToArray())
         });
     }
 
-    public async Task RestoreAsync(
+    public async Task<ActionExecutionResult> RestoreAsync(
         ActionDefinition action,
         JsonObject restoreState,
         ActionExecutionContext context,
         CancellationToken cancellationToken)
     {
-        if (!(restoreState["startedBySwitchBoard"]?.GetValue<bool>() ?? false)) return;
+        if (!(restoreState["startedBySwitchBoard"]?.GetValue<bool>() ?? false))
+            return ActionExecutionResult.Skipped("SwitchBoard did not start an independently identifiable program instance.");
 
         var identities = ReadIdentities(restoreState["launchedProcesses"] as JsonArray);
         if (identities.Count == 0 && ReadLegacyIdentity(restoreState) is { } legacy)
             identities.Add(legacy);
-        if (identities.Count == 0)
-            throw new InvalidOperationException("The saved program identity is incomplete.");
+        var processName = restoreState["processName"]?.GetValue<string>();
+        if (string.IsNullOrWhiteSpace(processName))
+            processName = Path.GetFileNameWithoutExtension(restoreState["executablePath"]?.GetValue<string>() ?? string.Empty);
+        if (identities.Count == 0 || string.IsNullOrWhiteSpace(processName))
+            return ActionExecutionResult.Failure("The saved program identity is incomplete.", false);
 
+        var baseline = ReadIdentities(restoreState["preExistingProcesses"] as JsonArray);
+        var captureTicks = restoreState["captureAtUtcTicks"]?.GetValue<long>() ??
+                           identities.Min(identity => identity.StartedAtUtcTicks) - IdentityTolerance.Ticks;
+        var fullPath = restoreState["executablePath"]?.GetValue<string>();
+        var killed = 0;
         var failures = new List<string>();
-        foreach (var identity in OrderChildrenFirst(identities))
+        var timer = Stopwatch.StartNew();
+        while (timer.Elapsed < RestoreTimeout)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            Process? process = null;
-            try
+            var candidates = FindRestoreCandidates(processName, fullPath, baseline, identities, captureTicks);
+            if (candidates.Count == 0)
+                return ActionExecutionResult.Success(
+                    Format("Result.ProgramRestoreSuccess",
+                        "Verified: the program was closed. Closed {0} '{1}.exe' process(es); none remain.", killed, processName));
+            foreach (var candidate in OrderChildrenFirst(candidates))
             {
-                process = Process.GetProcessById(identity.ProcessId);
-                if (process.HasExited) continue;
-                if (!IdentityMatches(process, identity)) continue;
-
-                process.Kill(entireProcessTree: true);
-                await process.WaitForExitAsync(cancellationToken)
-                    .WaitAsync(RestoreTimeout, cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
+                try
+                {
+                    using var process = Process.GetProcessById(candidate.ProcessId);
+                    if (process.HasExited || !IdentityMatches(process, candidate)) continue;
+                    process.Kill(entireProcessTree: true);
+                    killed++;
+                }
+                catch (ArgumentException) { }
+                catch (InvalidOperationException) { }
+                catch (Win32Exception exception) { failures.Add($"PID {candidate.ProcessId}: {exception.Message}"); }
             }
-            catch (ArgumentException)
-            {
-                // This exact process has already exited.
-            }
-            catch (Win32Exception exception)
-            {
-                failures.Add($"PID {identity.ProcessId}: {exception.Message}");
-            }
-            catch (TimeoutException)
-            {
-                failures.Add($"PID {identity.ProcessId}: the process did not exit within {RestoreTimeout.TotalSeconds:0} seconds.");
-            }
-            finally
-            {
-                process?.Dispose();
-            }
+            await Task.Delay(200, cancellationToken);
         }
 
-        if (failures.Count > 0)
-            throw new InvalidOperationException(
-                "Windows could not close every program process started by SwitchBoard. " +
-                "The operation may require administrator privileges. " + string.Join(" ", failures));
+        var remaining = FindRestoreCandidates(processName, fullPath, baseline, identities, captureTicks);
+        return ActionExecutionResult.Failure(
+            Format("Result.ProgramRestoreFailed",
+                "Could not close the program. {0} '{1}.exe' process(es) started by SwitchBoard remain.",
+                remaining.Count, processName) +
+            (failures.Count == 0 ? string.Empty : " Administrator privileges may be required. " + string.Join(" ", failures.Distinct())));
+    }
+
+    private string Format(string key, string fallback, params object?[] arguments) => localization is null
+        ? string.Format(System.Globalization.CultureInfo.CurrentCulture, fallback, arguments)
+        : localization.Format(key, arguments);
+
+    private static List<TrackedProcessIdentity> FindRestoreCandidates(string processName, string? fullPath,
+        IReadOnlyCollection<TrackedProcessIdentity> baseline, IReadOnlyCollection<TrackedProcessIdentity> originallyTracked,
+        long captureTicks)
+    {
+        var result = new List<TrackedProcessIdentity>();
+        var graph = CaptureProcessGraph();
+        foreach (var entry in graph.Values)
+        {
+            var identity = TryCaptureIdentity(entry.ProcessId, entry.ParentProcessId);
+            if (identity is null) continue;
+            var exactName = string.Equals(Path.GetFileNameWithoutExtension(entry.ExecutableName), processName,
+                StringComparison.OrdinalIgnoreCase);
+            var wasTracked = originallyTracked.Any(tracked => tracked.Key == identity.Key);
+            var descendantOfTracked = IsDescendantOf(entry.ProcessId,
+                originallyTracked.Select(item => item.ProcessId).ToHashSet(), graph);
+            // Persisted tracked identities and their descendants are owned even when the child executable
+            // has a different name from the launcher.
+            if (wasTracked || descendantOfTracked)
+            {
+                result.Add(identity);
+                continue;
+            }
+            if (!exactName || WasPresentBefore(identity, baseline)) continue;
+            if (baseline.Count == 0)
+            {
+                // Safe fallback: no exact-name process existed at capture time.
+                result.Add(identity);
+                continue;
+            }
+            var newExactExecutable = identity.StartedAtUtcTicks >= captureTicks &&
+                                     (string.IsNullOrWhiteSpace(fullPath) ||
+                                      !string.IsNullOrWhiteSpace(identity.ExecutablePath) && PathsEqual(identity.ExecutablePath, fullPath));
+            if (newExactExecutable) result.Add(identity);
+        }
+        return result;
+    }
+
+    private static bool IsDescendantOf(int processId, HashSet<int> ancestors,
+        IReadOnlyDictionary<int, ProcessGraphEntry> graph)
+    {
+        var visited = new HashSet<int>();
+        var current = processId;
+        while (graph.TryGetValue(current, out var entry) && entry.ParentProcessId > 0 && visited.Add(current))
+        {
+            if (ancestors.Contains(entry.ParentProcessId)) return true;
+            current = entry.ParentProcessId;
+        }
+        return false;
     }
 
     private static async Task DiscoverLaunchedProcessesAsync(

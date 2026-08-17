@@ -1,5 +1,9 @@
 using SwitchBoard.Data;
 using SwitchBoard.Services.Persistence;
+using SwitchBoard.Models.Actions;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using SwitchBoard.Services.Execution;
 
 namespace SwitchBoard.Services.Profiles;
 
@@ -60,5 +64,65 @@ public sealed class ProfileCatalogService(ICatalogRepository repository) : IProf
         {
             throw new InvalidOperationException("Every action must have an identifier and a type.");
         }
+
+        var profileIds = catalog.Profiles.Select(profile => profile.Id).ToHashSet();
+        foreach (var profile in catalog.Profiles)
+            foreach (var action in profile.Actions)
+                ValidateAction(action, 0, profileIds);
+
+        var edges = catalog.Profiles.ToDictionary(profile => profile.Id,
+            profile => profile.Actions.SelectMany(EnumerateProfileTargets).ToHashSet());
+        var visiting = new HashSet<Guid>();
+        var visited = new HashSet<Guid>();
+        foreach (var profile in catalog.Profiles)
+            if (HasCycle(profile.Id, edges, visiting, visited))
+                throw new InvalidOperationException("Profile dependencies contain a cycle.");
+    }
+
+    private static void ValidateAction(ActionDefinition action, int depth, IReadOnlySet<Guid> profileIds)
+    {
+        if (depth > ProfileRunner.MaximumNestingDepth)
+            throw new InvalidOperationException($"Automation nesting exceeds {ProfileRunner.MaximumNestingDepth} levels.");
+        if (action.Type == ActionTypeIds.ProfileRun)
+        {
+            var value = action.Parameters[ActionParameterNames.ProfileId]?.GetValue<string>();
+            if (!Guid.TryParse(value, out var target) || !profileIds.Contains(target))
+                throw new InvalidOperationException("A Run another profile action points to a missing profile.");
+        }
+        foreach (var nested in EnumerateNested(action)) ValidateAction(nested, depth + 1, profileIds);
+    }
+
+    private static IEnumerable<Guid> EnumerateProfileTargets(ActionDefinition action)
+    {
+        if (action.Type == ActionTypeIds.ProfileRun &&
+            Guid.TryParse(action.Parameters[ActionParameterNames.ProfileId]?.GetValue<string>(), out var id)) yield return id;
+        foreach (var nested in EnumerateNested(action))
+            foreach (var target in EnumerateProfileTargets(nested)) yield return target;
+    }
+
+    private static IEnumerable<ActionDefinition> EnumerateNested(ActionDefinition action)
+    {
+        if (action.Type != ActionTypeIds.ConditionIf) yield break;
+        foreach (var name in new[] { ActionParameterNames.ThenActions, ActionParameterNames.ElseActions })
+            if (action.Parameters[name] is JsonArray array)
+                foreach (var node in array)
+                {
+                    ActionDefinition? nested = null;
+                    try { nested = node?.Deserialize<ActionDefinition>(); } catch (JsonException) { }
+                    if (nested is not null) yield return nested;
+                }
+    }
+
+    private static bool HasCycle(Guid id, IReadOnlyDictionary<Guid, HashSet<Guid>> edges,
+        HashSet<Guid> visiting, HashSet<Guid> visited)
+    {
+        if (visited.Contains(id)) return false;
+        if (!visiting.Add(id)) return true;
+        if (edges.TryGetValue(id, out var targets))
+            foreach (var target in targets)
+                if (HasCycle(target, edges, visiting, visited)) return true;
+        visiting.Remove(id);
+        visited.Add(id);
+        return false;
     }
 }

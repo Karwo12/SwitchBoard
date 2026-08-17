@@ -182,6 +182,9 @@
                         <TextBlock Margin="0,12,0,5" Style="{StaticResource EditorEyebrow}"
                                    Text="{DynamicResource CustomTheme.ProfileEditorOpacity}" />
                         <DockPanel><TextBlock DockPanel.Dock="Right" Margin="10,0,0,0" Text="{Binding ProfileEditorPanelOpacityPercent, StringFormat={}{0:0}%}"/><Slider Minimum="0" Maximum="100" Value="{Binding ProfileEditorPanelOpacityPercent}"/></DockPanel>
+                        <TextBlock Margin="0,12,0,5" Style="{StaticResource EditorEyebrow}"
+                                   Text="{DynamicResource CustomTheme.ActivityOpacity}" />
+                        <DockPanel><TextBlock DockPanel.Dock="Right" Margin="10,0,0,0" Text="{Binding ActivityPanelOpacityPercent, StringFormat={}{0:0}%}"/><Slider Minimum="0" Maximum="100" Value="{Binding ActivityPanelOpacityPercent}"/></DockPanel>
 
                         <Border Height="1" Margin="0,12" Background="{StaticResource EditorBorderBrush}" />
                         <TextBlock Style="{StaticResource EditorEyebrow}" Text="{DynamicResource CustomTheme.BackgroundImage}" />

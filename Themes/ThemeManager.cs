@@ -94,7 +94,8 @@ public sealed class ThemeManager(AppDataPaths paths) : IThemeManager
             SurfaceOpacity = RepresentativeColor(dictionary["SurfaceBrush"] as Brush, Colors.White).A / 255d,
             CategoriesPanelOpacity = RepresentativeColor(dictionary["SurfaceBrush"] as Brush, Colors.White).A / 255d,
             ProfilesPanelOpacity = RepresentativeColor(dictionary["SurfaceBrush"] as Brush, Colors.White).A / 255d,
-            ProfileEditorPanelOpacity = RepresentativeColor(dictionary["SurfaceBrush"] as Brush, Colors.White).A / 255d
+            ProfileEditorPanelOpacity = RepresentativeColor(dictionary["SurfaceBrush"] as Brush, Colors.White).A / 255d,
+            ActivityPanelOpacity = RepresentativeColor(dictionary["ElevatedSurfaceBrush"] as Brush, Colors.White).A / 255d
         };
     }
 
@@ -112,6 +113,7 @@ public sealed class ThemeManager(AppDataPaths paths) : IThemeManager
         var categoriesPanel = ApplySurfaceOpacity(panelBase, settings.CategoriesPanelOpacity);
         var profilesPanel = ApplySurfaceOpacity(panelBase, settings.ProfilesPanelOpacity);
         var profileEditorPanel = ApplySurfaceOpacity(panelBase, settings.ProfileEditorPanelOpacity);
+        var activityPanel = ApplySurfaceOpacity(elevatedBase, settings.ActivityPanelOpacity);
         var border = Parse(settings.Border, "#52FFFFFF");
         var primaryText = EnsureReadable(Parse(settings.PrimaryText, "#FFF5F7FA"), background);
         var secondaryText = EnsureReadable(Parse(settings.SecondaryText, "#FFB5BDCA"), background);
@@ -141,6 +143,7 @@ public sealed class ThemeManager(AppDataPaths paths) : IThemeManager
             ["CategoriesSurfaceBrush"] = Brush(categoriesPanel),
             ["ProfilesSurfaceBrush"] = Brush(profilesPanel),
             ["ProfileEditorSurfaceBrush"] = Brush(profileEditorPanel),
+            ["ActivitySurfaceBrush"] = Brush(activityPanel),
             ["CardSurfaceBrush"] = Brush(card),
             ["ElevatedSurfaceBrush"] = Brush(elevated),
             ["InputBackgroundBrush"] = Brush(Blend(elevatedBase, background, 0.35)),
@@ -195,6 +198,7 @@ public sealed class ThemeManager(AppDataPaths paths) : IThemeManager
         if (!dictionary.Contains("CategoriesSurfaceBrush")) dictionary["CategoriesSurfaceBrush"] = dictionary["SurfaceBrush"];
         if (!dictionary.Contains("ProfilesSurfaceBrush")) dictionary["ProfilesSurfaceBrush"] = dictionary["SurfaceBrush"];
         if (!dictionary.Contains("ProfileEditorSurfaceBrush")) dictionary["ProfileEditorSurfaceBrush"] = dictionary["SurfaceBrush"];
+        if (!dictionary.Contains("ActivitySurfaceBrush")) dictionary["ActivitySurfaceBrush"] = dictionary["ElevatedSurfaceBrush"];
 
         Set("PrimaryButtonBackground", "PrimaryButtonForeground");
         Set("PrimaryButtonHoverBackground", "PrimaryButtonHoverForeground");

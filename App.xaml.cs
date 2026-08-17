@@ -15,6 +15,9 @@ using SwitchBoard.ViewModels;
 using SwitchBoard.Views;
 using SwitchBoard.Services.Windows;
 using SwitchBoard.Services.Logging;
+using SwitchBoard.Services.Activity;
+using SwitchBoard.Services.Monitoring;
+using SwitchBoard.Models.Actions;
 
 namespace SwitchBoard;
 
@@ -81,6 +84,9 @@ public partial class App : Application
             if (settings.SchemaVersion < SettingsSchema.SurfaceOpacityVersion)
                 foreach (var theme in settings.CustomThemes)
                     theme.Colors.MigrateSurfaceOpacityFromLegacyAlpha();
+            if (settings.SchemaVersion < SettingsSchema.ActivityOpacityVersion)
+                foreach (var theme in settings.CustomThemes)
+                    theme.Colors.MigrateActivityOpacity();
             var themeManager = new ThemeManager(paths);
             NormalizeCustomThemes(settings.CustomThemes, _localizationService.GetString("CustomTheme.DefaultName"),
                 themeManager.AvailableThemes.Select(theme => _localizationService.GetString(theme.DisplayNameResourceKey)));
@@ -94,23 +100,42 @@ public partial class App : Application
             var windowsServiceManager = new WindowsServiceManager();
             var powerPlanManager = new WindowsPowerPlanManager();
             var displayManager = new WindowsDisplayManager();
+            var audioManager = new WindowsAudioManager();
+            var deviceManager = new WindowsDeviceManager();
+            var activityService = new ActivityService(paths, _localizationService, _logger);
+            await activityService.ReconcileServiceChangesAsync(windowsServiceManager);
             var displayConfirmationService = new WpfDisplayConfirmationService(_localizationService);
             var actionRegistry = new ActionRegistry
             ([
-                new ProgramRunActionHandler(),
+                new ProgramRunActionHandler(_localizationService),
                 new ProcessSetStateActionHandler(),
-                new ServiceSetStateActionHandler(windowsServiceManager),
+                new ServiceSetStateActionHandler(windowsServiceManager, _localizationService),
                 new PowerSetPlanActionHandler(powerPlanManager),
                 new DisplayConfigureActionHandler(displayManager, displayConfirmationService),
                 new ScriptRunActionHandler(),
-                new DelayActionHandler()
+                new DelayActionHandler(),
+                new ProcessConfigureActionHandler(),
+                new WaitProcessActionHandler(ActionTypeIds.WaitProcessStart),
+                new WaitProcessActionHandler(ActionTypeIds.WaitProcessExit),
+                new WaitWindowActionHandler(),
+                new AudioConfigureActionHandler(audioManager),
+                new DeviceSetStateActionHandler(deviceManager),
+                new ProfileRunActionHandler(),
+                new ConditionIfActionHandler(windowsServiceManager),
+                new NotificationShowActionHandler(activityService)
             ]);
-            var profileRunner = new ProfileRunner(actionRegistry, _sessionRepository, _logger);
-            var restoreRunner = new ProfileRestoreRunner(actionRegistry, _sessionRepository, _logger);
+            MainWindowViewModel? viewModel = null;
+            var profileRunner = new ProfileRunner(actionRegistry, _sessionRepository, _logger,
+                id => viewModel?.ResolveProfileDefinition(id) ?? catalog.Profiles.FirstOrDefault(item => item.Id == id),
+                activityService, _localizationService);
+            var restoreRunner = new ProfileRestoreRunner(actionRegistry, _sessionRepository, _logger,
+                activityService, _localizationService);
             var completionBehavior = new ProfileCompletionBehavior(new WpfApplicationLifetime());
             var processDiscoveryService = new WindowsProcessDiscoveryService();
             var programDiscoveryService = new WindowsProgramDiscoveryService();
-            var viewModel = new MainWindowViewModel(
+            var statusMonitoring = new StatusMonitoringService(windowsServiceManager, powerPlanManager, displayManager,
+                audioManager, deviceManager, processDiscoveryService, _localizationService);
+            viewModel = new MainWindowViewModel(
                 catalogService,
                 new WpfUserDialogService(
                     processDiscoveryService,
@@ -118,6 +143,8 @@ public partial class App : Application
                     windowsServiceManager,
                     powerPlanManager,
                     displayManager,
+                    audioManager,
+                    deviceManager,
                     _localizationService),
                 catalog,
                 themeManager,
@@ -129,7 +156,8 @@ public partial class App : Application
                 _sessionRepository,
                 completionBehavior,
                 displayManager,
-                new WpfCustomThemeEditorService(paths, _localizationService));
+                new WpfCustomThemeEditorService(paths, _localizationService),
+                activityService, statusMonitoring);
 
             var window = new MainWindow(viewModel);
             MainWindow = window;

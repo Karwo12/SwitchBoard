@@ -23,6 +23,12 @@ public sealed class ActionDefinition
 
     public TimeSpan? Timeout { get; set; }
 
+    public bool RetryOnFailure { get; set; }
+
+    public int MaximumAttempts { get; set; } = 1;
+
+    public TimeSpan RetryDelay { get; set; } = TimeSpan.Zero;
+
     public JsonObject Parameters { get; set; } = [];
 
     [JsonIgnore]

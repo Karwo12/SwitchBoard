@@ -10,7 +10,9 @@ public enum PersistentSessionStatus
     PartiallyRestored,
     Restored,
     Failed,
-    RecoveryRequired
+    RecoveryRequired,
+    Discarded,
+    RestoreCancelled
 }
 
 public enum PersistentActionExecutionStatus

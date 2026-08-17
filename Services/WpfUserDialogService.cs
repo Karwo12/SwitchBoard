@@ -14,6 +14,8 @@ public sealed class WpfUserDialogService(
     IWindowsServiceManager windowsServiceManager,
     IPowerPlanManager powerPlanManager,
     IDisplayManager displayManager,
+    IAudioManager audioManager,
+    IDeviceManager deviceManager,
     ILocalizationService localizationService) : IUserDialogService
 {
     public bool Confirm(string title, string message) =>
@@ -104,6 +106,20 @@ public sealed class WpfUserDialogService(
             Title = title,
             Owner = Application.Current.MainWindow
         };
+        return dialog.ShowDialog() == true ? dialog.Result : null;
+    }
+
+    public AudioDeviceCandidate? SelectAudioDevice(string title, bool input)
+    {
+        var dialog = new AudioDevicePickerWindow(audioManager, localizationService, input)
+        { Title = title, Owner = Application.Current.MainWindow };
+        return dialog.ShowDialog() == true ? dialog.Result : null;
+    }
+
+    public DeviceCandidate? SelectDevice(string title)
+    {
+        var dialog = new DevicePickerWindow(deviceManager, localizationService)
+        { Title = title, Owner = Application.Current.MainWindow };
         return dialog.ShowDialog() == true ? dialog.Result : null;
     }
 }

@@ -238,7 +238,7 @@ public sealed class ScriptRunActionHandler : IReversibleActionHandler
         });
     }
 
-    public async Task RestoreAsync(
+    public async Task<ActionExecutionResult> RestoreAsync(
         ActionDefinition action,
         JsonObject restoreState,
         ActionExecutionContext context,
@@ -254,7 +254,6 @@ public sealed class ScriptRunActionHandler : IReversibleActionHandler
             Timeout = timeoutSeconds > 0 ? TimeSpan.FromSeconds(timeoutSeconds) : null
         };
         var result = await ExecuteAsync(restoreAction, context, cancellationToken);
-        if (!result.IsSuccessful)
-            throw new InvalidOperationException(result.Message ?? "The restore script failed.");
+        return result;
     }
 }

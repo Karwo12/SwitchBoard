@@ -12,7 +12,7 @@ public sealed class RollingFileLogger(AppDataPaths paths) : IAppLogger
     public void Info(string area, string message) => Write("INFO", area, message);
     public void Warning(string area, string message) => Write("WARN", area, message);
     public void Error(string area, Exception exception, string? message = null) =>
-        Write("ERROR", area, $"{message ?? exception.Message} | {exception.GetType().Name}: {exception.Message}");
+        Write("ERROR", area, $"{message ?? exception.Message} | HRESULT=0x{exception.HResult:X8} | {exception}");
 
     private void Write(string level, string area, string message)
     {

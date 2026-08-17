@@ -87,7 +87,9 @@ public sealed class DisplayConfigureActionHandler(
             }
 
             guard.Complete();
-            return ActionExecutionResult.Success(restoreState: ToJson(previous));
+            return ActionExecutionResult.Success(
+                $"Verified: {width}×{height} at {refreshRate} Hz is active on {previous.DisplayName}.",
+                ToJson(previous));
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -123,16 +125,16 @@ public sealed class DisplayConfigureActionHandler(
         }
     }
 
-    public async Task RestoreAsync(
+    public async Task<ActionExecutionResult> RestoreAsync(
         ActionDefinition action,
         JsonObject restoreState,
         ActionExecutionContext context,
         CancellationToken cancellationToken)
     {
         var state = FromJson(restoreState);
-        if (state is null) throw new InvalidOperationException("The saved display state is invalid.");
+        if (state is null) return ActionExecutionResult.Failure("The saved display state is invalid.", false);
         var current = await displayManager.GetCurrentStateAsync(state.DeviceId, state.DeviceName, cancellationToken);
-        if (Matches(current, state)) return;
+        if (Matches(current, state)) return ActionExecutionResult.Success("The saved display state was already active.");
 
         using var guard = DisplayRollbackGuard.Start(current, GuardTimeout);
         var persistenceAttempted = false;
@@ -154,6 +156,8 @@ public sealed class DisplayConfigureActionHandler(
             var verified = await displayManager.GetCurrentStateAsync(state.DeviceId, state.DeviceName, cancellationToken);
             if (!Matches(verified, state)) throw new InvalidOperationException("Windows did not keep the restored display settings.");
             guard.Complete();
+            return ActionExecutionResult.Success(
+                $"Verified: {state.Width}×{state.Height} at {state.RefreshRate} Hz is active on {state.DisplayName}.");
         }
         catch
         {

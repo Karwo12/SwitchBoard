@@ -107,9 +107,44 @@ public sealed class ProcessSetStateActionHandler : IReversibleActionHandler
             }
         }
 
-        return failures.Count == 0
-            ? ActionExecutionResult.Success($"Stopped {lookup.Processes.Count} process(es).")
-            : ActionExecutionResult.Failure(string.Join(Environment.NewLine, failures));
+        if (failures.Count > 0)
+            return ActionExecutionResult.Failure(string.Join(Environment.NewLine, failures));
+
+        // A runtime PID hint means the user selected one concrete process instance. Do not turn
+        // verification into a broader name-based operation that can include unrelated instances.
+        if (action.RuntimeProcessIdHint is int selectedPid && selectedPid > 0)
+            return IsProcessIdAlive(selectedPid)
+                ? ActionExecutionResult.Failure(
+                    $"Windows did not stop the selected '{processName}' process (PID {selectedPid}).")
+                : ActionExecutionResult.Success(
+                    $"Verified: the selected '{processName}' process (PID {selectedPid}) no longer exists.");
+
+        // Verify from fresh process snapshots. Windows can expose a just-terminated process briefly,
+        // and a target can also respawn, so do not decide from a single read.
+        var verificationDeadline = Stopwatch.StartNew();
+        ProcessLookupResult? lastVerification = null;
+        while (verificationDeadline.Elapsed < TimeSpan.FromSeconds(2))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (lastVerification is not null)
+                foreach (var target in lastVerification.Processes) target.Process.Dispose();
+            lastVerification = FindMatchingProcesses(processName, executablePath, null);
+            if (lastVerification.ErrorMessage is not null)
+                return ActionExecutionResult.Failure(lastVerification.ErrorMessage);
+            if (lastVerification.Processes.Count == 0 &&
+                (lastVerification.InspectionFailures == 0 || string.IsNullOrWhiteSpace(executablePath)))
+                return ActionExecutionResult.Success($"Verified: no matching '{processName}' process remains.");
+            await Task.Delay(100, cancellationToken);
+        }
+        try
+        {
+            if (lastVerification!.InspectionFailures > 0 && !string.IsNullOrWhiteSpace(executablePath))
+                return ActionExecutionResult.Failure(
+                    $"Windows could not verify that every '{processName}' process stopped. Administrator privileges may be required.");
+            return ActionExecutionResult.Failure(
+                $"Windows did not stop all matching '{processName}' processes. Current matching process count: {lastVerification.Processes.Count}.");
+        }
+        finally { foreach (var target in lastVerification!.Processes) target.Process.Dispose(); }
     }
 
     private static ProcessLookupResult FindMatchingProcesses(
@@ -320,14 +355,15 @@ public sealed class ProcessSetStateActionHandler : IReversibleActionHandler
         }
     }
 
-    public Task RestoreAsync(
+    public async Task<ActionExecutionResult> RestoreAsync(
         ActionDefinition action,
         JsonObject restoreState,
         ActionExecutionContext context,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (!(restoreState["wasRunning"]?.GetValue<bool>() ?? false)) return Task.CompletedTask;
+        if (!(restoreState["wasRunning"]?.GetValue<bool>() ?? false))
+            return ActionExecutionResult.Skipped("The process was not running before the action.");
         var path = restoreState["executablePath"]?.GetValue<string>();
         var desiredCount = restoreState["instanceCount"]?.GetValue<int>() ?? 0;
         if (desiredCount <= 0 || string.IsNullOrWhiteSpace(path) || !File.Exists(path))
@@ -345,7 +381,17 @@ public sealed class ProcessSetStateActionHandler : IReversibleActionHandler
             if (process is null) throw new InvalidOperationException($"Windows did not restart '{path}'.");
             process.Dispose();
         }
-        return Task.CompletedTask;
+        var deadline = Stopwatch.StartNew();
+        while (deadline.Elapsed < TimeSpan.FromSeconds(5))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var verifiedCount = CountMatchingExact(path);
+            if (verifiedCount >= desiredCount)
+                return ActionExecutionResult.Success($"Verified: restored {verifiedCount} matching process instance(s).");
+            await Task.Delay(100, cancellationToken);
+        }
+        return ActionExecutionResult.Failure(
+            $"Windows did not restore the expected process count. Expected at least {desiredCount}, current count: {CountMatchingExact(path)}.");
     }
 
     private static int CountMatchingExact(string executablePath)

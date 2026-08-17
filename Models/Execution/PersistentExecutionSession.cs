@@ -12,7 +12,19 @@ public sealed class PersistentExecutionSession
     public PersistentSessionStatus Status { get; set; } = PersistentSessionStatus.Preparing;
     public List<PersistentSessionAction> Actions { get; set; } = [];
 
-    public int PendingRestoreCount => Actions.Count(action => action.RequiresRestore && !action.IsRestored);
+    public IReadOnlyList<PersistentSessionAction> GetPendingRestoreEntries() =>
+        Status == PersistentSessionStatus.Discarded
+            ? []
+            : Actions.Where(action => action.RequiresRestore && !action.IsRestored).ToList();
+
+    public int PendingRestoreCount => GetPendingRestoreEntries().Count;
+
+    public IReadOnlyList<PersistentSessionAction> DiscardPendingRestore()
+    {
+        var discarded = GetPendingRestoreEntries().ToList();
+        Status = PersistentSessionStatus.Discarded;
+        return discarded;
+    }
 }
 
 public sealed class PersistentSessionAction
@@ -24,10 +36,21 @@ public sealed class PersistentSessionAction
     public TimeSpan? Timeout { get; set; }
     public JsonObject Parameters { get; set; } = [];
     public JsonObject? PreviousState { get; set; }
+    public JsonObject? StateAfter { get; set; }
+    public string? RequestedState { get; set; }
+    public JsonObject? RequestedConfiguration { get; set; }
     public bool RequiresRestore { get; set; }
+    public bool ExecutionAttempted { get; set; }
+    public bool ExecutionVerified { get; set; }
     public bool IsRestored { get; set; }
     public PersistentActionExecutionStatus ExecutionStatus { get; set; } = PersistentActionExecutionStatus.Pending;
     public string? ExecutionMessage { get; set; }
     public PersistentActionRestoreStatus RestoreStatus { get; set; } = PersistentActionRestoreStatus.NotRequired;
     public string? RestoreMessage { get; set; }
+    public Guid ProfileId { get; set; }
+    public Guid? ParentActionId { get; set; }
+    public string? Branch { get; set; }
+    public int NestingDepth { get; set; }
+    public int AttemptCount { get; set; }
+    public long ExecutionSequence { get; set; }
 }
