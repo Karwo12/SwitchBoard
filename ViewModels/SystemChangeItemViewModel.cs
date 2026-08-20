@@ -9,6 +9,8 @@ public sealed class SystemChangeItemViewModel
     public SystemChangeItemViewModel(SystemChangeEntry change, ILocalizationService localization)
     {
         Timestamp = change.Timestamp;
+        ProfileId = change.ProfileId;
+        ActionId = change.ActionId;
         FriendlyName = change.FriendlyName;
         Message = change.Message;
         Status = change.Status;
@@ -27,6 +29,9 @@ public sealed class SystemChangeItemViewModel
     }
 
     public DateTimeOffset Timestamp { get; }
+    public Guid? ProfileId { get; }
+    public Guid ActionId { get; }
+    public bool IsNavigable => ProfileId is not null;
     public string FriendlyName { get; }
     public string Details { get; }
     public string StatusText { get; }

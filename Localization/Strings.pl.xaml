@@ -7,7 +7,6 @@
     <system:String x:Key="Common.ActionsLower">akcji</system:String>
     <system:String x:Key="Common.Search">Szukaj</system:String>
     <system:String x:Key="Common.Refresh">Odśwież</system:String>
-    <system:String x:Key="Common.Cancel">Anuluj</system:String>
     <system:String x:Key="Common.Confirm">Zatwierdź</system:String>
     <system:String x:Key="Common.Select">Wybierz</system:String>
     <system:String x:Key="Common.Cancelled">Anulowano</system:String>
@@ -25,6 +24,8 @@
     <system:String x:Key="Editor.SearchActions">Szukaj akcji...</system:String>
     <system:String x:Key="Editor.NoActionsFound">Nie znaleziono akcji</system:String>
     <system:String x:Key="Editor.DuplicateAction">Duplikuj akcję</system:String>
+    <system:String x:Key="Profile.Duplicate">Duplikuj profil</system:String>
+    <system:String x:Key="Status.ProfileDuplicated">Zduplikowano profil — pamiętaj o zapisaniu</system:String>
     <system:String x:Key="Editor.UndoActionTest">Cofnij test</system:String>
     <system:String x:Key="Editor.TestAction">Testuj akcję</system:String>
     <system:String x:Key="Editor.DeleteAction">Usuń akcję</system:String>
@@ -35,8 +36,10 @@
     <system:String x:Key="ActionPicker.Category.Automation">Automatyzacja</system:String>
     <system:String x:Key="Editor.CloseAfterProfile">Zamknij SwitchBoard po zakończeniu wykonywania akcji profilu</system:String>
     <system:String x:Key="ActionEditor.FriendlyName">NAZWA</system:String>
-    <system:String x:Key="ActionEditor.Target">CEL / ŚCIEŻKA PROGRAMU LUB URI</system:String>
+    <system:String x:Key="ActionEditor.ProgramNameOptional">Nazwa akcji (opcjonalna)</system:String>
+    <system:String x:Key="ActionEditor.Target">Cel / ścieżka programu lub URI</system:String>
     <system:String x:Key="ActionEditor.Browse">Przeglądaj...</system:String>
+    <system:String x:Key="Dialog.SelectWorkingDirectoryTitle">Wybierz katalog roboczy</system:String>
     <system:String x:Key="ActionEditor.FindProgram">Znajdź program</system:String>
     <system:String x:Key="ActionEditor.SelectProcess">Wybierz proces</system:String>
     <system:String x:Key="ActionEditor.SelectService">Wybierz usługę</system:String>
@@ -48,19 +51,20 @@
     <system:String x:Key="ActionEditor.Timeout">LIMIT CZASU (SEKUNDY, OPCJONALNIE)</system:String>
     <system:String x:Key="ActionEditor.WaitForScript">Czekaj na zakończenie skryptu</system:String>
     <system:String x:Key="ActionEditor.RunAsAdministrator">Uruchom jako administrator</system:String>
-    <system:String x:Key="ActionEditor.OnFailure">PO BŁĘDZIE</system:String>
+    <system:String x:Key="ActionEditor.OnFailure">Po błędzie</system:String>
     <system:String x:Key="ActionEditor.AdminHint">Ta operacja może wymagać uprawnień administratora.</system:String>
     <system:String x:Key="ActionEditor.ProcessMultipleHint">Sama nazwa procesu może dopasować i zatrzymać wiele instancji. Dodaj ścieżkę EXE, aby zawęzić dopasowanie.</system:String>
-    <system:String x:Key="ActionEditor.Arguments">ARGUMENTY</system:String>
+    <system:String x:Key="ActionEditor.Arguments">Argumenty</system:String>
     <system:String x:Key="ActionEditor.ArgumentsHelp">Opcjonalne parametry przekazywane programowi podczas uruchamiania.</system:String>
     <system:String x:Key="ActionEditor.ArgumentsExample">Przykład: --fullscreen albo -silent</system:String>
+    <system:String x:Key="ActionEditor.SelectArguments">Wybierz</system:String>
     <system:String x:Key="ActionEditor.AdvancedOptions">Opcje zaawansowane</system:String>
     <system:String x:Key="ActionEditor.SelectDisplay">Wybierz monitor</system:String>
     <system:String x:Key="ActionEditor.SelectedDisplay">WYBRANY MONITOR</system:String>
     <system:String x:Key="ActionEditor.Resolution">ROZDZIELCZOŚĆ</system:String>
     <system:String x:Key="ActionEditor.RefreshRate">CZĘSTOTLIWOŚĆ ODŚWIEŻANIA</system:String>
     <system:String x:Key="ActionEditor.DisplaySafetyHint">Po zmianie trybu pojawi się 15-sekundowe potwierdzenie. Bez potwierdzenia poprzedni tryb zostanie przywrócony.</system:String>
-    <system:String x:Key="ActionEditor.WorkingDirectory">KATALOG ROBOCZY</system:String>
+    <system:String x:Key="ActionEditor.WorkingDirectory">Katalog roboczy</system:String>
     <system:String x:Key="ActionEditor.StartOnlyIfNotRunning">Uruchom tylko jeśli program jeszcze nie działa</system:String>
     <system:String x:Key="ActionEditor.ProcessName">NAZWA PROCESU</system:String>
     <system:String x:Key="ActionEditor.ExecutablePath">OPCJONALNA ŚCIEŻKA EXE</system:String>
@@ -68,6 +72,12 @@
     <system:String x:Key="ActionEditor.DelayDuration">CZAS OPÓŹNIENIA (SEKUNDY, 0-3600)</system:String>
     <system:String x:Key="ActionEditor.NotImplemented">Ta akcja nie jest jeszcze obsługiwana.</system:String>
     <system:String x:Key="ActionSummary.RunProgram">Uruchom program • {0}</system:String>
+    <system:String x:Key="ActionSummary.ProgramStartsAnother">uruchom ponownie działający</system:String>
+    <system:String x:Key="ActionSummary.ProgramDoesNotDuplicate">nie uruchamiaj ponownie</system:String>
+    <system:String x:Key="ActionSummary.ProgramWindow">okno: {0}</system:String>
+    <system:String x:Key="ActionSummary.ProgramRetry">ponawianie</system:String>
+    <system:String x:Key="ActionSummary.ProgramCustomDirectory">własny katalog roboczy</system:String>
+    <system:String x:Key="ActionSummary.ProgramRestore">przywracanie: {0}</system:String>
     <system:String x:Key="ActionSummary.StopProcess">Zatrzymaj proces • {0}</system:String>
     <system:String x:Key="ActionSummary.ProcessUnchanged">Bez zmian • {0}</system:String>
     <system:String x:Key="ActionSummary.Service">Usługa Windows • {0}</system:String>
@@ -112,7 +122,7 @@
     <system:String x:Key="ScriptType.BatchCmd">Batch/CMD</system:String>
     <system:String x:Key="FailurePolicy.Continue">Kontynuuj profil</system:String>
     <system:String x:Key="FailurePolicy.Stop">Zatrzymaj profil</system:String>
-    <system:String x:Key="ActionEditor.RestoreBehavior">PRZYWRACANIE</system:String>
+    <system:String x:Key="ActionEditor.RestoreBehavior">Przywracanie</system:String>
     <system:String x:Key="RestoreBehavior.None">Nie przywracaj</system:String>
     <system:String x:Key="RestoreBehavior.Previous">Przywróć poprzedni stan</system:String>
     <system:String x:Key="RestoreBehavior.CloseStarted">Zamknij, jeśli uruchomił SwitchBoard</system:String>
@@ -139,6 +149,13 @@
     <system:String x:Key="SessionStatus.RecoveryRequired">Wymaga odzyskania</system:String>
     <system:String x:Key="Common.Restore">Przywróć</system:String>
     <system:String x:Key="Common.Undo">Cofnij</system:String>
+    <system:String x:Key="Common.Redo">Ponów</system:String>
+    <system:String x:Key="Common.RedoTooltip">Ponów ostatnią zmianę konfiguracji</system:String>
+    <system:String x:Key="Dialog.UnsavedChangesTitle">Niezapisane zmiany</system:String>
+    <system:String x:Key="Dialog.UnsavedChangesMessage">Czy zapisać zmiany przed zamknięciem?</system:String>
+    <system:String x:Key="Dialog.SaveAndClose">Zapisz i zamknij</system:String>
+    <system:String x:Key="Dialog.CloseWithoutSaving">Zamknij bez zapisywania</system:String>
+    <system:String x:Key="Common.Cancel">Anuluj</system:String>
     <system:String x:Key="Common.UndoTooltip">Cofnij ostatnią zmianę w konfiguracji</system:String>
     <system:String x:Key="Restore.ChangesCount">Zmiany do przywrócenia: {0}</system:String>
     <system:String x:Key="Restore.ButtonCount">Przywróć • {0}</system:String>
@@ -332,6 +349,9 @@
     <system:String x:Key="Dialog.StartupErrorTitle">Błąd uruchamiania</system:String>
     <system:String x:Key="Dialog.StartupErrorMessage">Nie można uruchomić SwitchBoard.&#x0a;&#x0a;{0}</system:String>
     <system:String x:Key="Dialog.SelectProgramTitle">Wybierz program lub skrót</system:String>
+    <system:String x:Key="Dialog.SelectArgumentsTitle">Wybierz argumenty</system:String>
+    <system:String x:Key="Dialog.ArgumentsHeading">Argumenty uruchomienia</system:String>
+    <system:String x:Key="Dialog.ArgumentsHint">Wpisz argumenty, które zostaną przekazane programowi podczas uruchamiania.</system:String>
     <system:String x:Key="Dialog.ProgramFileFilter">Programy i skróty (*.exe;*.lnk)|*.exe;*.lnk|Wszystkie pliki (*.*)|*.*</system:String>
     <system:String x:Key="Dialog.FindProgramTitle">Znajdź program</system:String>
     <system:String x:Key="Dialog.SelectProcessTitle">Wybierz działający proces</system:String>
@@ -462,6 +482,12 @@
     <system:String x:Key="Advanced.InstanceBehavior">Jeśli program już działa</system:String>
     <system:String x:Key="Advanced.WindowBehavior">Zachowanie okna</system:String>
     <system:String x:Key="Advanced.WindowWait">Czekaj na okno maksymalnie (s)</system:String>
+    <system:String x:Key="Advanced.Launching">Uruchamianie</system:String>
+    <system:String x:Key="Advanced.ProgramWindow">Okno programu</system:String>
+    <system:String x:Key="Advanced.UseCustomWorkingDirectory">Użyj własnego katalogu roboczego</system:String>
+    <system:String x:Key="Advanced.UseCustomWorkingDirectoryHelp">Używa wskazanego katalogu jako bieżącego katalogu procesu. Wyłączenie zachowuje wpisaną wartość.</system:String>
+    <system:String x:Key="Advanced.RetryAndErrors">Błędy i ponawianie</system:String>
+    <system:String x:Key="Advanced.Restoring">Przywracanie</system:String>
     <system:String x:Key="ActionEditor.CpuAffinity">Koligacja CPU</system:String>
     <system:String x:Key="ActionEditor.SelectAll">Zaznacz wszystkie</system:String>
     <system:String x:Key="ActionEditor.ClearAll">Odznacz wszystkie</system:String>
@@ -493,6 +519,9 @@
     <system:String x:Key="Dialog.SelectAudioInput">Wybierz wejście audio</system:String><system:String x:Key="Dialog.SelectAudioOutput">Wybierz wyjście audio</system:String><system:String x:Key="Dialog.SelectDevice">Wybierz urządzenie Windows</system:String>
     <system:String x:Key="Picker.Name">Nazwa</system:String><system:String x:Key="Picker.Type">Typ</system:String><system:String x:Key="Picker.Default">Domyślne</system:String><system:String x:Key="Picker.Class">Klasa</system:String><system:String x:Key="Picker.State">Stan</system:String><system:String x:Key="Picker.InstanceId">Identyfikator instancji</system:String>
     <system:String x:Key="Validation.NestedAction">Zagnieżdżona akcja WTEDY/INACZEJ jest niekompletna.</system:String>
+    <system:String x:Key="Validation.RunBlocked">Nie można uruchomić profilu: {0} aktywnych akcji wymaga konfiguracji.</system:String>
+    <system:String x:Key="Validation.ProfileReferenceCycle">Nie można uruchomić profilu: odwołania zawierają cykl lub brakujący profil.</system:String>
+    <system:String x:Key="Validation.RunBusy">Profil nie może zostać uruchomiony podczas innej operacji.</system:String>
     <system:String x:Key="Validation.NoOp">Ta akcja nie wprowadzi żadnej zmiany.</system:String>
     <system:String x:Key="Picker.Input">Wejście</system:String><system:String x:Key="Picker.Output">Wyjście</system:String><system:String x:Key="Picker.Multimedia">Multimedia</system:String><system:String x:Key="Picker.Communications">Komunikacja</system:String><system:String x:Key="Picker.BothRoles">Multimedia + komunikacja</system:String>
     <system:String x:Key="CustomTheme.Export">Eksportuj motyw</system:String>

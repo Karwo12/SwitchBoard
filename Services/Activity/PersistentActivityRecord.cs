@@ -46,6 +46,7 @@ public static class SystemChangeStatuses
 
 public sealed record SystemChangeEntry(
     DateTimeOffset Timestamp,
+    Guid? ProfileId,
     Guid SessionId,
     Guid ActionId,
     string ActionType,

@@ -10,10 +10,8 @@
         Height="{Binding WindowHeight, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
         MinWidth="900"
         MinHeight="500"
-        WindowStartupLocation="CenterScreen">
-    <Window.InputBindings>
-        <KeyBinding Key="Z" Modifiers="Control" Command="{Binding UndoCommand}" CommandParameter="keyboard" />
-    </Window.InputBindings>
+        WindowStartupLocation="CenterScreen"
+        PreviewKeyDown="MainWindow_OnPreviewKeyDown">
     <Grid Background="{DynamicResource BackgroundBrush}">
         <Grid.RowDefinitions>
             <RowDefinition Height="82" />
@@ -66,6 +64,17 @@
                               Data="M8,4 L3,8 L8,12 M4,8 H11 C15,8 17,10 17,14"
                               StrokeThickness="1.7" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
                         <TextBlock VerticalAlignment="Center" Text="{DynamicResource Common.Undo}" />
+                    </StackPanel>
+                </Button>
+                <Button MinWidth="92" Margin="0,0,8,0"
+                        Command="{Binding RedoCommand}"
+                        ToolTip="{DynamicResource Common.RedoTooltip}">
+                    <StackPanel Orientation="Horizontal">
+                        <Path Width="17" Height="17" Margin="0,0,7,0" Stretch="Uniform"
+                              Style="{StaticResource SemanticStrokeIcon}"
+                              Data="M10,4 L15,8 L10,12 M14,8 H7 C3,8 2,10 2,14"
+                              StrokeThickness="1.7" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                        <TextBlock VerticalAlignment="Center" Text="{DynamicResource Common.Redo}" />
                     </StackPanel>
                 </Button>
                 <Button MinWidth="128"
@@ -278,6 +287,9 @@
                                             </StackPanel>
                                             <Button.ContextMenu>
                                                 <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+                                                    <MenuItem Header="{DynamicResource Profile.Duplicate}"
+                                                              Command="{Binding PlacementTarget.Tag.DuplicateProfileCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                              CommandParameter="{Binding}" />
                                                     <MenuItem Header="{DynamicResource Profile.Export}"
                                                               Command="{Binding PlacementTarget.Tag.ExportProfileCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                                               CommandParameter="{Binding}" />
@@ -318,7 +330,7 @@
                           DragCompleted="ActivityLayoutSplitter_OnDragCompleted"
                           MouseDoubleClick="ActivityLayoutSplitter_OnMouseDoubleClick" />
 
-            <controls:ActionEditorControl Grid.RowSpan="3" Grid.Column="4" />
+            <controls:ActionEditorControl x:Name="ActionEditor" Grid.RowSpan="3" Grid.Column="4" />
 
             <Border Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="3"
                     Margin="0,6,0,0" Padding="10,7" Background="{DynamicResource ActivitySurfaceBrush}"
@@ -374,16 +386,36 @@
                                 </Style.Triggers>
                             </Style>
                         </ScrollViewer.Style>
-                        <ItemsControl ItemsSource="{Binding ActivityEntries}">
+                        <ItemsControl ItemsSource="{Binding ActivityDisplayEntries}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <Grid Margin="2,2">
+                                    <Grid Margin="2,2" MouseLeftButtonDown="ActivityEntry_OnMouseDoubleClick">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="45"/><ColumnDefinition Width="18"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                                         <TextBlock Style="{StaticResource CaptionText}" Text="{Binding Timestamp, StringFormat={}{0:HH:mm}}" />
                                         <TextBlock Grid.Column="1" Text="•">
                                             <TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/><Style.Triggers><DataTrigger Binding="{Binding Level}" Value="Success"><Setter Property="Text" Value="✓"/><Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/></DataTrigger><DataTrigger Binding="{Binding Level}" Value="Warning"><Setter Property="Text" Value="!"/><Setter Property="Foreground" Value="{DynamicResource DangerBrush}"/></DataTrigger><DataTrigger Binding="{Binding Level}" Value="Error"><Setter Property="Text" Value="×"/><Setter Property="Foreground" Value="{DynamicResource DangerBrush}"/></DataTrigger></Style.Triggers></Style></TextBlock.Style>
                                         </TextBlock>
-                                        <TextBlock Grid.Column="2" Text="{Binding Message}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Message}" />
+                                        <StackPanel Grid.Column="2" Orientation="Horizontal">
+                                            <TextBlock Text="{Binding Prefix}" TextTrimming="CharacterEllipsis" />
+                                            <TextBlock Text="{Binding TargetName}" Margin="4,0,0,0"
+                                                       Cursor="Hand"
+                                                       MouseLeftButtonDown="ActivityTarget_OnMouseLeftButtonDown">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+                                                        <Setter Property="TextDecorations" Value="Underline" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsNavigable}" Value="False">
+                                                                <Setter Property="Visibility" Value="Collapsed" />
+                                                            </DataTrigger>
+                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+                                                            </Trigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </StackPanel>
                                     </Grid>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
@@ -393,9 +425,9 @@
                         <ScrollViewer.Style><Style TargetType="ScrollViewer"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><MultiDataTrigger><MultiDataTrigger.Conditions><Condition Binding="{Binding IsActivityExpanded}" Value="True"/><Condition Binding="{Binding ActivityTabIndex}" Value="1"/></MultiDataTrigger.Conditions><Setter Property="Visibility" Value="Visible"/></MultiDataTrigger></Style.Triggers></Style></ScrollViewer.Style>
                         <ItemsControl ItemsSource="{Binding SystemChangeEntries}">
                             <ItemsControl.ItemTemplate><DataTemplate>
-                                <Grid Margin="2,4"><Grid.ColumnDefinitions><ColumnDefinition Width="45"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <Grid Margin="2,4" MouseLeftButtonDown="SystemChangeEntry_OnMouseDoubleClick"><Grid.ColumnDefinitions><ColumnDefinition Width="45"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                     <TextBlock Style="{StaticResource CaptionText}" Text="{Binding Timestamp, StringFormat={}{0:dd.MM HH:mm}}"/>
-                                    <StackPanel Grid.Column="1" Margin="7,0,10,0"><TextBlock FontWeight="SemiBold" Text="{Binding FriendlyName}"/><TextBlock Style="{StaticResource CaptionText}" Text="{Binding Details}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Details}"/></StackPanel>
+                                    <StackPanel Grid.Column="1" Margin="7,0,10,0"><TextBlock FontWeight="SemiBold" Text="{Binding FriendlyName}" Cursor="Hand" TextDecorations="Underline" MouseLeftButtonDown="SystemChangeTarget_OnMouseLeftButtonDown"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/><Setter Property="TextDecorations" Value="Underline"/><Style.Triggers><DataTrigger Binding="{Binding IsNavigable}" Value="False"><Setter Property="TextDecorations" Value="{x:Null}"/><Setter Property="Cursor" Value="Arrow"/></DataTrigger><Trigger Property="IsMouseOver" Value="True"><Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/></Trigger></Style.Triggers></Style></TextBlock.Style></TextBlock><TextBlock Style="{StaticResource CaptionText}" Text="{Binding Details}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Details}"/></StackPanel>
                                     <TextBlock Grid.Column="2" VerticalAlignment="Center" Text="{Binding StatusText}"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}"/><Style.Triggers><DataTrigger Binding="{Binding Status}" Value="pending"><Setter Property="Foreground" Value="{DynamicResource DangerBrush}"/></DataTrigger><DataTrigger Binding="{Binding Status}" Value="restore-failed"><Setter Property="Foreground" Value="{DynamicResource DangerBrush}"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
                                 </Grid>
                             </DataTemplate></ItemsControl.ItemTemplate>

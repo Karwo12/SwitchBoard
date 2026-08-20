@@ -122,8 +122,12 @@ public sealed class ProgramRunActionHandler(ILocalizationService? localization =
     internal static ProcessStartInfo CreateStartInfo(ActionDefinition action, string target)
     {
         var arguments = ActionParameterReader.ReadString(action.Parameters, ActionParameterNames.Arguments);
-        var workingDirectory = ActionParameterReader.ReadString(
+        var storedWorkingDirectory = ActionParameterReader.ReadString(
             action.Parameters, ActionParameterNames.WorkingDirectory).Trim();
+        var useCustomWorkingDirectory = ActionParameterReader.ReadBoolean(
+            action.Parameters, ActionParameterNames.UseCustomWorkingDirectory,
+            !string.IsNullOrWhiteSpace(storedWorkingDirectory));
+        var workingDirectory = useCustomWorkingDirectory ? storedWorkingDirectory : string.Empty;
         var useShellExecute = IsProtocolTarget(target) ||
                               string.Equals(Path.GetExtension(target), ".lnk", StringComparison.OrdinalIgnoreCase) ||
                               ActionParameterReader.ReadBoolean(action.Parameters,

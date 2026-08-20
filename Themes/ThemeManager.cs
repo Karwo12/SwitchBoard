@@ -148,6 +148,7 @@ public sealed class ThemeManager(AppDataPaths paths) : IThemeManager
             ["CardSurfaceBrush"] = Brush(card),
             ["ElevatedSurfaceBrush"] = Brush(elevated),
             ["InputBackgroundBrush"] = Brush(Blend(elevatedBase, background, 0.35)),
+            ["SettingsRowBackgroundBrush"] = Brush(CreateSettingsRowBackground(background, elevatedBase, panelBase)),
             ["PopupBackgroundBrush"] = Brush(WithAlpha(panel, 1)),
             ["BorderBrush"] = Brush(border),
             ["BorderHighlightBrush"] = Brush(WithAlpha(accent, 0.58)),
@@ -200,6 +201,13 @@ public sealed class ThemeManager(AppDataPaths paths) : IThemeManager
         if (!dictionary.Contains("ProfilesSurfaceBrush")) dictionary["ProfilesSurfaceBrush"] = dictionary["SurfaceBrush"];
         if (!dictionary.Contains("ProfileEditorSurfaceBrush")) dictionary["ProfileEditorSurfaceBrush"] = dictionary["SurfaceBrush"];
         if (!dictionary.Contains("ActivitySurfaceBrush")) dictionary["ActivitySurfaceBrush"] = dictionary["ElevatedSurfaceBrush"];
+        if (!dictionary.Contains("SettingsRowBackgroundBrush"))
+        {
+            var background = RepresentativeColor(dictionary["BackgroundBrush"] as Brush, Colors.Black);
+            var elevated = RepresentativeColor(dictionary["ElevatedSurfaceBrush"] as Brush, background);
+            var panel = RepresentativeColor(dictionary["SurfaceBrush"] as Brush, elevated);
+            dictionary["SettingsRowBackgroundBrush"] = Brush(CreateSettingsRowBackground(background, elevated, panel));
+        }
 
         Set("PrimaryButtonBackground", "PrimaryButtonForeground");
         Set("PrimaryButtonHoverBackground", "PrimaryButtonHoverForeground");
@@ -372,6 +380,31 @@ public sealed class ThemeManager(AppDataPaths paths) : IThemeManager
     private static Color Adjust(Color value, double factor) => Color.FromArgb(value.A,
         (byte)Math.Clamp(value.R * factor, 0, 255), (byte)Math.Clamp(value.G * factor, 0, 255),
         (byte)Math.Clamp(value.B * factor, 0, 255));
+
+    private static Color CreateSettingsRowBackground(Color background, Color elevated, Color panel)
+    {
+        var row = Blend(elevated, background, 0.18);
+        var lightBackground = RelativeLuminance(background) > 0.5;
+        if (ColorDistance(row, background) < 18)
+            row = lightBackground ? Adjust(background, 0.92) : Adjust(background, 1.18);
+        if (ColorDistance(row, panel) < 10)
+            row = lightBackground ? Adjust(row, 0.95) : Adjust(row, 1.08);
+        return Color.FromRgb(row.R, row.G, row.B);
+    }
+
+    private static double RelativeLuminance(Color color)
+    {
+        static double Channel(byte value)
+        {
+            var normalized = value / 255d;
+            return normalized <= 0.03928 ? normalized / 12.92 : Math.Pow((normalized + 0.055) / 1.055, 2.4);
+        }
+
+        return 0.2126 * Channel(color.R) + 0.7152 * Channel(color.G) + 0.0722 * Channel(color.B);
+    }
+
+    private static double ColorDistance(Color first, Color second) =>
+        Math.Sqrt(Math.Pow(first.R - second.R, 2) + Math.Pow(first.G - second.G, 2) + Math.Pow(first.B - second.B, 2));
     private static string GetResourceFileName(Uri resourceUri) => resourceUri.OriginalString[(resourceUri.OriginalString.LastIndexOf('/') + 1)..];
     private static ThemeDefinition Create(string id, string displayName, string fileName) => new(id, displayName,
         new Uri($"/SwitchBoard;component/Themes/{fileName}", UriKind.Relative));

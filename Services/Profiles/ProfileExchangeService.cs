@@ -43,6 +43,15 @@ public sealed class ProfileExchangeService
         return imported;
     }
 
+    public ProfileDefinition CloneForDuplicate(ProfileDefinition profile)
+    {
+        var clone = JsonSerializer.Deserialize<ProfileDefinition>(JsonSerializer.Serialize(profile, _options), _options)
+                    ?? throw new InvalidDataException("The profile could not be duplicated.");
+        clone.Id = Guid.NewGuid();
+        foreach (var action in clone.Actions) ResetIds(action);
+        return clone;
+    }
+
     private static void ResetIds(ActionDefinition action)
     {
         action.Id = Guid.NewGuid();

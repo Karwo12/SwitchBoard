@@ -7,6 +7,14 @@
              mc:Ignorable="d"
              d:DesignHeight="640"
              d:DesignWidth="700">
+    <UserControl.Resources>
+        <Style x:Key="SettingsRowBorderStyle" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource SettingsRowBackgroundBrush}" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Padding" Value="10,7" />
+        </Style>
+    </UserControl.Resources>
     <ContentControl Padding="24,22,24,4" Background="{DynamicResource ProfileEditorSurfaceBrush}"
                     Style="{StaticResource GlassPanel}">
         <Grid>
@@ -39,7 +47,7 @@
                     <RowDefinition Height="48" MinHeight="0" />
                 </Grid.RowDefinitions>
 
-                <Grid>
+                <Grid Height="100" VerticalAlignment="Top" ClipToBounds="True">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="134" />
@@ -54,19 +62,27 @@
                         <TextBlock Margin="0,4,0,0"
                                    Style="{StaticResource CaptionText}"
                                    Text="{DynamicResource Panel.ProfileEditorSubtitle}" />
-                        <TextBlock Margin="0,5,0,0" Text="{Binding RestoreNoticeText}">
-                            <TextBlock.Style>
-                                <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
-                                    <Setter Property="Visibility" Value="Collapsed" />
-                                    <Style.Triggers><DataTrigger Binding="{Binding HasRestoreNotice}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers>
-                                </Style>
-                            </TextBlock.Style>
-                        </TextBlock>
+                        <TextBlock Height="16" Margin="0,5,0,0"
+                                   Style="{StaticResource CaptionText}"
+                                   Text="{Binding RestoreNoticeText}"
+                                   TextTrimming="CharacterEllipsis"
+                                   ToolTip="{Binding RestoreNoticeText}" />
+                        <Button Margin="0,6,0,0"
+                                Padding="0"
+                                HorizontalAlignment="Left"
+                                BorderThickness="0"
+                                Background="Transparent"
+                                Foreground="{DynamicResource DangerBrush}"
+                                Content="{Binding RunAvailabilityMessage}"
+                                Command="{Binding NavigateToValidationErrorCommand}"
+                                Visibility="{Binding HasRunValidationIssue, Converter={StaticResource BooleanToVisibilityConverter}}" />
                     </StackPanel>
                     <Button Grid.Column="1"
                             Width="134"
                             Height="36"
-                            Command="{Binding RunProfileCommand}">
+                            Command="{Binding RunProfileCommand}"
+                            ToolTip="{Binding RunAvailabilityMessage}"
+                            ToolTipService.ShowOnDisabled="True">
                         <Button.Style>
                             <Style TargetType="Button" BasedOn="{StaticResource AccentButton}">
                                 <Setter Property="Tag" Value="{DynamicResource Execution.RunProfile}" />
@@ -381,10 +397,18 @@
                                                             </Style.Triggers>
                                                         </Style>
                                                     </StackPanel.Style>
-                                                    <TextBlock Margin="0,0,0,6" Style="{StaticResource EyebrowText}" Text="{DynamicResource ActionEditor.FriendlyName}" />
-                                                    <TextBox Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" />
-                                                    <TextBlock Margin="0,11,0,6" Style="{StaticResource EyebrowText}" Text="{DynamicResource ActionEditor.Target}" />
-                                                    <Grid>
+                                                    <Border Style="{StaticResource SettingsRowBorderStyle}" Margin="0,0,0,8">
+                                                        <Grid>
+                                                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="250"/></Grid.ColumnDefinitions>
+                                                            <TextBlock VerticalAlignment="Center" Text="{DynamicResource ActionEditor.ProgramNameOptional}" />
+                                                            <TextBox Grid.Column="1" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" />
+                                                        </Grid>
+                                                    </Border>
+                                                    <Border Style="{StaticResource SettingsRowBorderStyle}" Margin="0,0,0,8">
+                                                        <Grid>
+                                                            <Grid.ColumnDefinitions><ColumnDefinition Width="170"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                                            <TextBlock VerticalAlignment="Center" Text="{DynamicResource ActionEditor.Target}" />
+                                                            <Grid Grid.Column="1">
                                                         <Grid.ColumnDefinitions>
                                                             <ColumnDefinition Width="*" />
                                                             <ColumnDefinition Width="8" />
@@ -401,27 +425,21 @@
                                                                 Command="{Binding DataContext.FindProgramCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                                 CommandParameter="{Binding}"
                                                                 Content="{DynamicResource ActionEditor.FindProgram}" />
-                                                    </Grid>
-                                                    <Grid Margin="0,11,0,0">
-                                                        <Grid.ColumnDefinitions>
-                                                            <ColumnDefinition Width="*" />
-                                                            <ColumnDefinition Width="12" />
-                                                            <ColumnDefinition Width="*" />
-                                                        </Grid.ColumnDefinitions>
-                                                        <StackPanel>
-                                                            <StackPanel Margin="0,0,0,6" Orientation="Horizontal">
+                                                            </Grid>
+                                                        </Grid>
+                                                    </Border>
+                                                     <Grid Visibility="Collapsed" Margin="0,11,0,0">
+                                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="8"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                                         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                                                             <StackPanel Grid.Row="0" Margin="0,0,0,6" Orientation="Horizontal">
                                                                 <TextBlock Style="{StaticResource EyebrowText}" Text="{DynamicResource ActionEditor.Arguments}" />
                                                                 <TextBlock Margin="5,0,0,0" Style="{StaticResource CaptionText}" Text="ⓘ">
                                                                     <TextBlock.ToolTip><StackPanel MaxWidth="330"><TextBlock Text="{DynamicResource ActionEditor.ArgumentsHelp}" TextWrapping="Wrap"/><TextBlock Margin="0,5,0,0" Text="{DynamicResource ActionEditor.ArgumentsExample}" TextWrapping="Wrap"/></StackPanel></TextBlock.ToolTip>
                                                                 </TextBlock>
                                                             </StackPanel>
-                                                            <TextBox Text="{Binding Arguments, UpdateSourceTrigger=PropertyChanged}" />
-                                                        </StackPanel>
-                                                        <StackPanel Grid.Column="2">
-                                                            <TextBlock Margin="0,0,0,6" Style="{StaticResource EyebrowText}" Text="{DynamicResource ActionEditor.WorkingDirectory}" />
-                                                            <TextBox Text="{Binding WorkingDirectory, UpdateSourceTrigger=PropertyChanged}" />
-                                                        </StackPanel>
-                                                    </Grid>
+                                                              <TextBox Grid.Row="1" Text="{Binding Arguments, UpdateSourceTrigger=PropertyChanged}" ToolTip="{DynamicResource ActionEditor.ArgumentsHelp}" />
+                                                              <Button Grid.Row="1" Grid.Column="2" Command="{Binding DataContext.SelectArgumentsCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" Content="{DynamicResource ActionEditor.SelectArguments}" />
+                                                     </Grid>
                                                 </StackPanel>
 
                                                 <StackPanel>
@@ -692,8 +710,8 @@
                                                     <TextBlock Margin="6,0,0,0" VerticalAlignment="Center" Text="{DynamicResource ActionEditor.AdvancedOptions}" />
                                                 </StackPanel>
                                             </Button>
-                                            <Border Margin="0,8,0,0" Padding="12" Background="{DynamicResource InputBackgroundBrush}" CornerRadius="7">
-                                                <Border.Style><Style TargetType="Border"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding IsAdvancedOptionsExpanded}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Border.Style>
+                                             <Border Margin="0,8,0,0" Padding="12" Background="{DynamicResource InputBackgroundBrush}" CornerRadius="7">
+                                                 <Border.Style><Style TargetType="Border"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding IsAdvancedOptionsExpanded}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Border.Style>
                                                 <StackPanel>
                                                     <StackPanel>
                                                         <StackPanel.Style>
@@ -710,26 +728,46 @@
                                                         <TextBox Text="{Binding TimeoutSeconds, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}" />
                                                     </StackPanel>
                                                     <StackPanel Margin="0,11,0,0">
-                                                        <StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Visible"/><Style.Triggers><DataTrigger Binding="{Binding Type}" Value="delay"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger><DataTrigger Binding="{Binding Type}" Value="wait.processStart"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger><DataTrigger Binding="{Binding Type}" Value="wait.processExit"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger><DataTrigger Binding="{Binding Type}" Value="wait.window"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger><DataTrigger Binding="{Binding Type}" Value="notification.show"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger><DataTrigger Binding="{Binding Type}" Value="condition.if"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger><DataTrigger Binding="{Binding Type}" Value="profile.run"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></StackPanel.Style>
+                                                        <StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Visible"/><Style.Triggers><DataTrigger Binding="{Binding Type}" Value="delay"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger><DataTrigger Binding="{Binding Type}" Value="wait.processStart"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger><DataTrigger Binding="{Binding Type}" Value="wait.processExit"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger><DataTrigger Binding="{Binding Type}" Value="wait.window"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger><DataTrigger Binding="{Binding Type}" Value="notification.show"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger><DataTrigger Binding="{Binding Type}" Value="condition.if"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger><DataTrigger Binding="{Binding Type}" Value="profile.run"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger><DataTrigger Binding="{Binding Type}" Value="program.run"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></StackPanel.Style>
                                                         <CheckBox IsChecked="{Binding RetryOnFailure}" Content="{DynamicResource Advanced.RetryEnabled}"/>
                                                         <Grid Margin="0,7,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="12"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><StackPanel><TextBlock Margin="0,0,0,6" Style="{StaticResource EyebrowText}" Text="{DynamicResource Advanced.MaximumAttempts}"/><TextBox Text="{Binding MaximumAttempts}"/></StackPanel><StackPanel Grid.Column="2"><TextBlock Margin="0,0,0,6" Style="{StaticResource EyebrowText}" Text="{DynamicResource Advanced.RetryDelay}"/><TextBox Text="{Binding RetryDelaySeconds}"/></StackPanel></Grid>
                                                     </StackPanel>
-                                                    <StackPanel Margin="0,11,0,0"><StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding Type}" Value="program.run"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></StackPanel.Style>
-                                                        <TextBlock Margin="0,0,0,6" Style="{StaticResource EyebrowText}" Text="{DynamicResource Advanced.InstanceBehavior}"/><ComboBox ItemsSource="{Binding AvailableInstanceBehaviors}" DisplayMemberPath="DisplayName" SelectedValuePath="Value" SelectedValue="{Binding InstanceBehavior}"/>
-                                                        <TextBlock Margin="0,11,0,6" Style="{StaticResource EyebrowText}" Text="{DynamicResource Advanced.WindowBehavior}"/><ComboBox ItemsSource="{Binding AvailableWindowBehaviors}" DisplayMemberPath="DisplayName" SelectedValuePath="Value" SelectedValue="{Binding WindowBehavior}"/>
-                                                        <TextBlock Margin="0,11,0,6" Style="{StaticResource EyebrowText}" Text="{DynamicResource Advanced.WindowWait}"/><TextBox Text="{Binding WindowWaitSeconds}"/>
-                                                        <CheckBox Margin="0,9,0,0" IsChecked="{Binding RunAsAdministrator}" Content="{DynamicResource ActionEditor.RunAsAdministrator}"/>
-                                                    </StackPanel>
-                                                    <TextBlock Margin="0,11,0,6" Style="{StaticResource EyebrowText}" Text="{DynamicResource ActionEditor.OnFailure}" />
-                                                    <ComboBox ItemsSource="{Binding AvailableFailurePolicies}" DisplayMemberPath="DisplayName"
-                                                              SelectedValue="{Binding FailurePolicyId, Mode=TwoWay}" SelectedValuePath="Value" />
-                                                    <StackPanel Margin="0,11,0,0">
+                                                      <StackPanel Margin="0,8,0,0">
+                                                          <StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding Type}" Value="program.run"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></StackPanel.Style>
+                                                          <TextBlock FontSize="13" FontWeight="SemiBold" Text="{DynamicResource Advanced.Launching}" />
+                                                          <Border Style="{StaticResource SettingsRowBorderStyle}" Margin="0,5,0,0"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="250"/></Grid.ColumnDefinitions><StackPanel Orientation="Horizontal" VerticalAlignment="Center"><TextBlock Text="{DynamicResource ActionEditor.Arguments}"/><TextBlock Margin="5,0,0,0" Style="{StaticResource CaptionText}" Text="ⓘ" ToolTip="{DynamicResource ActionEditor.ArgumentsHelp}"/></StackPanel><Grid Grid.Column="1"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="86"/></Grid.ColumnDefinitions><TextBox Foreground="{DynamicResource TextPrimaryBrush}" CaretBrush="{DynamicResource TextPrimaryBrush}" Background="{DynamicResource InputBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" Text="{Binding Arguments, UpdateSourceTrigger=PropertyChanged}" ToolTip="{DynamicResource ActionEditor.ArgumentsHelp}"/><Button Grid.Column="1" Margin="6,0,0,0" Content="{DynamicResource ActionEditor.SelectArguments}" Command="{Binding DataContext.SelectArgumentsCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}"/></Grid></Grid></Border>
+                                                          <Border Style="{StaticResource SettingsRowBorderStyle}" Margin="0,5,0,0"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="250"/></Grid.ColumnDefinitions><TextBlock VerticalAlignment="Center" Text="{DynamicResource Advanced.InstanceBehavior}" ToolTip="{DynamicResource Advanced.InstanceBehavior}"/><ComboBox Grid.Column="1" ItemsSource="{Binding AvailableInstanceBehaviors}" DisplayMemberPath="DisplayName" SelectedValuePath="Value" SelectedValue="{Binding InstanceBehavior}" /></Grid></Border>
+                                                          <Border Style="{StaticResource SettingsRowBorderStyle}" Margin="0,4,0,0"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="250"/></Grid.ColumnDefinitions><TextBlock VerticalAlignment="Center" Text="{DynamicResource ActionEditor.RunAsAdministrator}" ToolTip="{DynamicResource ActionEditor.RunAsAdministrator}"/><CheckBox Grid.Column="1" HorizontalAlignment="Center" VerticalAlignment="Center" IsChecked="{Binding RunAsAdministrator}" /></Grid></Border>
+                                                          <Border Style="{StaticResource SettingsRowBorderStyle}" Margin="0,4,0,0"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="250"/></Grid.ColumnDefinitions><TextBlock VerticalAlignment="Center" Text="{DynamicResource Advanced.UseCustomWorkingDirectory}" ToolTip="{DynamicResource Advanced.UseCustomWorkingDirectoryHelp}"/><CheckBox Grid.Column="1" HorizontalAlignment="Center" VerticalAlignment="Center" IsChecked="{Binding UseCustomWorkingDirectory}" /></Grid></Border>
+                                                          <Border Margin="0,4,0,0"><Border.Style><Style TargetType="Border" BasedOn="{StaticResource SettingsRowBorderStyle}"><Setter Property="BorderThickness" Value="0"/><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding UseCustomWorkingDirectory}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Border.Style><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="250"/></Grid.ColumnDefinitions><TextBlock VerticalAlignment="Center" Text="{DynamicResource ActionEditor.WorkingDirectory}"/><Grid Grid.Column="1"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="86"/></Grid.ColumnDefinitions><TextBox Foreground="{DynamicResource TextPrimaryBrush}" CaretBrush="{DynamicResource TextPrimaryBrush}" Background="{DynamicResource InputBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" Text="{Binding WorkingDirectory, UpdateSourceTrigger=PropertyChanged}" ToolTip="{Binding WorkingDirectory}"/><Button Grid.Column="1" Margin="6,0,0,0" Content="{DynamicResource ActionEditor.Browse}" Command="{Binding DataContext.BrowseWorkingDirectoryCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" CommandParameter="{Binding}" /></Grid></Grid></Border>
+                                                      </StackPanel>
+                                                      <StackPanel Margin="0,8,0,0">
+                                                         <StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding Type}" Value="program.run"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></StackPanel.Style>
+                                                         <TextBlock FontSize="13" FontWeight="SemiBold" Text="{DynamicResource Advanced.ProgramWindow}" />
+                                                          <Border Style="{StaticResource SettingsRowBorderStyle}" Margin="0,5,0,0"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="250"/></Grid.ColumnDefinitions><TextBlock VerticalAlignment="Center" Text="{DynamicResource Advanced.WindowBehavior}" ToolTip="{DynamicResource Advanced.WindowBehavior}"/><ComboBox Grid.Column="1" ItemsSource="{Binding AvailableWindowBehaviors}" DisplayMemberPath="DisplayName" SelectedValuePath="Value" SelectedValue="{Binding WindowBehavior}" /></Grid></Border>
+                                                          <Border Margin="0,4,0,0" Padding="10,7" Background="{DynamicResource InputBackgroundBrush}" CornerRadius="6"><Border.Style><Style TargetType="Border"><Setter Property="BorderThickness" Value="0"/><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding IsWindowWaitEnabled}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Border.Style><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="250"/></Grid.ColumnDefinitions><TextBlock VerticalAlignment="Center" Text="{DynamicResource Advanced.WindowWait}"/><TextBox Grid.Column="1" Text="{Binding WindowWaitSeconds}" /></Grid></Border>
+                                                     </StackPanel>
+                                                     <StackPanel Margin="0,8,0,0"><StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding Type}" Value="program.run"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></StackPanel.Style>
+                                                         <TextBlock FontSize="13" FontWeight="SemiBold" Text="{DynamicResource Advanced.RetryAndErrors}" />
+                                                          <Border Style="{StaticResource SettingsRowBorderStyle}" Margin="0,5,0,0"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="250"/></Grid.ColumnDefinitions><TextBlock VerticalAlignment="Center" Text="{DynamicResource Advanced.RetryEnabled}" ToolTip="{DynamicResource Advanced.RetryEnabled}"/><CheckBox Grid.Column="1" HorizontalAlignment="Center" VerticalAlignment="Center" IsChecked="{Binding RetryOnFailure}" /></Grid></Border>
+                                                          <Border Margin="0,4,0,0" Padding="10,7" Background="{DynamicResource InputBackgroundBrush}" CornerRadius="6"><Border.Style><Style TargetType="Border"><Setter Property="BorderThickness" Value="0"/><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding RetryOnFailure}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Border.Style><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="250"/></Grid.ColumnDefinitions><TextBlock VerticalAlignment="Center" Text="{DynamicResource Advanced.MaximumAttempts}"/><TextBox Grid.Column="1" Text="{Binding MaximumAttempts}" /></Grid></Border>
+                                                          <Border Margin="0,4,0,0" Padding="10,7" Background="{DynamicResource InputBackgroundBrush}" CornerRadius="6"><Border.Style><Style TargetType="Border"><Setter Property="BorderThickness" Value="0"/><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding RetryOnFailure}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Border.Style><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="250"/></Grid.ColumnDefinitions><TextBlock VerticalAlignment="Center" Text="{DynamicResource Advanced.RetryDelay}"/><TextBox Grid.Column="1" Text="{Binding RetryDelaySeconds}" /></Grid></Border>
+                                                          <Border Style="{StaticResource SettingsRowBorderStyle}" Margin="0,4,0,0"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="250"/></Grid.ColumnDefinitions><TextBlock VerticalAlignment="Center" Text="{DynamicResource ActionEditor.OnFailure}" ToolTip="{DynamicResource ActionEditor.OnFailure}"/><ComboBox Grid.Column="1" ItemsSource="{Binding AvailableFailurePolicies}" DisplayMemberPath="DisplayName" SelectedValue="{Binding FailurePolicyId, Mode=TwoWay}" SelectedValuePath="Value" /></Grid></Border>
+                                                     </StackPanel>
+                                                     <StackPanel Margin="0,8,0,0"><StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding Type}" Value="program.run"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></StackPanel.Style>
+                                                         <TextBlock FontSize="13" FontWeight="SemiBold" Text="{DynamicResource Advanced.Restoring}" ToolTip="{DynamicResource ActionEditor.RestoreBehavior}" />
+                                                          <Border Style="{StaticResource SettingsRowBorderStyle}" Margin="0,5,0,0"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="250"/></Grid.ColumnDefinitions><TextBlock VerticalAlignment="Center" Text="{DynamicResource ActionEditor.RestoreBehavior}"/><ComboBox Grid.Column="1" ItemsSource="{Binding AvailableRestoreBehaviors}" DisplayMemberPath="DisplayName" SelectedValue="{Binding RestoreBehaviorId, Mode=TwoWay}" SelectedValuePath="Value" /></Grid></Border>
+                                                     </StackPanel>
+                                                     <StackPanel Margin="0,11,0,0">
                                                         <StackPanel.Style>
                                                             <Style TargetType="StackPanel">
                                                                 <Setter Property="Visibility" Value="Collapsed" />
                                                                 <Style.Triggers>
                                                                     <DataTrigger Binding="{Binding SupportsRestore}" Value="True">
                                                                         <Setter Property="Visibility" Value="Visible" />
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding Type}" Value="program.run">
+                                                                        <Setter Property="Visibility" Value="Collapsed" />
                                                                     </DataTrigger>
                                                                 </Style.Triggers>
                                                             </Style>
@@ -764,10 +802,10 @@
                                                             <CheckBox Margin="0,7,0,0" IsChecked="{Binding RestoreScriptRunAsAdministrator}" Content="{DynamicResource ActionEditor.RunAsAdministrator}" />
                                                             <TextBlock Margin="0,11,0,6" Style="{StaticResource EyebrowText}" Text="{DynamicResource ActionEditor.Timeout}" />
                                                             <TextBox Text="{Binding RestoreScriptTimeoutSeconds, UpdateSourceTrigger=PropertyChanged}" />
-                                                        </StackPanel>
-                                                    </StackPanel>
-                                                </StackPanel>
-                                            </Border>
+                                                     </StackPanel>
+                                                     </StackPanel>
+                                                 </StackPanel>
+                                             </Border>
                                             </StackPanel>
                                         </Border>
                                     </StackPanel>

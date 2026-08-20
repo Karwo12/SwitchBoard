@@ -14,6 +14,7 @@
         <GradientStop Offset="1" Color="#F0212B39" />
     </LinearGradientBrush>
     <SolidColorBrush x:Key="InputBackgroundBrush" Color="#E0121822" />
+    <SolidColorBrush x:Key="SettingsRowBackgroundBrush" Color="#FF263646" />
     <SolidColorBrush x:Key="PopupBackgroundBrush" Color="#FF18212E" />
     <SolidColorBrush x:Key="BorderBrush" Color="#365F7694" />
     <SolidColorBrush x:Key="BorderHighlightBrush" Color="#607B98BC" />

@@ -5,6 +5,7 @@ public static class ActionParameterNames
     public const string Target = "target";
     public const string Arguments = "arguments";
     public const string WorkingDirectory = "workingDirectory";
+    public const string UseCustomWorkingDirectory = "useCustomWorkingDirectory";
     public const string StartOnlyIfNotAlreadyRunning = "startOnlyIfNotAlreadyRunning";
     public const string ProcessName = "processName";
     public const string ExecutablePath = "executablePath";

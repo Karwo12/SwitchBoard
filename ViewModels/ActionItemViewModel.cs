@@ -21,6 +21,7 @@ public sealed class ActionItemViewModel : ObservableObject
     private string _target;
     private string _arguments;
     private string _workingDirectory;
+    private bool _useCustomWorkingDirectory;
     private bool _startOnlyIfNotAlreadyRunning;
     private string _processName;
     private string _executablePath;
@@ -112,6 +113,9 @@ public sealed class ActionItemViewModel : ObservableObject
         _target = ReadString(ActionParameterNames.Target);
         _arguments = ReadString(ActionParameterNames.Arguments);
         _workingDirectory = ReadString(ActionParameterNames.WorkingDirectory);
+        // Older actions had no explicit switch; a stored directory means that it was intentional.
+        _useCustomWorkingDirectory = ReadBoolean(ActionParameterNames.UseCustomWorkingDirectory,
+            !string.IsNullOrWhiteSpace(_workingDirectory));
         _startOnlyIfNotAlreadyRunning = ReadBoolean(ActionParameterNames.StartOnlyIfNotAlreadyRunning, true);
         _processName = ReadString(ActionParameterNames.ProcessName);
         _executablePath = ReadString(ActionParameterNames.ExecutablePath);
@@ -329,7 +333,7 @@ public sealed class ActionItemViewModel : ObservableObject
 
     public string Summary => Type switch
     {
-        ActionTypeIds.ProgramRun => _localizationService.Format("ActionSummary.RunProgram", GetFileSummary(Target)),
+        ActionTypeIds.ProgramRun => GetProgramSummary(),
         ActionTypeIds.ProcessSetState => _localizationService.Format(
             string.Equals(DesiredProcessState, ProcessDesiredStateIds.Unchanged, StringComparison.OrdinalIgnoreCase)
                 ? "ActionSummary.ProcessUnchanged"
@@ -373,6 +377,7 @@ public sealed class ActionItemViewModel : ObservableObject
         {
             if (!SetProperty(ref _restoreBehaviorId, value)) return;
             OnPropertyChanged(nameof(IsRestoreScriptEnabled));
+            OnPropertyChanged(nameof(Summary));
             NotifyValidation();
         }
     }
@@ -386,7 +391,15 @@ public sealed class ActionItemViewModel : ObservableObject
     };
     public bool IsRestoreScriptEnabled => Type == ActionTypeIds.ScriptRun && RestoreBehaviorId == "restoreScript";
     public string Arguments { get => _arguments; set => SetProperty(ref _arguments, value); }
-    public string WorkingDirectory { get => _workingDirectory; set => SetProperty(ref _workingDirectory, value); }
+    public string WorkingDirectory { get => _workingDirectory; set { if (SetProperty(ref _workingDirectory, value)) OnPropertyChanged(nameof(Summary)); } }
+    public bool UseCustomWorkingDirectory
+    {
+        get => _useCustomWorkingDirectory;
+        set
+        {
+            if (SetProperty(ref _useCustomWorkingDirectory, value)) OnPropertyChanged(nameof(Summary));
+        }
+    }
     public bool StartOnlyIfNotAlreadyRunning { get => _startOnlyIfNotAlreadyRunning; set => SetProperty(ref _startOnlyIfNotAlreadyRunning, value); }
     public bool WaitForScriptExit { get => _waitForScriptExit; set => SetProperty(ref _waitForScriptExit, value); }
     public bool RunAsAdministrator { get => _runAsAdministrator; set => SetProperty(ref _runAsAdministrator, value); }
@@ -398,11 +411,21 @@ public sealed class ActionItemViewModel : ObservableObject
     public bool RestoreScriptRunAsAdministrator { get => _restoreScriptRunAsAdministrator; set => SetProperty(ref _restoreScriptRunAsAdministrator, value); }
     public int RestoreScriptTimeoutSeconds { get => _restoreScriptTimeoutSeconds; set => SetProperty(ref _restoreScriptTimeoutSeconds, Math.Clamp(value, 0, 86400)); }
     public int TimeoutSeconds { get => _timeoutSeconds; set => SetProperty(ref _timeoutSeconds, Math.Clamp(value, 0, 86400)); }
-    public bool RetryOnFailure { get => _retryOnFailure; set => SetProperty(ref _retryOnFailure, value); }
+    public bool RetryOnFailure { get => _retryOnFailure; set { if (SetProperty(ref _retryOnFailure, value)) OnPropertyChanged(nameof(Summary)); } }
     public int MaximumAttempts { get => _maximumAttempts; set => SetProperty(ref _maximumAttempts, Math.Clamp(value, 1, 10)); }
     public int RetryDelaySeconds { get => _retryDelaySeconds; set => SetProperty(ref _retryDelaySeconds, Math.Clamp(value, 0, 3600)); }
-    public string InstanceBehavior { get => _instanceBehavior; set => SetProperty(ref _instanceBehavior, value); }
-    public string WindowBehavior { get => _windowBehavior; set => SetProperty(ref _windowBehavior, value); }
+    public string InstanceBehavior { get => _instanceBehavior; set { if (SetProperty(ref _instanceBehavior, value)) OnPropertyChanged(nameof(Summary)); } }
+    public string WindowBehavior
+    {
+        get => _windowBehavior;
+        set
+        {
+            if (!SetProperty(ref _windowBehavior, value)) return;
+            OnPropertyChanged(nameof(IsWindowWaitEnabled));
+            OnPropertyChanged(nameof(Summary));
+        }
+    }
+    public bool IsWindowWaitEnabled => !string.Equals(WindowBehavior, WindowBehaviorIds.None, StringComparison.OrdinalIgnoreCase);
     public int WindowWaitSeconds { get => _windowWaitSeconds; set => SetProperty(ref _windowWaitSeconds, Math.Clamp(value, 1, 300)); }
     public bool ChangeAffinity { get => _changeAffinity; set { if (SetProperty(ref _changeAffinity, value)) NotifyValidation(); } }
     public bool ChangePriority { get => _changePriority; set { if (SetProperty(ref _changePriority, value)) NotifyValidation(); } }
@@ -816,6 +839,7 @@ public sealed class ActionItemViewModel : ObservableObject
             parameters[ActionParameterNames.WindowBehavior] = WindowBehavior;
             parameters[ActionParameterNames.WindowWaitSeconds] = WindowWaitSeconds;
             parameters[ActionParameterNames.RunAsAdministrator] = RunAsAdministrator;
+            parameters[ActionParameterNames.UseCustomWorkingDirectory] = UseCustomWorkingDirectory;
         }
 
         return new ActionDefinition
@@ -937,6 +961,29 @@ public sealed class ActionItemViewModel : ObservableObject
         if (string.IsNullOrWhiteSpace(value)) return _localizationService.GetString("ActionSummary.NotConfigured");
         if (Uri.TryCreate(value, UriKind.Absolute, out var uri) && !uri.IsFile) return value;
         return Path.GetFileName(value.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+    }
+
+    private string GetProgramSummary()
+    {
+        var summary = _localizationService.Format("ActionSummary.RunProgram", GetFileSummary(Target));
+        var options = new List<string>();
+
+        if (InstanceBehavior == InstanceBehaviorIds.StartAnother)
+            options.Add(_localizationService.GetString("ActionSummary.ProgramStartsAnother"));
+        else if (InstanceBehavior == InstanceBehaviorIds.DoNotStartAgain)
+            options.Add(_localizationService.GetString("ActionSummary.ProgramDoesNotDuplicate"));
+        if (!string.Equals(WindowBehavior, WindowBehaviorIds.None, StringComparison.OrdinalIgnoreCase))
+            options.Add(_localizationService.Format("ActionSummary.ProgramWindow",
+                AvailableWindowBehaviors.FirstOrDefault(option => option.Value == WindowBehavior)?.DisplayName ?? WindowBehavior));
+        if (RetryOnFailure)
+            options.Add(_localizationService.GetString("ActionSummary.ProgramRetry"));
+        if (UseCustomWorkingDirectory)
+            options.Add(_localizationService.GetString("ActionSummary.ProgramCustomDirectory"));
+        if (!string.Equals(RestoreBehaviorId, "none", StringComparison.OrdinalIgnoreCase))
+            options.Add(_localizationService.Format("ActionSummary.ProgramRestore",
+                AvailableRestoreBehaviors.FirstOrDefault(option => option.Value == RestoreBehaviorId)?.DisplayName ?? RestoreBehaviorId));
+
+        return options.Count == 0 ? summary : $"{summary} · {string.Join(" · ", options)}";
     }
 
     private string GetProcessSummaryTarget() => !string.IsNullOrWhiteSpace(ExecutablePath)

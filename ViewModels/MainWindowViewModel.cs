@@ -85,6 +85,10 @@ public sealed class MainWindowViewModel : ObservableObject
     private bool _isStatusRefreshing;
     private string _statusRefreshText = string.Empty;
     private DispatcherTimer? _statusMonitorTimer;
+    private bool _isRestoringSelection;
+    private CancellationTokenSource? _settingsSaveDebounce;
+    private Task? _settingsSaveTask;
+    private readonly object _settingsSaveSync = new();
 
     public MainWindowViewModel(
         IProfileCatalogService catalogService,
@@ -120,6 +124,8 @@ public sealed class MainWindowViewModel : ObservableObject
         _statusMonitoring = statusMonitoring;
         _themeExchangeService = themeExchangeService;
         _activityPanelHeightRatio = Math.Clamp(userSettings.ActivityPanelHeightRatio, 0.2, 0.8);
+        _isActivityExpanded = userSettings.IsActivityExpanded;
+        _activityTabIndex = Math.Clamp(userSettings.LastActivityTabIndex, 0, 2);
         _statusMessage = localizationService.GetString("Status.Ready");
         _executionStatusText = localizationService.GetString(_executionStatusResourceKey);
 
@@ -176,6 +182,7 @@ public sealed class MainWindowViewModel : ObservableObject
         DeleteCategoryCommand = new RelayCommand<CategoryItemViewModel>(DeleteCategory, category => category is not null);
         AddProfileCommand = new RelayCommand(AddProfile, () => SelectedCategory is not null);
         DeleteProfileCommand = new RelayCommand<ProfileItemViewModel>(DeleteProfile, profile => profile is not null);
+        DuplicateProfileCommand = new RelayCommand<ProfileItemViewModel>(DuplicateProfile, profile => profile is not null && !HasCriticalOperation);
         ExportProfileCommand = new AsyncRelayCommand<ProfileItemViewModel>(ExportProfileAsync, profile => profile is not null);
         ImportProfileCommand = new AsyncRelayCommand(ImportProfileAsync, () => SelectedCategory is not null && !HasCriticalOperation);
         AddActionCommand = new RelayCommand(AddAction, () => SelectedProfile is not null && SelectedActionType is not null && !HasCriticalOperation);
@@ -203,6 +210,9 @@ public sealed class MainWindowViewModel : ObservableObject
         RenameThemeCommand = new AsyncRelayCommand<string>(RenameThemeAsync, id => FindCustomTheme(id ?? string.Empty) is not null);
         DeleteThemeCommand = new AsyncRelayCommand<string>(DeleteThemeAsync, id => FindCustomTheme(id ?? string.Empty) is not null);
         BrowseProgramCommand = new RelayCommand<ActionItemViewModel>(BrowseProgram, action => action?.Type == ActionTypeIds.ProgramRun);
+        SelectArgumentsCommand = new RelayCommand<ActionItemViewModel>(SelectArguments, action => action?.Type == ActionTypeIds.ProgramRun);
+        BrowseWorkingDirectoryCommand = new RelayCommand<ActionItemViewModel>(BrowseWorkingDirectory,
+            action => action?.Type == ActionTypeIds.ProgramRun && action.UseCustomWorkingDirectory);
         FindProgramCommand = new RelayCommand<ActionItemViewModel>(FindProgram, action => action?.Type == ActionTypeIds.ProgramRun);
         SelectProcessCommand = new RelayCommand<ActionItemViewModel>(SelectProcess, action => action?.Type is
             ActionTypeIds.ProcessSetState or ActionTypeIds.ProcessConfigure or ActionTypeIds.WaitProcessStart or
@@ -225,6 +235,7 @@ public sealed class MainWindowViewModel : ObservableObject
         SelectDeviceCommand = new RelayCommand<ActionItemViewModel>(SelectDevice,
             action => action?.Type == ActionTypeIds.DeviceSetState);
         ToggleActionExpandedCommand = new RelayCommand<ActionItemViewModel>(ToggleActionExpanded, action => action is not null);
+        NavigateToValidationErrorCommand = new RelayCommand(NavigateToValidationError, () => FindFirstValidationError() is not null);
         ToggleAdvancedOptionsCommand = new RelayCommand<ActionItemViewModel>(action =>
         {
             if (action is not null) action.IsAdvancedOptionsExpanded = !action.IsAdvancedOptionsExpanded;
@@ -237,6 +248,7 @@ public sealed class MainWindowViewModel : ObservableObject
         CancelProfileCommand = new RelayCommand(CancelProfile, () => IsProfileRunning || IsRestoreRunning);
         SaveCommand = new AsyncRelayCommand(SaveAsync, () => !IsProfileRunning && !IsRestoreRunning);
         UndoCommand = new RelayCommand<string>(Undo, _ => _undoService.CanUndo && !HasCriticalOperation);
+        RedoCommand = new RelayCommand<string>(Redo, _ => _undoService.CanRedo && !HasCriticalOperation);
         ToggleActivityCommand = new RelayCommand(() => IsActivityExpanded = !IsActivityExpanded);
         ClearActivityCommand = new RelayCommand(ClearActivity);
         SelectActivityTabCommand = new RelayCommand<string>(index =>
@@ -246,6 +258,8 @@ public sealed class MainWindowViewModel : ObservableObject
         });
 
         ActivityEntries = new ObservableCollection<ActivityEntry>(activityService?.Entries ?? []);
+        ActivityDisplayEntries = new ObservableCollection<ActivityEntryViewModel>();
+        RefreshActivityDisplayEntries();
         HistoryEntries = [];
         SystemChangeEntries = [];
         if (activityService is not null)
@@ -257,7 +271,10 @@ public sealed class MainWindowViewModel : ObservableObject
 
         SubscribeToItems();
         _undoBaseline = BuildCatalogSnapshot();
-        SelectedCategory = Categories.FirstOrDefault();
+        _isRestoringSelection = true;
+        SelectedCategory = Categories.FirstOrDefault(item => item.Id == userSettings.LastSelectedCategoryId) ?? Categories.FirstOrDefault();
+        SelectedProfile = Profiles.FirstOrDefault(item => item.Id == userSettings.LastSelectedProfileId) ?? Profiles.FirstOrDefault();
+        _isRestoringSelection = false;
         SetClean(_localizationService.GetString("Status.CatalogLoaded"));
         _ = HydrateDisplayActionsAsync();
         if (_statusMonitoring is not null)
@@ -291,6 +308,7 @@ public sealed class MainWindowViewModel : ObservableObject
 
     public ObservableCollection<LanguageOptionViewModel> LanguageOptions { get; }
     public ObservableCollection<ActivityEntry> ActivityEntries { get; }
+    public ObservableCollection<ActivityEntryViewModel> ActivityDisplayEntries { get; }
     public ObservableCollection<ActivityEntry> HistoryEntries { get; }
     public ObservableCollection<SystemChangeItemViewModel> SystemChangeEntries { get; }
     public IReadOnlyList<ProfileItemViewModel> AllProfiles => _allProfiles;
@@ -304,6 +322,8 @@ public sealed class MainWindowViewModel : ObservableObject
             OnPropertyChanged(nameof(TopContentRowHeight));
             OnPropertyChanged(nameof(ActivityContentRowHeight));
             if (value) ActivityAlertCount = 0;
+            _userSettings.IsActivityExpanded = value;
+            ScheduleSettingsSave();
         }
     }
 
@@ -334,7 +354,7 @@ public sealed class MainWindowViewModel : ObservableObject
             if (_userSettings.ShowCurrentActionState == value) return;
             _userSettings.ShowCurrentActionState = value;
             OnPropertyChanged();
-            _ = _settingsRepository.SaveAsync(_userSettings);
+            ScheduleSettingsSave();
         }
     }
     public int WindowWidth
@@ -346,7 +366,7 @@ public sealed class MainWindowViewModel : ObservableObject
             if (_userSettings.WindowWidth == normalized) return;
             _userSettings.WindowWidth = normalized;
             OnPropertyChanged();
-            _ = _settingsRepository.SaveAsync(_userSettings);
+            ScheduleSettingsSave();
         }
     }
     public int WindowHeight
@@ -358,7 +378,7 @@ public sealed class MainWindowViewModel : ObservableObject
             if (_userSettings.WindowHeight == normalized) return;
             _userSettings.WindowHeight = normalized;
             OnPropertyChanged();
-            _ = _settingsRepository.SaveAsync(_userSettings);
+            ScheduleSettingsSave();
         }
     }
     public bool IsStatusRefreshing
@@ -380,7 +400,13 @@ public sealed class MainWindowViewModel : ObservableObject
     public int ActivityTabIndex
     {
         get => _activityTabIndex;
-        set => SetProperty(ref _activityTabIndex, value);
+        set
+        {
+            var normalized = Math.Clamp(value, 0, 2);
+            if (!SetProperty(ref _activityTabIndex, normalized)) return;
+            _userSettings.LastActivityTabIndex = normalized;
+            ScheduleSettingsSave();
+        }
     }
     public int UnresolvedSystemChangeCount => SystemChangeEntries.Count(item => item.IsUnresolved);
     public string SystemChangeTabText => UnresolvedSystemChangeCount > 0
@@ -389,6 +415,22 @@ public sealed class MainWindowViewModel : ObservableObject
     public string SystemChangeNoticeText => UnresolvedSystemChangeCount > 0
         ? _localizationService.Format("Activity.UnrestoredChanges", UnresolvedSystemChangeCount)
         : string.Empty;
+
+    public string RunAvailabilityMessage
+    {
+        get
+        {
+            if (SelectedProfile is null) return string.Empty;
+            var invalid = SelectedProfile.Actions.Count(action => action.IsEnabled && !action.IsValid);
+            if (invalid > 0) return _localizationService.Format("Validation.RunBlocked", invalid);
+            if (!ProfileReferencesAreValid(SelectedProfile.Id))
+                return _localizationService.GetString("Validation.ProfileReferenceCycle");
+            if (IsProfileRunning || IsRestoreRunning || IsSaving)
+                return _localizationService.GetString("Validation.RunBusy");
+            return string.Empty;
+        }
+    }
+    public bool HasRunValidationIssue => !string.IsNullOrWhiteSpace(RunAvailabilityMessage);
 
     public CategoryItemViewModel? SelectedCategory
     {
@@ -401,6 +443,12 @@ public sealed class MainWindowViewModel : ObservableObject
             }
 
             RefreshProfiles();
+            if (!_isRestoringSelection)
+            {
+                _userSettings.LastSelectedCategoryId = value?.Id;
+                _userSettings.LastSelectedProfileId = Profiles.FirstOrDefault()?.Id;
+                ScheduleSettingsSave();
+            }
             AddProfileCommand.NotifyCanExecuteChanged();
             ImportProfileCommand.NotifyCanExecuteChanged();
         }
@@ -414,8 +462,16 @@ public sealed class MainWindowViewModel : ObservableObject
             if (SetProperty(ref _selectedProfile, value))
             {
                 SelectedAction = value?.Actions.FirstOrDefault();
+                if (!_isRestoringSelection)
+                {
+                    _userSettings.LastSelectedProfileId = value?.Id;
+                    ScheduleSettingsSave();
+                }
                 AddActionCommand.NotifyCanExecuteChanged();
                 RunProfileCommand.NotifyCanExecuteChanged();
+                OnPropertyChanged(nameof(RunAvailabilityMessage));
+                OnPropertyChanged(nameof(HasRunValidationIssue));
+                NavigateToValidationErrorCommand.NotifyCanExecuteChanged();
                 _ = RefreshPendingRestoreAsync();
                 _ = RefreshCurrentStatesAsync();
                 NotifyActionCommandStates();
@@ -499,6 +555,7 @@ public sealed class MainWindowViewModel : ObservableObject
                 UndoCommand.NotifyCanExecuteChanged();
                 TestActionCommand.NotifyCanExecuteChanged();
                 OnPropertyChanged(nameof(IsCancellationAvailable));
+                OnPropertyChanged(nameof(RunAvailabilityMessage));
             }
         }
     }
@@ -563,6 +620,8 @@ public sealed class MainWindowViewModel : ObservableObject
             AddActionCommand.NotifyCanExecuteChanged();
             SaveCommand.NotifyCanExecuteChanged();
             OnPropertyChanged(nameof(IsCancellationAvailable));
+            OnPropertyChanged(nameof(RunAvailabilityMessage));
+            OnPropertyChanged(nameof(HasRunValidationIssue));
         }
     }
 
@@ -619,6 +678,7 @@ public sealed class MainWindowViewModel : ObservableObject
             AddActionCommand.NotifyCanExecuteChanged();
             UndoCommand.NotifyCanExecuteChanged();
             TestActionCommand.NotifyCanExecuteChanged();
+            OnPropertyChanged(nameof(RunAvailabilityMessage));
         }
     }
     public bool HasCriticalOperation => IsProfileRunning || IsRestoreRunning || IsSaving;
@@ -630,6 +690,7 @@ public sealed class MainWindowViewModel : ObservableObject
     public RelayCommand AddProfileCommand { get; }
 
     public RelayCommand<ProfileItemViewModel> DeleteProfileCommand { get; }
+    public RelayCommand<ProfileItemViewModel> DuplicateProfileCommand { get; }
     public AsyncRelayCommand<ProfileItemViewModel> ExportProfileCommand { get; }
     public AsyncRelayCommand ImportProfileCommand { get; }
 
@@ -669,6 +730,8 @@ public sealed class MainWindowViewModel : ObservableObject
     public AsyncRelayCommand<string> DeleteThemeCommand { get; }
 
     public RelayCommand<ActionItemViewModel> BrowseProgramCommand { get; }
+    public RelayCommand<ActionItemViewModel> SelectArgumentsCommand { get; }
+    public RelayCommand<ActionItemViewModel> BrowseWorkingDirectoryCommand { get; }
 
     public RelayCommand<ActionItemViewModel> FindProgramCommand { get; }
 
@@ -692,6 +755,7 @@ public sealed class MainWindowViewModel : ObservableObject
     public RelayCommand<ActionItemViewModel> ToggleAdvancedOptionsCommand { get; }
 
     public RelayCommand<ActionItemViewModel> ToggleActionExpandedCommand { get; }
+    public RelayCommand NavigateToValidationErrorCommand { get; }
 
     public AsyncRelayCommand RunProfileCommand { get; }
     public AsyncRelayCommand RestoreProfileCommand { get; }
@@ -703,12 +767,53 @@ public sealed class MainWindowViewModel : ObservableObject
 
     public AsyncRelayCommand SaveCommand { get; }
     public RelayCommand<string> UndoCommand { get; }
+    public RelayCommand<string> RedoCommand { get; }
     public RelayCommand ToggleActivityCommand { get; }
     public RelayCommand ClearActivityCommand { get; }
     public RelayCommand<string> SelectActivityTabCommand { get; }
 
     public ProfileDefinition? ResolveProfileDefinition(Guid id) =>
         _allProfiles.FirstOrDefault(item => item.Id == id)?.ToModel();
+
+    public string GetLocalizedText(string key) => _localizationService.GetString(key);
+
+    public bool NavigateToProfileAction(Guid? profileId, Guid? actionId)
+    {
+        if (profileId is not Guid id) return false;
+        var profile = _allProfiles.FirstOrDefault(item => item.Id == id);
+        if (profile is null) return false;
+        var category = Categories.FirstOrDefault(item => item.Id == profile.CategoryId);
+        if (category is null) return false;
+        SelectedCategory = category;
+        SelectedProfile = Profiles.FirstOrDefault(item => item.Id == profile.Id);
+        if (actionId is not Guid targetActionId) return true;
+        var action = FindAction(profile.Actions, targetActionId);
+        if (action is null) return false;
+        SelectedAction = action;
+        action.IsExpanded = true;
+        return true;
+    }
+
+    private static ActionItemViewModel? FindAction(IEnumerable<ActionItemViewModel> actions, Guid id)
+    {
+        foreach (var action in actions)
+        {
+            if (action.Id == id) return action;
+            if (FindAction(action.ThenActions.Concat(action.ElseActions), id) is { } nested) return nested;
+        }
+        return null;
+    }
+
+    private ActionItemViewModel? FindFirstValidationError() =>
+        SelectedProfile?.Actions.FirstOrDefault(action => action.IsEnabled && !action.IsValid);
+
+    private void NavigateToValidationError()
+    {
+        var action = FindFirstValidationError();
+        if (action is null) return;
+        SelectedAction = action;
+        action.IsExpanded = true;
+    }
 
     private void ActivityServiceOnEntryAdded(object? sender, ActivityEntry entry)
     {
@@ -719,7 +824,9 @@ public sealed class MainWindowViewModel : ObservableObject
             return;
         }
         ActivityEntries.Add(entry);
+        ActivityDisplayEntries.Add(CreateActivityDisplayEntry(entry));
         while (ActivityEntries.Count > 300) ActivityEntries.RemoveAt(0);
+        while (ActivityDisplayEntries.Count > 300) ActivityDisplayEntries.RemoveAt(0);
         if (!IsActivityExpanded && entry.Level is ActivityLevel.Warning or ActivityLevel.Error)
             ActivityAlertCount++;
     }
@@ -728,6 +835,7 @@ public sealed class MainWindowViewModel : ObservableObject
     {
         _activityService?.Clear();
         ActivityEntries.Clear();
+        ActivityDisplayEntries.Clear();
         ActivityAlertCount = 0;
     }
 
@@ -752,6 +860,21 @@ public sealed class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(UnresolvedSystemChangeCount));
         OnPropertyChanged(nameof(SystemChangeTabText));
         OnPropertyChanged(nameof(SystemChangeNoticeText));
+    }
+
+    private void RefreshActivityDisplayEntries()
+    {
+        foreach (var entry in ActivityEntries)
+            ActivityDisplayEntries.Add(CreateActivityDisplayEntry(entry));
+    }
+
+    private ActivityEntryViewModel CreateActivityDisplayEntry(ActivityEntry entry)
+    {
+        var profile = entry.ProfileId is Guid profileId ? _allProfiles.FirstOrDefault(item => item.Id == profileId) : null;
+        var action = profile is not null && entry.ActionId is Guid actionId
+            ? FindAction(profile.Actions, actionId)
+            : null;
+        return new ActivityEntryViewModel(entry, profile?.Name, action?.DisplayName ?? action?.Name);
     }
 
     private void AddCategory()
@@ -897,6 +1020,27 @@ public sealed class MainWindowViewModel : ObservableObject
             ? null
             : Profiles[Math.Min(oldIndex, Profiles.Count - 1)];
         MarkDirty(_localizationService.GetString("Status.ProfileDeleted"));
+    }
+
+    private void DuplicateProfile(ProfileItemViewModel? source)
+    {
+        if (source is null) return;
+        var siblings = _allProfiles.Where(item => item.CategoryId == source.CategoryId)
+            .OrderBy(item => item.SortOrder).ToList();
+        var clone = _profileExchangeService.CloneForDuplicate(source.ToModel());
+        clone.CategoryId = source.CategoryId;
+        clone.Name = CreateUniqueName(source.Name, siblings.Select(item => item.Name));
+        clone.SortOrder = source.SortOrder + 1;
+        foreach (var sibling in siblings.Where(item => item.SortOrder > source.SortOrder)) sibling.SortOrder++;
+
+        RecordStructuralUndo("duplicate-profile");
+        var viewModel = new ProfileItemViewModel(clone, _localizationService);
+        Subscribe(viewModel);
+        _allProfiles.Add(viewModel);
+        OnPropertyChanged(nameof(AllProfiles));
+        RefreshProfiles();
+        SelectedProfile = Profiles.FirstOrDefault(item => item.Id == viewModel.Id);
+        MarkDirty(_localizationService.GetString("Status.ProfileDuplicated"));
     }
 
     private void AddAction()
@@ -1252,7 +1396,79 @@ public sealed class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(TopContentRowHeight));
             OnPropertyChanged(nameof(ActivityContentRowHeight));
             OnPropertyChanged(nameof(ActivityMinimumHeight));
-        _ = _settingsRepository.SaveAsync(_userSettings);
+        ScheduleSettingsSave();
+    }
+
+    private void ScheduleSettingsSave()
+    {
+        lock (_settingsSaveSync)
+        {
+            _settingsSaveDebounce?.Cancel();
+            var cancellation = new CancellationTokenSource();
+            _settingsSaveDebounce = cancellation;
+            _settingsSaveTask = SaveSettingsAfterDelayAsync(cancellation);
+        }
+    }
+
+    private async Task SaveSettingsAfterDelayAsync(CancellationTokenSource cancellation)
+    {
+        try
+        {
+            await Task.Delay(400, cancellation.Token);
+            await _settingsRepository.SaveAsync(_userSettings, cancellation.Token);
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception exception)
+        {
+            StatusMessage = _localizationService.Format("Status.SaveFailed", exception.Message);
+        }
+    }
+
+    public async Task FlushPendingSettingsSaveAsync()
+    {
+        Task? pending;
+        lock (_settingsSaveSync)
+        {
+            _settingsSaveDebounce?.Cancel();
+            pending = _settingsSaveTask;
+        }
+        if (pending is not null)
+        {
+            try { await pending; } catch (OperationCanceledException) { }
+        }
+        await _settingsRepository.SaveAsync(_userSettings);
+    }
+
+    public double? WindowX => _userSettings.WindowX;
+    public double? WindowY => _userSettings.WindowY;
+    public string SavedWindowState => _userSettings.WindowState;
+
+    public void CaptureWindowGeometry(Window window)
+    {
+        if (window.WindowState == WindowState.Maximized && window.RestoreBounds.Width > 0)
+        {
+            var bounds = window.RestoreBounds;
+            _userSettings.WindowWidth = Math.Clamp((int)Math.Round(bounds.Width), 900, 4096);
+            _userSettings.WindowHeight = Math.Clamp((int)Math.Round(bounds.Height), 500, 4096);
+            _userSettings.WindowX = bounds.Left;
+            _userSettings.WindowY = bounds.Top;
+            _userSettings.WindowState = "Maximized";
+        }
+        else if (window.WindowState == WindowState.Normal)
+        {
+            _userSettings.WindowWidth = Math.Clamp((int)Math.Round(window.Width), 900, 4096);
+            _userSettings.WindowHeight = Math.Clamp((int)Math.Round(window.Height), 500, 4096);
+            _userSettings.WindowX = window.Left;
+            _userSettings.WindowY = window.Top;
+            _userSettings.WindowState = "Normal";
+        }
+        ScheduleSettingsSave();
+    }
+
+    public async Task<bool> SaveForShutdownAsync()
+    {
+        await SaveAsync();
+        return !HasUnsavedChanges;
     }
 
     public void ResetActivityPanelRatio() => UpdateActivityPanelRatio(0.5);
@@ -1594,6 +1810,24 @@ public sealed class MainWindowViewModel : ObservableObject
         }
     }
 
+    private void BrowseWorkingDirectory(ActionItemViewModel? action)
+    {
+        if (action is null || action.Type != ActionTypeIds.ProgramRun || !action.UseCustomWorkingDirectory) return;
+        var selected = _dialogService.SelectFolder(
+            _localizationService.GetString("Dialog.SelectWorkingDirectoryTitle"), action.WorkingDirectory);
+        if (selected is null) return;
+        RunGroupedConfigurationChange("select-working-directory", () => action.WorkingDirectory = selected);
+    }
+
+    private void SelectArguments(ActionItemViewModel? action)
+    {
+        if (action is null || action.Type != ActionTypeIds.ProgramRun) return;
+        var selected = _dialogService.SelectArguments(
+            _localizationService.GetString("Dialog.SelectArgumentsTitle"), action.Arguments);
+        if (selected is not null)
+            RunGroupedConfigurationChange("select-program-arguments", () => action.Arguments = selected);
+    }
+
     private void FindProgram(ActionItemViewModel? action)
     {
         if (action is null || action.Type != ActionTypeIds.ProgramRun)
@@ -1787,6 +2021,7 @@ public sealed class MainWindowViewModel : ObservableObject
         action.Target = target;
         action.TrySetSuggestedName(suggestedName);
         action.WorkingDirectory = workingDirectory;
+        action.UseCustomWorkingDirectory = !string.IsNullOrWhiteSpace(workingDirectory);
     }
 
     private static string GetFriendlyProgramName(string path)
@@ -2230,10 +2465,17 @@ public sealed class MainWindowViewModel : ObservableObject
         foreach (var profile in _allProfiles)
         {
             Subscribe(profile);
-            foreach (var action in profile.Actions)
-            {
-                Subscribe(action);
-            }
+            foreach (var action in EnumerateActions(profile.Actions)) Subscribe(action);
+        }
+    }
+
+    private static IEnumerable<ActionItemViewModel> EnumerateActions(IEnumerable<ActionItemViewModel> actions)
+    {
+        foreach (var action in actions)
+        {
+            yield return action;
+            foreach (var nested in EnumerateActions(action.ThenActions.Concat(action.ElseActions)))
+                yield return nested;
         }
     }
 
@@ -2252,6 +2494,13 @@ public sealed class MainWindowViewModel : ObservableObject
             nameof(ActionItemViewModel.SupportsRestore) or
             nameof(ActionItemViewModel.IsRestoreScriptEnabled))
         {
+            if (e.PropertyName is nameof(ActionItemViewModel.IsValid) or nameof(ActionItemViewModel.ValidationMessage))
+            {
+                OnPropertyChanged(nameof(RunAvailabilityMessage));
+                OnPropertyChanged(nameof(HasRunValidationIssue));
+                RunProfileCommand.NotifyCanExecuteChanged();
+                NavigateToValidationErrorCommand.NotifyCanExecuteChanged();
+            }
             return;
         }
         if (!_suppressUndoTracking)
@@ -2267,9 +2516,12 @@ public sealed class MainWindowViewModel : ObservableObject
             _undoService.Record(_undoBaseline, key, allowCoalescing: true);
             _undoBaseline = BuildCatalogSnapshot();
             UndoCommand.NotifyCanExecuteChanged();
+            RedoCommand.NotifyCanExecuteChanged();
         }
         HasUnsavedChanges = true;
         RunProfileCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(RunAvailabilityMessage));
+        NavigateToValidationErrorCommand.NotifyCanExecuteChanged();
     }
 
     private void MarkDirty(string message)
@@ -2285,6 +2537,7 @@ public sealed class MainWindowViewModel : ObservableObject
         _undoService.Record(_undoBaseline, $"{key}:{Guid.NewGuid():N}");
         _suppressUndoTracking = true;
         UndoCommand.NotifyCanExecuteChanged();
+        RedoCommand.NotifyCanExecuteChanged();
     }
 
     private void RunGroupedConfigurationChange(string key, Action change)
@@ -2306,7 +2559,7 @@ public sealed class MainWindowViewModel : ObservableObject
             if (DateTimeOffset.UtcNow - _lastUndoAt < TimeSpan.FromMilliseconds(300)) return;
             _lastUndoAt = DateTimeOffset.UtcNow;
         }
-        if (!_undoService.TryUndo(out var catalog) || catalog is null) return;
+        if (!_undoService.TryUndo(BuildCatalogSnapshot(), out var catalog) || catalog is null) return;
         var categoryId = SelectedCategory?.Id;
         var profileId = SelectedProfile?.Id;
         _suppressUndoTracking = true;
@@ -2314,7 +2567,7 @@ public sealed class MainWindowViewModel : ObservableObject
         foreach (var profile in _allProfiles)
         {
             profile.PropertyChanged -= ItemOnPropertyChanged;
-            foreach (var action in profile.Actions) action.PropertyChanged -= ItemOnPropertyChanged;
+            foreach (var action in EnumerateActions(profile.Actions)) action.PropertyChanged -= ItemOnPropertyChanged;
         }
         Categories.Clear();
         _allProfiles.Clear();
@@ -2331,6 +2584,43 @@ public sealed class MainWindowViewModel : ObservableObject
         HasUnsavedChanges = true;
         StatusMessage = _localizationService.GetString("Common.Undo");
         UndoCommand.NotifyCanExecuteChanged();
+        RedoCommand.NotifyCanExecuteChanged();
+        NotifyActionCommandStates();
+    }
+
+    private void Redo(string? source)
+    {
+        if (!_undoService.TryRedo(BuildCatalogSnapshot(), out var catalog) || catalog is null) return;
+        ApplyCatalogSnapshot(catalog, "Common.Redo");
+    }
+
+    private void ApplyCatalogSnapshot(SwitchBoardCatalog catalog, string statusKey)
+    {
+        var categoryId = SelectedCategory?.Id;
+        var profileId = SelectedProfile?.Id;
+        _suppressUndoTracking = true;
+        foreach (var category in Categories) category.PropertyChanged -= ItemOnPropertyChanged;
+        foreach (var profile in _allProfiles)
+        {
+            profile.PropertyChanged -= ItemOnPropertyChanged;
+            foreach (var action in EnumerateActions(profile.Actions)) action.PropertyChanged -= ItemOnPropertyChanged;
+        }
+        Categories.Clear();
+        _allProfiles.Clear();
+        foreach (var category in catalog.Categories.OrderBy(item => item.SortOrder))
+            Categories.Add(new CategoryItemViewModel(category));
+        foreach (var profile in catalog.Profiles.OrderBy(item => item.SortOrder))
+            _allProfiles.Add(new ProfileItemViewModel(profile, _localizationService));
+        OnPropertyChanged(nameof(AllProfiles));
+        SubscribeToItems();
+        SelectedCategory = Categories.FirstOrDefault(item => item.Id == categoryId) ?? Categories.FirstOrDefault();
+        SelectedProfile = Profiles.FirstOrDefault(item => item.Id == profileId) ?? Profiles.FirstOrDefault();
+        _suppressUndoTracking = false;
+        _undoBaseline = BuildCatalogSnapshot();
+        HasUnsavedChanges = true;
+        StatusMessage = _localizationService.GetString(statusKey);
+        UndoCommand.NotifyCanExecuteChanged();
+        RedoCommand.NotifyCanExecuteChanged();
         NotifyActionCommandStates();
     }
 

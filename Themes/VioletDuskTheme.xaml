@@ -7,6 +7,7 @@
     <SolidColorBrush x:Key="SurfaceBrush" Color="#ED27212E" />
     <SolidColorBrush x:Key="ElevatedSurfaceBrush" Color="#F2332A3A" />
     <SolidColorBrush x:Key="InputBackgroundBrush" Color="#E815121B" />
+    <SolidColorBrush x:Key="SettingsRowBackgroundBrush" Color="#FF3A2F43" />
     <SolidColorBrush x:Key="PopupBackgroundBrush" Color="#FF292130" />
     <SolidColorBrush x:Key="BorderBrush" Color="#405B4967" />
     <SolidColorBrush x:Key="BorderHighlightBrush" Color="#70745D83" />

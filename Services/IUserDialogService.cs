@@ -8,6 +8,10 @@ public interface IUserDialogService
 
     string? SelectFile(string title, string filter, string? initialPath = null);
 
+    string? SelectFolder(string title, string? initialPath = null);
+
+    string? SelectArguments(string title, string? initialArguments = null);
+
     ProcessCandidate? SelectProcess(string title);
 
     ServiceCandidate? SelectService(string title);

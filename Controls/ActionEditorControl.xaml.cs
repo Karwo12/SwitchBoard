@@ -13,6 +13,34 @@ public partial class ActionEditorControl : UserControl
         InitializeComponent();
     }
 
+    public void BringActionIntoView(Guid actionId)
+    {
+        BringActionIntoView(actionId, 0);
+    }
+
+    private void BringActionIntoView(Guid actionId, int attempt)
+    {
+        Dispatcher.BeginInvoke(DispatcherPriority.ContextIdle, () =>
+        {
+            if (DataContext is not ViewModels.MainWindowViewModel viewModel) return;
+            var action = viewModel.SelectedProfile?.Actions.SelectMany(Flatten).FirstOrDefault(item => item.Id == actionId);
+            if (action is null) return;
+            ActionList.SelectedItem = action;
+            ActionList.UpdateLayout();
+            if (ActionList.ItemContainerGenerator.ContainerFromItem(action) is FrameworkElement container)
+                container.BringIntoView();
+            else if (attempt < 4)
+                BringActionIntoView(actionId, attempt + 1);
+        });
+    }
+
+    private static IEnumerable<ViewModels.ActionItemViewModel> Flatten(ViewModels.ActionItemViewModel action)
+    {
+        yield return action;
+        foreach (var child in action.ThenActions.Concat(action.ElseActions))
+            foreach (var nested in Flatten(child)) yield return nested;
+    }
+
     private void ActionPicker_OnOpened(object? sender, EventArgs e)
     {
         Dispatcher.BeginInvoke(DispatcherPriority.Input, () =>

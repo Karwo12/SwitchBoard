@@ -243,7 +243,7 @@ public sealed class ActivityService : IActivityService
                 var first = ordered.FirstOrDefault(item => item.StateBefore is not null || item.RequestedState is not null)
                             ?? ordered[0];
                 var last = ordered[^1];
-                return new SystemChangeEntry(first.Timestamp.ToLocalTime(), first.SessionId!.Value,
+                return new SystemChangeEntry(first.Timestamp.ToLocalTime(), first.ProfileId, first.SessionId!.Value,
                     first.ActionId!.Value, first.ActionType ?? string.Empty,
                     first.FriendlyName ?? first.ActionType ?? string.Empty,
                     first.StateBefore?.DeepClone().AsObject(), first.RequestedState?.DeepClone().AsObject(),

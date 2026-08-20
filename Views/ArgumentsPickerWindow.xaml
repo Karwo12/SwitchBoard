@@ -1,0 +1,28 @@
+<Window x:Class="SwitchBoard.Views.ArgumentsPickerWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        WindowStartupLocation="CenterOwner" SizeToContent="WidthAndHeight"
+        MinWidth="520" MaxWidth="760" ShowInTaskbar="False"
+        Background="{DynamicResource BackgroundBrush}"
+        Foreground="{DynamicResource TextPrimaryBrush}">
+    <Border Margin="12" Padding="20"
+            Background="{DynamicResource SurfaceBrush}"
+            BorderBrush="{DynamicResource BorderBrush}"
+            BorderThickness="1" CornerRadius="14">
+        <StackPanel>
+            <TextBlock Margin="0,0,0,6" FontSize="15" FontWeight="SemiBold"
+                       Text="{DynamicResource Dialog.ArgumentsHeading}" />
+            <TextBlock Margin="0,0,0,12" Foreground="{DynamicResource TextSecondaryBrush}"
+                       TextWrapping="Wrap" Text="{DynamicResource Dialog.ArgumentsHint}" />
+            <TextBox x:Name="ArgumentsTextBox" MinHeight="90" AcceptsReturn="True"
+                     TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
+                     VerticalContentAlignment="Top" />
+            <StackPanel Margin="0,16,0,0" Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button MinWidth="100" Margin="0,0,8,0" IsCancel="True"
+                        Content="{DynamicResource Common.Cancel}" />
+                <Button MinWidth="100" IsDefault="True" Click="Select_OnClick"
+                        Content="{DynamicResource ActionEditor.SelectArguments}" />
+            </StackPanel>
+        </StackPanel>
+    </Border>
+</Window>

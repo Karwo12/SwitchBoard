@@ -59,6 +59,31 @@ public sealed class WpfUserDialogService(
         return dialog.ShowDialog() == true ? dialog.FileName : null;
     }
 
+    public string? SelectFolder(string title, string? initialPath = null)
+    {
+        using var dialog = new System.Windows.Forms.FolderBrowserDialog
+        {
+            Description = title,
+            UseDescriptionForTitle = true,
+            ShowNewFolderButton = true
+        };
+        if (!string.IsNullOrWhiteSpace(initialPath) && Directory.Exists(initialPath))
+            dialog.SelectedPath = initialPath;
+        return dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK
+            ? dialog.SelectedPath
+            : null;
+    }
+
+    public string? SelectArguments(string title, string? initialArguments = null)
+    {
+        var dialog = new ArgumentsPickerWindow(initialArguments ?? string.Empty, localizationService)
+        {
+            Title = title,
+            Owner = Application.Current.MainWindow
+        };
+        return dialog.ShowDialog() == true ? dialog.Result : null;
+    }
+
     public ProcessCandidate? SelectProcess(string title)
     {
         var dialog = new ProcessPickerWindow(processDiscoveryService, localizationService)

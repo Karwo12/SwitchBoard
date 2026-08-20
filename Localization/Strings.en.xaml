@@ -7,7 +7,6 @@
     <system:String x:Key="Common.ActionsLower">actions</system:String>
     <system:String x:Key="Common.Search">Search</system:String>
     <system:String x:Key="Common.Refresh">Refresh</system:String>
-    <system:String x:Key="Common.Cancel">Cancel</system:String>
     <system:String x:Key="Common.Confirm">Confirm</system:String>
     <system:String x:Key="Common.Select">Select</system:String>
     <system:String x:Key="Common.Cancelled">Cancelled</system:String>
@@ -25,6 +24,8 @@
     <system:String x:Key="Editor.SearchActions">Search actions...</system:String>
     <system:String x:Key="Editor.NoActionsFound">No actions found</system:String>
     <system:String x:Key="Editor.DuplicateAction">Duplicate action</system:String>
+    <system:String x:Key="Profile.Duplicate">Duplicate profile</system:String>
+    <system:String x:Key="Status.ProfileDuplicated">Profile duplicated — remember to save</system:String>
     <system:String x:Key="Editor.UndoActionTest">Undo test</system:String>
     <system:String x:Key="Editor.TestAction">Test action</system:String>
     <system:String x:Key="Editor.DeleteAction">Delete action</system:String>
@@ -35,8 +36,10 @@
     <system:String x:Key="ActionPicker.Category.Automation">Automation</system:String>
     <system:String x:Key="Editor.CloseAfterProfile">Close SwitchBoard after profile actions finish</system:String>
     <system:String x:Key="ActionEditor.FriendlyName">NAME</system:String>
-    <system:String x:Key="ActionEditor.Target">TARGET / PROGRAM PATH OR URI</system:String>
+    <system:String x:Key="ActionEditor.ProgramNameOptional">Action name (optional)</system:String>
+    <system:String x:Key="ActionEditor.Target">Target / program path or URI</system:String>
     <system:String x:Key="ActionEditor.Browse">Browse...</system:String>
+    <system:String x:Key="Dialog.SelectWorkingDirectoryTitle">Select working directory</system:String>
     <system:String x:Key="ActionEditor.FindProgram">Find program</system:String>
     <system:String x:Key="ActionEditor.SelectProcess">Select process</system:String>
     <system:String x:Key="ActionEditor.SelectService">Select service</system:String>
@@ -48,19 +51,20 @@
     <system:String x:Key="ActionEditor.Timeout">TIMEOUT (SECONDS, OPTIONAL)</system:String>
     <system:String x:Key="ActionEditor.WaitForScript">Wait for script to finish</system:String>
     <system:String x:Key="ActionEditor.RunAsAdministrator">Run as administrator</system:String>
-    <system:String x:Key="ActionEditor.OnFailure">ON FAILURE</system:String>
+    <system:String x:Key="ActionEditor.OnFailure">On failure</system:String>
     <system:String x:Key="ActionEditor.AdminHint">This operation may require administrator privileges.</system:String>
     <system:String x:Key="ActionEditor.ProcessMultipleHint">Process Name alone can match and stop multiple instances. Add an EXE path to narrow the match.</system:String>
-    <system:String x:Key="ActionEditor.Arguments">ARGUMENTS</system:String>
+    <system:String x:Key="ActionEditor.Arguments">Arguments</system:String>
     <system:String x:Key="ActionEditor.ArgumentsHelp">Optional parameters passed to the program when it starts.</system:String>
     <system:String x:Key="ActionEditor.ArgumentsExample">Example: --fullscreen or -silent</system:String>
+    <system:String x:Key="ActionEditor.SelectArguments">Select</system:String>
     <system:String x:Key="ActionEditor.AdvancedOptions">Advanced options</system:String>
     <system:String x:Key="ActionEditor.SelectDisplay">Select monitor</system:String>
     <system:String x:Key="ActionEditor.SelectedDisplay">SELECTED MONITOR</system:String>
     <system:String x:Key="ActionEditor.Resolution">RESOLUTION</system:String>
     <system:String x:Key="ActionEditor.RefreshRate">REFRESH RATE</system:String>
     <system:String x:Key="ActionEditor.DisplaySafetyHint">A 15-second confirmation will appear after changing the display mode. Without confirmation, the previous mode is restored.</system:String>
-    <system:String x:Key="ActionEditor.WorkingDirectory">WORKING DIRECTORY</system:String>
+    <system:String x:Key="ActionEditor.WorkingDirectory">Working directory</system:String>
     <system:String x:Key="ActionEditor.StartOnlyIfNotRunning">Start only if not already running</system:String>
     <system:String x:Key="ActionEditor.ProcessName">PROCESS NAME</system:String>
     <system:String x:Key="ActionEditor.ExecutablePath">OPTIONAL EXE PATH</system:String>
@@ -68,6 +72,12 @@
     <system:String x:Key="ActionEditor.DelayDuration">DELAY DURATION (SECONDS, 0-3600)</system:String>
     <system:String x:Key="ActionEditor.NotImplemented">This action is not implemented yet.</system:String>
     <system:String x:Key="ActionSummary.RunProgram">Run program • {0}</system:String>
+    <system:String x:Key="ActionSummary.ProgramStartsAnother">start another instance</system:String>
+    <system:String x:Key="ActionSummary.ProgramDoesNotDuplicate">do not start again</system:String>
+    <system:String x:Key="ActionSummary.ProgramWindow">window: {0}</system:String>
+    <system:String x:Key="ActionSummary.ProgramRetry">retry enabled</system:String>
+    <system:String x:Key="ActionSummary.ProgramCustomDirectory">custom working directory</system:String>
+    <system:String x:Key="ActionSummary.ProgramRestore">restore: {0}</system:String>
     <system:String x:Key="ActionSummary.StopProcess">Stop process • {0}</system:String>
     <system:String x:Key="ActionSummary.ProcessUnchanged">Leave unchanged • {0}</system:String>
     <system:String x:Key="ActionSummary.Service">Windows service • {0}</system:String>
@@ -112,7 +122,7 @@
     <system:String x:Key="ScriptType.BatchCmd">Batch/CMD</system:String>
     <system:String x:Key="FailurePolicy.Continue">Continue profile</system:String>
     <system:String x:Key="FailurePolicy.Stop">Stop profile</system:String>
-    <system:String x:Key="ActionEditor.RestoreBehavior">RESTORE BEHAVIOR</system:String>
+    <system:String x:Key="ActionEditor.RestoreBehavior">Restore behavior</system:String>
     <system:String x:Key="RestoreBehavior.None">Do not restore</system:String>
     <system:String x:Key="RestoreBehavior.Previous">Restore previous state</system:String>
     <system:String x:Key="RestoreBehavior.CloseStarted">Close if started by SwitchBoard</system:String>
@@ -139,6 +149,13 @@
     <system:String x:Key="SessionStatus.RecoveryRequired">Recovery required</system:String>
     <system:String x:Key="Common.Restore">Restore</system:String>
     <system:String x:Key="Common.Undo">Undo</system:String>
+    <system:String x:Key="Common.Redo">Redo</system:String>
+    <system:String x:Key="Common.RedoTooltip">Redo the last configuration change</system:String>
+    <system:String x:Key="Dialog.UnsavedChangesTitle">Unsaved changes</system:String>
+    <system:String x:Key="Dialog.UnsavedChangesMessage">Save your changes before closing?</system:String>
+    <system:String x:Key="Dialog.SaveAndClose">Save and close</system:String>
+    <system:String x:Key="Dialog.CloseWithoutSaving">Close without saving</system:String>
+    <system:String x:Key="Common.Cancel">Cancel</system:String>
     <system:String x:Key="Common.UndoTooltip">Undo the last configuration change</system:String>
     <system:String x:Key="Restore.ChangesCount">Changes to restore: {0}</system:String>
     <system:String x:Key="Restore.ButtonCount">Restore • {0}</system:String>
@@ -332,6 +349,9 @@
     <system:String x:Key="Dialog.StartupErrorTitle">Startup error</system:String>
     <system:String x:Key="Dialog.StartupErrorMessage">SwitchBoard could not start.&#x0a;&#x0a;{0}</system:String>
     <system:String x:Key="Dialog.SelectProgramTitle">Select a program or shortcut</system:String>
+    <system:String x:Key="Dialog.SelectArgumentsTitle">Select arguments</system:String>
+    <system:String x:Key="Dialog.ArgumentsHeading">Launch arguments</system:String>
+    <system:String x:Key="Dialog.ArgumentsHint">Enter the arguments that will be passed to the program when it starts.</system:String>
     <system:String x:Key="Dialog.ProgramFileFilter">Programs and shortcuts (*.exe;*.lnk)|*.exe;*.lnk|All files (*.*)|*.*</system:String>
     <system:String x:Key="Dialog.FindProgramTitle">Find a program</system:String>
     <system:String x:Key="Dialog.SelectProcessTitle">Select a running process</system:String>
@@ -462,6 +482,12 @@
     <system:String x:Key="Advanced.InstanceBehavior">If the program is already running</system:String>
     <system:String x:Key="Advanced.WindowBehavior">Window behavior</system:String>
     <system:String x:Key="Advanced.WindowWait">Wait for the window at most (s)</system:String>
+    <system:String x:Key="Advanced.Launching">Launching</system:String>
+    <system:String x:Key="Advanced.ProgramWindow">Program window</system:String>
+    <system:String x:Key="Advanced.UseCustomWorkingDirectory">Use custom working directory</system:String>
+    <system:String x:Key="Advanced.UseCustomWorkingDirectoryHelp">Uses the selected folder as the process working directory. Disabling it preserves the entered value.</system:String>
+    <system:String x:Key="Advanced.RetryAndErrors">Errors and retry</system:String>
+    <system:String x:Key="Advanced.Restoring">Restoring</system:String>
     <system:String x:Key="ActionEditor.CpuAffinity">CPU affinity</system:String>
     <system:String x:Key="ActionEditor.SelectAll">Select all</system:String>
     <system:String x:Key="ActionEditor.ClearAll">Clear all</system:String>
@@ -493,6 +519,9 @@
     <system:String x:Key="Dialog.SelectAudioInput">Select audio input</system:String><system:String x:Key="Dialog.SelectAudioOutput">Select audio output</system:String><system:String x:Key="Dialog.SelectDevice">Select Windows device</system:String>
     <system:String x:Key="Picker.Name">Name</system:String><system:String x:Key="Picker.Type">Type</system:String><system:String x:Key="Picker.Default">Default</system:String><system:String x:Key="Picker.Class">Class</system:String><system:String x:Key="Picker.State">State</system:String><system:String x:Key="Picker.InstanceId">Instance ID</system:String>
     <system:String x:Key="Validation.NestedAction">A nested THEN/ELSE action is incomplete.</system:String>
+    <system:String x:Key="Validation.RunBlocked">Cannot run profile: {0} enabled action(s) need configuration.</system:String>
+    <system:String x:Key="Validation.ProfileReferenceCycle">Cannot run profile: profile references contain a cycle or missing profile.</system:String>
+    <system:String x:Key="Validation.RunBusy">Profile cannot run while another operation is active.</system:String>
     <system:String x:Key="Validation.NoOp">This action will not make any change.</system:String>
     <system:String x:Key="Picker.Input">Input</system:String><system:String x:Key="Picker.Output">Output</system:String><system:String x:Key="Picker.Multimedia">Multimedia</system:String><system:String x:Key="Picker.Communications">Communications</system:String><system:String x:Key="Picker.BothRoles">Multimedia + communications</system:String>
     <system:String x:Key="CustomTheme.Export">Export theme</system:String>

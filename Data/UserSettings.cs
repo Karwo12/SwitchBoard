@@ -19,6 +19,15 @@ public sealed class UserSettings
 
     public int WindowHeight { get; set; } = 820;
 
+    public double? WindowX { get; set; }
+    public double? WindowY { get; set; }
+    public string WindowState { get; set; } = "Normal";
+
+    public Guid? LastSelectedCategoryId { get; set; }
+    public Guid? LastSelectedProfileId { get; set; }
+    public int LastActivityTabIndex { get; set; }
+    public bool IsActivityExpanded { get; set; }
+
     public List<CustomThemeDefinition> CustomThemes { get; set; } = [];
 
     // Schema 4 compatibility. Migrated once at startup and omitted from subsequent JSON.

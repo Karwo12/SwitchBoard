@@ -2168,6 +2168,8 @@ sealed class TestDialogService : IUserDialogService
 {
     public bool Confirm(string title, string message) => true;
     public string? SelectFile(string title, string filter, string? initialPath = null) => null;
+      public string? SelectFolder(string title, string? initialPath = null) => null;
+      public string? SelectArguments(string title, string? initialArguments = null) => null;
     public SwitchBoard.Services.Discovery.ProcessCandidate? SelectProcess(string title) => null;
     public SwitchBoard.Services.Discovery.ServiceCandidate? SelectService(string title) => null;
     public SwitchBoard.Services.Discovery.PowerPlanCandidate? SelectPowerPlan(string title) => null;
