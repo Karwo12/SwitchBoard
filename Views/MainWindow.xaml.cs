@@ -11,6 +11,11 @@ public partial class MainWindow : Window
     public MainWindow(MainWindowViewModel viewModel)
     {
         InitializeComponent();
+        var workArea = SystemParameters.WorkArea;
+        MinWidth = Math.Min(MinWidth, workArea.Width);
+        MinHeight = Math.Min(MinHeight, workArea.Height);
+        MaxWidth = workArea.Width;
+        MaxHeight = workArea.Height;
         DataContext = viewModel;
         Closing += OnClosing;
     }

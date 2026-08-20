@@ -1,4 +1,3 @@
-using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
@@ -19,7 +18,10 @@ using SwitchBoard.Services.Windows;
 using SwitchBoard.Services.Activity;
 using SwitchBoard.Services.Monitoring;
 using System.Windows;
+using System.Windows.Data;
 using System.Windows.Threading;
+using Microsoft.Win32;
+using System.Collections.ObjectModel;
 
 namespace SwitchBoard.ViewModels;
 
@@ -42,6 +44,8 @@ public sealed class MainWindowViewModel : ObservableObject
     private ProfileItemViewModel? _selectedProfile;
     private ActionItemViewModel? _selectedAction;
     private ActionTypeOption? _selectedActionType;
+    private string _actionPickerSearch = string.Empty;
+    private bool _isActionPickerOpen;
     private ThemeOptionViewModel? _selectedThemeOption;
     private LanguageOptionViewModel? _selectedLanguageOption;
     private string _statusMessage;
@@ -67,6 +71,7 @@ public sealed class MainWindowViewModel : ObservableObject
     private DateTimeOffset _lastAddActionAt;
     private DateTimeOffset _lastUndoAt;
     private PersistentExecutionSession? _pendingRestoreSession;
+    private PersistentExecutionSession? _lastSingleActionTestSession;
     private int _restoreChangeCount;
     private string _restoreNoticeText = string.Empty;
     private readonly IActivityService? _activityService;
@@ -75,6 +80,8 @@ public sealed class MainWindowViewModel : ObservableObject
     private int _activityTabIndex;
     private double _activityPanelHeightRatio;
     private readonly StatusMonitoringService? _statusMonitoring;
+    private readonly ThemeExchangeService? _themeExchangeService;
+    private readonly ProfileExchangeService _profileExchangeService = new();
     private bool _isStatusRefreshing;
     private string _statusRefreshText = string.Empty;
     private DispatcherTimer? _statusMonitorTimer;
@@ -94,7 +101,8 @@ public sealed class MainWindowViewModel : ObservableObject
         IDisplayManager displayManager,
         ICustomThemeEditorService customThemeEditorService,
         IActivityService? activityService = null,
-        StatusMonitoringService? statusMonitoring = null)
+        StatusMonitoringService? statusMonitoring = null,
+        ThemeExchangeService? themeExchangeService = null)
     {
         _catalogService = catalogService;
         _dialogService = dialogService;
@@ -110,6 +118,7 @@ public sealed class MainWindowViewModel : ObservableObject
         _customThemeEditorService = customThemeEditorService;
         _activityService = activityService;
         _statusMonitoring = statusMonitoring;
+        _themeExchangeService = themeExchangeService;
         _activityPanelHeightRatio = Math.Clamp(userSettings.ActivityPanelHeightRatio, 0.2, 0.8);
         _statusMessage = localizationService.GetString("Status.Ready");
         _executionStatusText = localizationService.GetString(_executionStatusResourceKey);
@@ -127,23 +136,26 @@ public sealed class MainWindowViewModel : ObservableObject
         Profiles = [];
         AvailableActionTypes =
         [
-            new(ActionTypeIds.ProcessSetState, "Action.ProcessState", localizationService),
-            new(ActionTypeIds.ProgramRun, "Action.RunProgram", localizationService),
-            new(ActionTypeIds.ServiceSetState, "Action.WindowsServiceState", localizationService),
-            new(ActionTypeIds.DisplayConfigure, "Action.DisplaySettings", localizationService),
-            new(ActionTypeIds.PowerSetPlan, "Action.PowerPlan", localizationService),
-            new(ActionTypeIds.ScriptRun, "Action.RunScript", localizationService),
-            new(ActionTypeIds.Delay, "Action.Delay", localizationService),
-            new(ActionTypeIds.ProcessConfigure, "Action.ProcessSettings", localizationService),
-            new(ActionTypeIds.WaitProcessStart, "Action.WaitProcess", localizationService),
-            new(ActionTypeIds.WaitProcessExit, "Action.WaitProcessExit", localizationService),
-            new(ActionTypeIds.WaitWindow, "Action.WaitWindow", localizationService),
-            new(ActionTypeIds.AudioConfigure, "Action.AudioSettings", localizationService),
-            new(ActionTypeIds.DeviceSetState, "Action.DeviceState", localizationService),
-            new(ActionTypeIds.ProfileRun, "Action.RunProfile", localizationService),
-            new(ActionTypeIds.ConditionIf, "Action.If", localizationService),
-            new(ActionTypeIds.NotificationShow, "Action.Notification", localizationService)
+            new(ActionTypeIds.ProcessSetState, "Action.ProcessState", localizationService, "ActionPicker.Category.Programs", "process", "proces"),
+            new(ActionTypeIds.ProgramRun, "Action.RunProgram", localizationService, "ActionPicker.Category.Programs", "program", "programy"),
+            new(ActionTypeIds.ServiceSetState, "Action.WindowsServiceState", localizationService, "ActionPicker.Category.Programs", "service", "usługa", "usluga"),
+            new(ActionTypeIds.ProcessConfigure, "Action.ProcessSettings", localizationService, "ActionPicker.Category.Programs", "process", "proces"),
+            new(ActionTypeIds.WaitProcessStart, "Action.WaitProcess", localizationService, "ActionPicker.Category.Programs", "process", "proces"),
+            new(ActionTypeIds.WaitProcessExit, "Action.WaitProcessExit", localizationService, "ActionPicker.Category.Programs", "process", "proces"),
+            new(ActionTypeIds.WaitWindow, "Action.WaitWindow", localizationService, "ActionPicker.Category.Programs", "window", "okno"),
+            new(ActionTypeIds.PowerSetPlan, "Action.PowerPlan", localizationService, "ActionPicker.Category.Windows", "power", "zasilanie"),
+            new(ActionTypeIds.DisplayConfigure, "Action.DisplaySettings", localizationService, "ActionPicker.Category.Windows", "display", "ekran"),
+            new(ActionTypeIds.DeviceSetState, "Action.DeviceState", localizationService, "ActionPicker.Category.Windows", "device", "urządzenie", "urzadzenie"),
+            new(ActionTypeIds.AudioConfigure, "Action.AudioSettings", localizationService, "ActionPicker.Category.Multimedia", "audio", "dźwięk", "dzwiek"),
+            new(ActionTypeIds.Delay, "Action.Delay", localizationService, "ActionPicker.Category.Automation", "delay", "opóźnienie", "opoznienie"),
+            new(ActionTypeIds.ScriptRun, "Action.RunScript", localizationService, "ActionPicker.Category.Automation", "script", "skrypt"),
+            new(ActionTypeIds.NotificationShow, "Action.Notification", localizationService, "ActionPicker.Category.Automation", "notification", "powiadomienie"),
+            new(ActionTypeIds.ProfileRun, "Action.RunProfile", localizationService, "ActionPicker.Category.Automation", "profile", "profil"),
+            new(ActionTypeIds.ConditionIf, "Action.If", localizationService, "ActionPicker.Category.Automation", "if", "warunek")
         ];
+        FilteredActionTypes = new ObservableCollection<ActionTypeOption>(AvailableActionTypes);
+        ActionPickerView = CollectionViewSource.GetDefaultView(FilteredActionTypes);
+        ActionPickerView.GroupDescriptions.Add(new PropertyGroupDescription(nameof(ActionTypeOption.Category)));
         _selectedActionType = AvailableActionTypes[0];
 
         ThemeOptions = new ObservableCollection<ThemeOptionViewModel>(
@@ -164,8 +176,14 @@ public sealed class MainWindowViewModel : ObservableObject
         DeleteCategoryCommand = new RelayCommand<CategoryItemViewModel>(DeleteCategory, category => category is not null);
         AddProfileCommand = new RelayCommand(AddProfile, () => SelectedCategory is not null);
         DeleteProfileCommand = new RelayCommand<ProfileItemViewModel>(DeleteProfile, profile => profile is not null);
+        ExportProfileCommand = new AsyncRelayCommand<ProfileItemViewModel>(ExportProfileAsync, profile => profile is not null);
+        ImportProfileCommand = new AsyncRelayCommand(ImportProfileAsync, () => SelectedCategory is not null && !HasCriticalOperation);
         AddActionCommand = new RelayCommand(AddAction, () => SelectedProfile is not null && SelectedActionType is not null && !HasCriticalOperation);
+        ToggleActionPickerCommand = new RelayCommand(() => IsActionPickerOpen = !IsActionPickerOpen);
+        SelectActionTypeCommand = new RelayCommand<ActionTypeOption>(SelectActionType, option => option is not null);
         DeleteActionCommand = new RelayCommand<ActionItemViewModel>(DeleteAction, action => action is not null);
+        DuplicateActionCommand = new RelayCommand<ActionItemViewModel>(DuplicateAction, action => action is not null && SelectedProfile is not null && !HasCriticalOperation);
+        TestActionCommand = new AsyncRelayCommand<ActionItemViewModel>(TestActionAsync, CanTestAction);
         MoveActionUpCommand = new RelayCommand<ActionItemViewModel>(MoveActionUp, CanMoveActionUp);
         MoveActionDownCommand = new RelayCommand<ActionItemViewModel>(MoveActionDown, CanMoveActionDown);
         ReorderDropCommand = new AsyncRelayCommand<ReorderDropRequest>(ApplyReorderAsync,
@@ -178,6 +196,8 @@ public sealed class MainWindowViewModel : ObservableObject
         CancelProfileRenameCommand = new RelayCommand<ProfileItemViewModel>(profile => profile?.CancelEdit());
         ToggleThemeMenuCommand = new RelayCommand(() => IsThemeMenuOpen = !IsThemeMenuOpen);
         AddThemeCommand = new AsyncRelayCommand(AddThemeAsync);
+        ImportThemeCommand = new AsyncRelayCommand(ImportThemeAsync);
+        ExportThemeCommand = new AsyncRelayCommand<string>(ExportThemeAsync, id => FindCustomTheme(id ?? string.Empty) is not null);
         EditThemeCommand = new AsyncRelayCommand<string>(EditThemeAsync, id => !string.IsNullOrWhiteSpace(id));
         DuplicateThemeCommand = new AsyncRelayCommand<string>(DuplicateThemeAsync, id => !string.IsNullOrWhiteSpace(id));
         RenameThemeCommand = new AsyncRelayCommand<string>(RenameThemeAsync, id => FindCustomTheme(id ?? string.Empty) is not null);
@@ -212,6 +232,7 @@ public sealed class MainWindowViewModel : ObservableObject
         RunProfileCommand = new AsyncRelayCommand(RunProfileAsync, CanRunProfile);
         RestoreProfileCommand = new AsyncRelayCommand(RestoreProfileAsync, CanRestoreProfile);
         DiscardPendingRestoreCommand = new AsyncRelayCommand(DiscardPendingRestoreAsync, CanDiscardPendingRestore);
+        UndoSingleActionTestCommand = new AsyncRelayCommand(UndoSingleActionTestAsync, () => CanUndoSingleActionTest);
         RefreshCurrentStatesCommand = new AsyncRelayCommand(RefreshCurrentStatesAsync, CanRefreshCurrentStates);
         CancelProfileCommand = new RelayCommand(CancelProfile, () => IsProfileRunning || IsRestoreRunning);
         SaveCommand = new AsyncRelayCommand(SaveAsync, () => !IsProfileRunning && !IsRestoreRunning);
@@ -221,7 +242,7 @@ public sealed class MainWindowViewModel : ObservableObject
         SelectActivityTabCommand = new RelayCommand<string>(index =>
         {
             ActivityTabIndex = int.TryParse(index, out var parsed) ? Math.Clamp(parsed, 0, 2) : 0;
-            IsActivityExpanded = true;
+            ExpandActivityPanelForTab();
         });
 
         ActivityEntries = new ObservableCollection<ActivityEntry>(activityService?.Entries ?? []);
@@ -253,6 +274,18 @@ public sealed class MainWindowViewModel : ObservableObject
     public ObservableCollection<ProfileItemViewModel> Profiles { get; }
 
     public IReadOnlyList<ActionTypeOption> AvailableActionTypes { get; }
+    public ObservableCollection<ActionTypeOption> FilteredActionTypes { get; }
+    public ICollectionView ActionPickerView { get; }
+    public string ActionPickerSearch
+    {
+        get => _actionPickerSearch;
+        set { if (SetProperty(ref _actionPickerSearch, value)) FilterActionTypes(); }
+    }
+    public bool IsActionPickerOpen
+    {
+        get => _isActionPickerOpen;
+        set { if (SetProperty(ref _isActionPickerOpen, value) && value) ActionPickerSearch = string.Empty; }
+    }
 
     public ObservableCollection<ThemeOptionViewModel> ThemeOptions { get; }
 
@@ -273,6 +306,15 @@ public sealed class MainWindowViewModel : ObservableObject
             if (value) ActivityAlertCount = 0;
         }
     }
+
+    private void ExpandActivityPanelForTab()
+    {
+        if (ActivityPanelHeightRatio is < 0.2 or > 0.8)
+            ActivityPanelHeightRatio = 0.5;
+        IsActivityExpanded = true;
+        OnPropertyChanged(nameof(ActivityContentRowHeight));
+        OnPropertyChanged(nameof(TopContentRowHeight));
+    }
     public double ActivityPanelHeight => IsActivityExpanded ? 220 : 52;
     public GridLength TopContentRowHeight => IsActivityExpanded
         ? new GridLength(1 - ActivityPanelHeightRatio, GridUnitType.Star) : new GridLength(1, GridUnitType.Star);
@@ -291,6 +333,30 @@ public sealed class MainWindowViewModel : ObservableObject
         {
             if (_userSettings.ShowCurrentActionState == value) return;
             _userSettings.ShowCurrentActionState = value;
+            OnPropertyChanged();
+            _ = _settingsRepository.SaveAsync(_userSettings);
+        }
+    }
+    public int WindowWidth
+    {
+        get => _userSettings.WindowWidth;
+        set
+        {
+            var normalized = Math.Clamp(value, 900, 4096);
+            if (_userSettings.WindowWidth == normalized) return;
+            _userSettings.WindowWidth = normalized;
+            OnPropertyChanged();
+            _ = _settingsRepository.SaveAsync(_userSettings);
+        }
+    }
+    public int WindowHeight
+    {
+        get => _userSettings.WindowHeight;
+        set
+        {
+            var normalized = Math.Clamp(value, 500, 4096);
+            if (_userSettings.WindowHeight == normalized) return;
+            _userSettings.WindowHeight = normalized;
             OnPropertyChanged();
             _ = _settingsRepository.SaveAsync(_userSettings);
         }
@@ -336,6 +402,7 @@ public sealed class MainWindowViewModel : ObservableObject
 
             RefreshProfiles();
             AddProfileCommand.NotifyCanExecuteChanged();
+            ImportProfileCommand.NotifyCanExecuteChanged();
         }
     }
 
@@ -430,6 +497,8 @@ public sealed class MainWindowViewModel : ObservableObject
                 AddActionCommand.NotifyCanExecuteChanged();
                 SaveCommand.NotifyCanExecuteChanged();
                 UndoCommand.NotifyCanExecuteChanged();
+                TestActionCommand.NotifyCanExecuteChanged();
+                OnPropertyChanged(nameof(IsCancellationAvailable));
             }
         }
     }
@@ -439,6 +508,8 @@ public sealed class MainWindowViewModel : ObservableObject
         get => _hasExecutionStatus;
         private set => SetProperty(ref _hasExecutionStatus, value);
     }
+
+    public bool IsCancellationAvailable => IsProfileRunning || IsRestoreRunning;
 
     public int CurrentExecutionActionNumber
     {
@@ -487,14 +558,19 @@ public sealed class MainWindowViewModel : ObservableObject
             OnPropertyChanged(nameof(RestoreButtonText));
             RunProfileCommand.NotifyCanExecuteChanged();
             UndoCommand.NotifyCanExecuteChanged();
+            TestActionCommand.NotifyCanExecuteChanged();
             CancelProfileCommand.NotifyCanExecuteChanged();
             AddActionCommand.NotifyCanExecuteChanged();
             SaveCommand.NotifyCanExecuteChanged();
+            OnPropertyChanged(nameof(IsCancellationAvailable));
         }
     }
 
     public int RestoreChangeCount { get => _restoreChangeCount; private set => SetProperty(ref _restoreChangeCount, value); }
     public bool HasPendingRestore => RestoreChangeCount > 0;
+    public bool CanUndoSingleActionTest => _lastSingleActionTestSession is not null &&
+        _lastSingleActionTestSession.Origin == ExecutionOrigin.SingleActionTest &&
+        _lastSingleActionTestSession.PendingRestoreCount > 0 && !HasCriticalOperation;
     public string RestoreNoticeText
     {
         get => _restoreNoticeText;
@@ -542,6 +618,7 @@ public sealed class MainWindowViewModel : ObservableObject
             RestoreProfileCommand.NotifyCanExecuteChanged();
             AddActionCommand.NotifyCanExecuteChanged();
             UndoCommand.NotifyCanExecuteChanged();
+            TestActionCommand.NotifyCanExecuteChanged();
         }
     }
     public bool HasCriticalOperation => IsProfileRunning || IsRestoreRunning || IsSaving;
@@ -553,10 +630,16 @@ public sealed class MainWindowViewModel : ObservableObject
     public RelayCommand AddProfileCommand { get; }
 
     public RelayCommand<ProfileItemViewModel> DeleteProfileCommand { get; }
+    public AsyncRelayCommand<ProfileItemViewModel> ExportProfileCommand { get; }
+    public AsyncRelayCommand ImportProfileCommand { get; }
 
     public RelayCommand AddActionCommand { get; }
+    public RelayCommand ToggleActionPickerCommand { get; }
+    public RelayCommand<ActionTypeOption> SelectActionTypeCommand { get; }
 
     public RelayCommand<ActionItemViewModel> DeleteActionCommand { get; }
+    public RelayCommand<ActionItemViewModel> DuplicateActionCommand { get; }
+    public AsyncRelayCommand<ActionItemViewModel> TestActionCommand { get; }
 
     public RelayCommand<ActionItemViewModel> MoveActionUpCommand { get; }
 
@@ -578,6 +661,8 @@ public sealed class MainWindowViewModel : ObservableObject
 
     public RelayCommand ToggleThemeMenuCommand { get; }
     public AsyncRelayCommand AddThemeCommand { get; }
+    public AsyncRelayCommand ImportThemeCommand { get; }
+    public AsyncRelayCommand<string> ExportThemeCommand { get; }
     public AsyncRelayCommand<string> EditThemeCommand { get; }
     public AsyncRelayCommand<string> DuplicateThemeCommand { get; }
     public AsyncRelayCommand<string> RenameThemeCommand { get; }
@@ -611,6 +696,7 @@ public sealed class MainWindowViewModel : ObservableObject
     public AsyncRelayCommand RunProfileCommand { get; }
     public AsyncRelayCommand RestoreProfileCommand { get; }
     public AsyncRelayCommand DiscardPendingRestoreCommand { get; }
+    public AsyncRelayCommand UndoSingleActionTestCommand { get; }
     public AsyncRelayCommand RefreshCurrentStatesCommand { get; }
 
     public RelayCommand CancelProfileCommand { get; }
@@ -740,6 +826,58 @@ public sealed class MainWindowViewModel : ObservableObject
         MarkDirty(_localizationService.GetString("Status.ProfileCreated"));
     }
 
+    private async Task ExportProfileAsync(ProfileItemViewModel? profile)
+    {
+        if (profile is null) return;
+        var dialog = new SaveFileDialog
+        {
+            Filter = "SwitchBoard profile (*.sbprofile)|*.sbprofile|JSON files (*.json)|*.json",
+            DefaultExt = ".sbprofile",
+            FileName = string.IsNullOrWhiteSpace(profile.Name) ? "Profile" : profile.Name
+        };
+        if (dialog.ShowDialog() != true) return;
+        try
+        {
+            await _profileExchangeService.ExportAsync(profile.ToModel(), dialog.FileName);
+            StatusMessage = _localizationService.GetString("Status.ProfileExported");
+        }
+        catch (Exception exception)
+        {
+            StatusMessage = _localizationService.Format("Status.ProfileExportFailed", exception.Message);
+        }
+    }
+
+    private async Task ImportProfileAsync()
+    {
+        if (SelectedCategory is null || HasCriticalOperation) return;
+        var dialog = new OpenFileDialog
+        {
+            Filter = "SwitchBoard profile (*.sbprofile)|*.sbprofile|JSON files (*.json)|*.json",
+            DefaultExt = ".sbprofile",
+            CheckFileExists = true
+        };
+        if (dialog.ShowDialog() != true) return;
+        try
+        {
+            var imported = await _profileExchangeService.ImportAsync(dialog.FileName);
+            RecordStructuralUndo("import-profile");
+            imported.CategoryId = SelectedCategory.Id;
+            imported.Name = CreateUniqueName(imported.Name, Profiles.Select(profile => profile.Name));
+            imported.SortOrder = Profiles.Count;
+            var profile = new ProfileItemViewModel(imported, _localizationService);
+            Subscribe(profile);
+            _allProfiles.Add(profile);
+            Profiles.Add(profile);
+            OnPropertyChanged(nameof(AllProfiles));
+            SelectedProfile = profile;
+            MarkDirty(_localizationService.GetString("Status.ProfileImported"));
+        }
+        catch (Exception exception)
+        {
+            StatusMessage = _localizationService.Format("Status.ProfileImportFailed", exception.Message);
+        }
+    }
+
     private void DeleteProfile(ProfileItemViewModel? profile)
     {
         if (profile is null || !_dialogService.Confirm(
@@ -794,6 +932,125 @@ public sealed class MainWindowViewModel : ObservableObject
         SelectedAction = action;
         NotifyActionCommandStates();
         MarkDirty(_localizationService.GetString("Status.ActionAdded"));
+    }
+
+    private void FilterActionTypes()
+    {
+        var matches = AvailableActionTypes.Where(option => option.Matches(ActionPickerSearch)).ToList();
+        FilteredActionTypes.Clear();
+        foreach (var option in matches) FilteredActionTypes.Add(option);
+    }
+
+    private void SelectActionType(ActionTypeOption? option)
+    {
+        if (option is null) return;
+        SelectedActionType = option;
+        IsActionPickerOpen = false;
+        AddAction();
+    }
+
+    private void DuplicateAction(ActionItemViewModel? action)
+    {
+        if (SelectedProfile is null || action is null || HasCriticalOperation) return;
+        RecordStructuralUndo("duplicate-action");
+        var model = action.ToModel();
+        ResetRuntimeAndAssignIds(model);
+        var copy = new ActionItemViewModel(model, _localizationService);
+        Subscribe(copy);
+        var index = SelectedProfile.Actions.IndexOf(action);
+        foreach (var existing in SelectedProfile.Actions) existing.IsExpanded = false;
+        SelectedProfile.Actions.Insert(index + 1, copy);
+        SelectedAction = copy;
+        MarkDirty(_localizationService.GetString("Status.ActionDuplicated"));
+    }
+
+    private static void ResetRuntimeAndAssignIds(ActionDefinition action)
+    {
+        action.Id = Guid.NewGuid();
+        action.RuntimeProcessIdHint = null;
+        foreach (var property in new[] { ActionParameterNames.ThenActions, ActionParameterNames.ElseActions })
+        {
+            if (action.Parameters[property] is not JsonArray nested) continue;
+            foreach (var node in nested)
+            {
+                try
+                {
+                    if (node is null) continue;
+                    var child = node.Deserialize<ActionDefinition>();
+                    if (child is null) continue;
+                    ResetRuntimeAndAssignIds(child);
+                    node.ReplaceWith(JsonSerializer.SerializeToNode(child));
+                }
+                catch (JsonException) { }
+            }
+        }
+    }
+
+    private bool CanTestAction(ActionItemViewModel? action) => action is not null &&
+        SelectedProfile is not null && action.IsValid && !HasCriticalOperation &&
+        !_profileRunner.IsRunning && !_profileRestoreRunner.IsRunning;
+
+    private async Task TestActionAsync(ActionItemViewModel? action)
+    {
+        if (!CanTestAction(action) || SelectedProfile is null) return;
+        var model = action!.ToModel();
+        var testProfile = new ProfileDefinition { Id = SelectedProfile.Id, Name = SelectedProfile.Name, Actions = [model] };
+        _profileExecutionCancellation = new CancellationTokenSource();
+        IsProfileRunning = true;
+        HasExecutionStatus = true;
+        CurrentExecutionActionNumber = 0;
+        TotalExecutionActions = 1;
+        CurrentExecutionActionName = action.DisplayName;
+        ExecutionErrorMessage = string.Empty;
+        SetExecutionStatus("Execution.Status.Running");
+        StatusMessage = _localizationService.GetString("Execution.TestingAction");
+        try
+        {
+            LastExecutionSession = await _profileRunner.RunAsync(testProfile, null, _profileExecutionCancellation.Token,
+                ExecutionOrigin.SingleActionTest);
+            _activityService?.Add(ActivityLevel.Info,
+                _localizationService.Format("Activity.ActionTest", action.DisplayName),
+                SelectedProfile.Id, action.Id);
+            await RefreshPendingRestoreAsync(SelectedProfile.Id);
+            UndoSingleActionTestCommand.NotifyCanExecuteChanged();
+            await RefreshCurrentStatesAsync();
+            ExecutionErrorMessage = LastExecutionSession.Journal.LastOrDefault(entry =>
+                entry.Status is ActionJournalStatus.Failed or ActionJournalStatus.Unsupported)?.ErrorMessage ?? string.Empty;
+            switch (LastExecutionSession.Status)
+            {
+                case ExecutionSessionStatus.Cancelled:
+                    SetExecutionStatus("Execution.Status.Cancelled");
+                    StatusMessage = _localizationService.GetString("Status.ProfileCancelled");
+                    break;
+                case ExecutionSessionStatus.Failed:
+                case ExecutionSessionStatus.CompletedWithErrors:
+                    SetExecutionStatus("Execution.Status.Failed");
+                    StatusMessage = _localizationService.GetString("Status.ActionTestFailed");
+                    break;
+                default:
+                    SetExecutionStatus("Execution.Status.Success");
+                    StatusMessage = _localizationService.GetString("Status.ActionTestCompleted");
+                    break;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            SetExecutionStatus("Execution.Status.Cancelled");
+            StatusMessage = _localizationService.GetString("Execution.Cancelled");
+        }
+        catch (Exception exception)
+        {
+            SetExecutionStatus("Execution.Status.Failed");
+            ExecutionErrorMessage = exception.Message;
+            StatusMessage = exception.Message;
+        }
+        finally
+        {
+            _profileExecutionCancellation.Dispose();
+            _profileExecutionCancellation = null;
+            IsProfileRunning = false;
+            TestActionCommand.NotifyCanExecuteChanged();
+        }
     }
 
     private void DeleteAction(ActionItemViewModel? action)
@@ -1197,8 +1454,10 @@ public sealed class MainWindowViewModel : ObservableObject
         if (id is null)
         {
             _pendingRestoreSession = null;
+            _lastSingleActionTestSession = null;
             SetRestoreCount(0);
             RestoreNoticeText = string.Empty;
+            UndoSingleActionTestCommand.NotifyCanExecuteChanged();
             return;
         }
         try
@@ -1206,7 +1465,10 @@ public sealed class MainWindowViewModel : ObservableObject
             var loaded = await _sessionRepository.GetLatestPendingAsync(id.Value);
             if (SelectedProfile?.Id != id.Value) return;
             _pendingRestoreSession = loaded;
+            _lastSingleActionTestSession = loaded?.Origin == ExecutionOrigin.SingleActionTest &&
+                loaded.PendingRestoreCount > 0 ? loaded : null;
             SetRestoreCount(_pendingRestoreSession?.PendingRestoreCount ?? 0);
+            UndoSingleActionTestCommand.NotifyCanExecuteChanged();
             OnPropertyChanged(nameof(RestorePreviewText));
             if (_pendingRestoreSession?.Status == PersistentSessionStatus.RecoveryRequired)
                 RestoreNoticeText = _localizationService.GetString("Restore.RecoveryPending");
@@ -1275,6 +1537,14 @@ public sealed class MainWindowViewModel : ObservableObject
             _profileExecutionCancellation = null;
             IsRestoreRunning = false;
         }
+    }
+
+    private async Task UndoSingleActionTestAsync()
+    {
+        if (!CanUndoSingleActionTest) return;
+        await RestoreProfileAsync();
+        _lastSingleActionTestSession = null;
+        UndoSingleActionTestCommand.NotifyCanExecuteChanged();
     }
 
     private void SetRestoreCount(int value)
@@ -1614,6 +1884,59 @@ public sealed class MainWindowViewModel : ObservableObject
         await SelectApplyAndSaveThemeAsync(option, "CustomTheme.AddedStatus");
     }
 
+    private async Task ExportThemeAsync(string? themeId)
+    {
+        var theme = FindCustomTheme(themeId ?? string.Empty);
+        if (theme is null || _themeExchangeService is null) return;
+        var dialog = new SaveFileDialog { Filter = _localizationService.GetString("CustomTheme.PackageFilter"), FileName = theme.Name + ".sbtheme", AddExtension = true, DefaultExt = ".sbtheme" };
+        if (dialog.ShowDialog() != true) return;
+        try
+        {
+            _themeExchangeService.Export(theme, dialog.FileName);
+            StatusMessage = _localizationService.GetString("CustomTheme.ExportSuccess");
+        }
+        catch (Exception exception)
+        {
+            StatusMessage = _localizationService.Format("CustomTheme.ExchangeError", exception.Message);
+            MessageBox.Show(StatusMessage, _localizationService.GetString("CustomTheme.ExchangeTitle"), MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        await Task.CompletedTask;
+    }
+
+    private async Task ImportThemeAsync()
+    {
+        if (_themeExchangeService is null) return;
+        var dialog = new OpenFileDialog { Filter = _localizationService.GetString("CustomTheme.PackageFilter"), DefaultExt = ".sbtheme", CheckFileExists = true };
+        if (dialog.ShowDialog() != true) return;
+        CustomThemeDefinition? imported = null;
+        try
+        {
+            imported = _themeExchangeService.Import(dialog.FileName, _userSettings.CustomThemes);
+            _userSettings.CustomThemes.Add(imported);
+            ThemeOptions.Add(new ThemeOptionViewModel(imported, _localizationService));
+            _userSettings.SchemaVersion = SettingsSchema.CurrentVersion;
+            await _settingsRepository.SaveAsync(_userSettings);
+            StatusMessage = _localizationService.Format("CustomTheme.ImportSuccess", imported.Name);
+        }
+        catch (ThemeExchangeService.UnsupportedThemeAssetException)
+        {
+            StatusMessage = _localizationService.GetString("CustomTheme.UnsupportedBackgroundMedia");
+            MessageBox.Show(StatusMessage, _localizationService.GetString("CustomTheme.ExchangeTitle"), MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        catch (Exception exception)
+        {
+            if (imported is not null)
+            {
+                _userSettings.CustomThemes.Remove(imported);
+                var importedOption = GetThemeOptionById(imported.Id);
+                if (importedOption is not null) ThemeOptions.Remove(importedOption);
+                _themeExchangeService.DeleteOwnedAssets(imported.Id);
+            }
+            StatusMessage = _localizationService.Format("CustomTheme.ExchangeError", exception.Message);
+            MessageBox.Show(StatusMessage, _localizationService.GetString("CustomTheme.ExchangeTitle"), MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
     private async Task EditThemeAsync(string? themeId)
     {
         if (string.IsNullOrWhiteSpace(themeId)) return;
@@ -1711,6 +2034,7 @@ public sealed class MainWindowViewModel : ObservableObject
             UpdateActiveThemeMarker();
         }
         await SaveThemeCollectionAsync("CustomTheme.DeletedStatus");
+        _themeExchangeService?.DeleteOwnedAssets(custom.Id);
     }
 
     private async Task SelectApplyAndSaveThemeAsync(ThemeOptionViewModel option, string statusKey)
@@ -1820,8 +2144,9 @@ public sealed class MainWindowViewModel : ObservableObject
 
         foreach (var actionType in AvailableActionTypes)
         {
-            actionType.RefreshDisplayName();
+            actionType.RefreshLocalization();
         }
+        ActionPickerView.Refresh();
 
         foreach (var action in _allProfiles.SelectMany(profile => profile.Actions))
         {

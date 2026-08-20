@@ -125,8 +125,9 @@ public sealed class ThemeManager(AppDataPaths paths) : IThemeManager
         var iconForeground = Parse(settings.IconForeground, "#FFA9C9FF");
         var menuBackgroundBase = ParseAuto(settings.MenuBackground, panelBase);
         var menuHoverBackgroundBase = ParseAuto(settings.MenuHoverBackground, Adjust(menuBackgroundBase, 1.12));
-        var menuBackground = ApplySurfaceOpacity(menuBackgroundBase, surfaceOpacity);
-        var menuHoverBackground = ApplySurfaceOpacity(menuHoverBackgroundBase, surfaceOpacity);
+        // Popup/menu surfaces must be opaque so glass panels behind them cannot bleed through.
+        var menuBackground = WithAlpha(menuBackgroundBase, 1);
+        var menuHoverBackground = WithAlpha(menuHoverBackgroundBase, 1);
         var primaryHover = Adjust(primaryButton, 1.12);
         var primaryPressed = Adjust(primaryButton, 0.82);
         var primaryDisabled = Blend(primaryButton, background, 0.65);
@@ -147,7 +148,7 @@ public sealed class ThemeManager(AppDataPaths paths) : IThemeManager
             ["CardSurfaceBrush"] = Brush(card),
             ["ElevatedSurfaceBrush"] = Brush(elevated),
             ["InputBackgroundBrush"] = Brush(Blend(elevatedBase, background, 0.35)),
-            ["PopupBackgroundBrush"] = Brush(panel),
+            ["PopupBackgroundBrush"] = Brush(WithAlpha(panel, 1)),
             ["BorderBrush"] = Brush(border),
             ["BorderHighlightBrush"] = Brush(WithAlpha(accent, 0.58)),
             ["TopHighlightBrush"] = Brush(WithAlpha(primaryText, 0.12)),

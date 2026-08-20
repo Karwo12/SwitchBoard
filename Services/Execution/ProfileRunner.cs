@@ -35,17 +35,19 @@ public sealed class ProfileRunner
     public bool IsRunning => Volatile.Read(ref _isRunning) != 0;
 
     public async Task<ExecutionSession> RunAsync(ProfileDefinition profile,
-        IProgress<ProfileExecutionProgress>? progress = null, CancellationToken cancellationToken = default)
+        IProgress<ProfileExecutionProgress>? progress = null, CancellationToken cancellationToken = default,
+        ExecutionOrigin origin = ExecutionOrigin.ProfileRun)
     {
         ArgumentNullException.ThrowIfNull(profile);
         if (Interlocked.CompareExchange(ref _isRunning, 1, 0) != 0)
             throw new InvalidOperationException("Another profile is already running.");
 
-        var session = new ExecutionSession { ProfileId = profile.Id, Status = ExecutionSessionStatus.Running };
+        var session = new ExecutionSession { ProfileId = profile.Id, Origin = origin, Status = ExecutionSessionStatus.Running };
         var persistent = new PersistentExecutionSession
         {
             SessionId = session.Id,
             ProfileId = profile.Id,
+            Origin = origin,
             ProfileName = profile.Name,
             Status = PersistentSessionStatus.Preparing
         };
@@ -298,6 +300,7 @@ public sealed class ProfileRunner
         var observedChange = saved.RequiresRestore || result.RestoreRequired == true;
         _activity.Record(new PersistentActivityRecord
         {
+            Origin = state.Persistent.Origin,
             SessionId = state.Persistent.SessionId,
             ProfileId = profileId,
             ProfileName = state.Persistent.ProfileName,

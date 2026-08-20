@@ -65,6 +65,7 @@ public partial class App : Application
             _sessionRepository = new JsonExecutionSessionRepository(paths);
             await _sessionRepository.MaintainAsync(TimeSpan.FromDays(30));
             var settings = await _settingsRepository.LoadAsync();
+            NormalizeWindowSize(settings);
             _localizationService = new LocalizationService();
             settings.LanguageId = _localizationService.ApplyLanguage(
                 settings.LanguageId ?? _localizationService.DetectSystemLanguage());
@@ -157,7 +158,7 @@ public partial class App : Application
                 completionBehavior,
                 displayManager,
                 new WpfCustomThemeEditorService(paths, _localizationService),
-                activityService, statusMonitoring);
+                activityService, statusMonitoring, new ThemeExchangeService(paths));
 
             var window = new MainWindow(viewModel);
             MainWindow = window;
@@ -208,6 +209,15 @@ public partial class App : Application
             if (theme.CreatedAt == default) theme.CreatedAt = DateTimeOffset.UtcNow;
             if (theme.UpdatedAt == default) theme.UpdatedAt = theme.CreatedAt;
         }
+    }
+
+    private static void NormalizeWindowSize(UserSettings settings)
+    {
+        var workArea = SystemParameters.WorkArea;
+        var width = settings.WindowWidth is >= 900 and <= 4096 ? settings.WindowWidth : 1340;
+        var height = settings.WindowHeight is >= 500 and <= 4096 ? settings.WindowHeight : 820;
+        settings.WindowWidth = Math.Min(width, Math.Max(1, (int)Math.Round(workArea.Width)));
+        settings.WindowHeight = Math.Min(height, Math.Max(1, (int)Math.Round(workArea.Height)));
     }
 }
 

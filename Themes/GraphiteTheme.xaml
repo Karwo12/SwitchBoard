@@ -20,9 +20,9 @@
         <GradientStop Offset="1" Color="#E1121316" />
     </LinearGradientBrush>
     <LinearGradientBrush x:Key="PopupBackgroundBrush" StartPoint="0,0" EndPoint="1,1">
-        <GradientStop Offset="0" Color="#FA34353A" />
-        <GradientStop Offset="0.45" Color="#F426272B" />
-        <GradientStop Offset="1" Color="#FA151619" />
+        <GradientStop Offset="0" Color="#FF34353A" />
+        <GradientStop Offset="0.45" Color="#FF26272B" />
+        <GradientStop Offset="1" Color="#FF151619" />
     </LinearGradientBrush>
     <SolidColorBrush x:Key="BorderBrush" Color="#2EFFFFFF" />
     <SolidColorBrush x:Key="BorderHighlightBrush" Color="#58FFFFFF" />

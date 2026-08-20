@@ -11,6 +11,7 @@
 
   <ItemGroup>
     <Compile Remove="SwitchBoard.RuntimeTests\**\*.cs" />
+    <Compile Remove="build-temp-tests\**\*.cs" />
     <Resource Include="Assets\switchboard.ico" />
   </ItemGroup>
 

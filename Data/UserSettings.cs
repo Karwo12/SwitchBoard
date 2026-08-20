@@ -15,6 +15,10 @@ public sealed class UserSettings
 
     public bool ShowCurrentActionState { get; set; } = true;
 
+    public int WindowWidth { get; set; } = 1340;
+
+    public int WindowHeight { get; set; } = 820;
+
     public List<CustomThemeDefinition> CustomThemes { get; set; } = [];
 
     // Schema 4 compatibility. Migrated once at startup and omitted from subsequent JSON.

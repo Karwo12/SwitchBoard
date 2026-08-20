@@ -1,9 +1,11 @@
 using System.Text.Json.Nodes;
+using SwitchBoard.Models.Execution;
 
 namespace SwitchBoard.Services.Activity;
 
 public sealed class PersistentActivityRecord
 {
+    public ExecutionOrigin Origin { get; set; } = ExecutionOrigin.ProfileRun;
     public DateTimeOffset Timestamp { get; set; } = DateTimeOffset.UtcNow;
     public Guid? SessionId { get; set; }
     public Guid? ProfileId { get; set; }

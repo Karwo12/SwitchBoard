@@ -6,6 +6,7 @@ public sealed class PersistentExecutionSession
 {
     public Guid SessionId { get; set; } = Guid.NewGuid();
     public Guid ProfileId { get; set; }
+    public ExecutionOrigin Origin { get; set; } = ExecutionOrigin.ProfileRun;
     public string ProfileName { get; set; } = string.Empty;
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;

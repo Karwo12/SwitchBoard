@@ -13,6 +13,44 @@ public partial class ActionEditorControl : UserControl
         InitializeComponent();
     }
 
+    private void ActionPicker_OnOpened(object? sender, EventArgs e)
+    {
+        Dispatcher.BeginInvoke(DispatcherPriority.Input, () =>
+        {
+            ActionPickerSearchBox.Focus();
+            ActionPickerSearchBox.SelectAll();
+        });
+    }
+
+    private void ActionOverflow_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button || button.ContextMenu is null) return;
+        button.ContextMenu.PlacementTarget = button;
+        button.ContextMenu.IsOpen = true;
+        e.Handled = true;
+    }
+
+    private void ActionPickerSearch_OnPreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape && DataContext is ViewModels.MainWindowViewModel viewModel)
+        {
+            viewModel.IsActionPickerOpen = false;
+            e.Handled = true;
+        }
+    }
+
+    private void ActionList_OnPreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.D || Keyboard.Modifiers != ModifierKeys.Control ||
+            Keyboard.FocusedElement is TextBox || DataContext is not ViewModels.MainWindowViewModel viewModel ||
+            ActionList.SelectedItem is not ViewModels.ActionItemViewModel action) return;
+        if (viewModel.DuplicateActionCommand.CanExecute(action))
+        {
+            viewModel.DuplicateActionCommand.Execute(action);
+            e.Handled = true;
+        }
+    }
+
     private void ActionList_OnPreviewMouseWheel(object sender, MouseWheelEventArgs e)
     {
         if (FindAncestor<ComboBox>(e.OriginalSource as DependencyObject) is { IsDropDownOpen: true }) return;

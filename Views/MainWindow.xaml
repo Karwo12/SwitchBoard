@@ -6,8 +6,8 @@
         xmlns:controls="clr-namespace:SwitchBoard.Controls"
         mc:Ignorable="d"
         Title="SwitchBoard"
-        Width="1340"
-        Height="820"
+        Width="{Binding WindowWidth, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+        Height="{Binding WindowHeight, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
         MinWidth="900"
         MinHeight="500"
         WindowStartupLocation="CenterScreen">
@@ -108,6 +108,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <StackPanel>
                             <TextBlock Style="{StaticResource SectionTitle}" Text="{DynamicResource Panel.Categories}" />
@@ -195,6 +196,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <StackPanel>
                             <TextBlock Style="{StaticResource SectionTitle}" Text="{DynamicResource Panel.Profiles}" />
@@ -212,6 +214,14 @@
                                 Content="+"
                                 ToolTip="{DynamicResource Tooltip.AddProfile}"
                                 Style="{StaticResource GhostIconButton}" />
+                        <Button Grid.Column="2" Margin="4,0,0,0"
+                                Command="{Binding ImportProfileCommand}"
+                                ToolTip="{DynamicResource Profile.Import}"
+                                Style="{StaticResource GhostIconButton}">
+                            <Path Width="14" Height="14" Stretch="Uniform"
+                                  Fill="{DynamicResource TextPrimaryBrush}"
+                                  Data="M7,1 L7,10 M3.5,6.5 L7,10 L10.5,6.5 M2,13 L12,13" />
+                        </Button>
                     </Grid>
 
                     <Grid Grid.Row="2">
@@ -226,6 +236,7 @@
                                     <Grid Margin="5,3">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
                                             <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
                                         <Grid>
@@ -255,6 +266,24 @@
                                                 Content="×"
                                                 ToolTip="{DynamicResource Tooltip.DeleteProfile}"
                                                 Style="{StaticResource DangerIconButton}" />
+                                        <Button Grid.Column="2" Width="30" Height="30" Padding="0" Margin="4,0,0,0"
+                                                Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                Click="ThemeMenuButton_OnClick"
+                                                ToolTip="{DynamicResource Profile.MoreOptions}"
+                                                Style="{StaticResource GhostIconButton}">
+                                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                                <Ellipse Width="3" Height="3" Margin="1" Fill="{DynamicResource TextPrimaryBrush}" />
+                                                <Ellipse Width="3" Height="3" Margin="1" Fill="{DynamicResource TextPrimaryBrush}" />
+                                                <Ellipse Width="3" Height="3" Margin="1" Fill="{DynamicResource TextPrimaryBrush}" />
+                                            </StackPanel>
+                                            <Button.ContextMenu>
+                                                <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+                                                    <MenuItem Header="{DynamicResource Profile.Export}"
+                                                              Command="{Binding PlacementTarget.Tag.ExportProfileCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                              CommandParameter="{Binding}" />
+                                                </ContextMenu>
+                                            </Button.ContextMenu>
+                                        </Button>
                                     </Grid>
                                 </DataTemplate>
                             </ListBox.ItemTemplate>
@@ -419,7 +448,8 @@
                 <ContentControl Width="300"
                                 Margin="0,0,0,10"
                                 Padding="18"
-                                Style="{StaticResource GlassPanel}">
+                                Style="{StaticResource PopupPanel}">
+                    <ScrollViewer MaxHeight="620" VerticalScrollBarVisibility="Auto">
                     <StackPanel>
                         <Grid>
                             <Grid.ColumnDefinitions>
@@ -428,9 +458,6 @@
                             </Grid.ColumnDefinitions>
                             <StackPanel>
                                 <TextBlock Style="{StaticResource SectionTitle}" Text="{DynamicResource Settings.Title}" />
-                                <TextBlock Margin="0,3,0,17"
-                                           Style="{StaticResource CaptionText}"
-                                           Text="{DynamicResource Settings.Personalization}" />
                             </StackPanel>
                             <Button Grid.Column="1"
                                     Margin="6,-4,-4,0"
@@ -440,6 +467,24 @@
                                     ToolTip="{DynamicResource Tooltip.CloseSettings}"
                                     Style="{StaticResource GhostIconButton}" />
                         </Grid>
+
+                        <StackPanel Margin="0,16,0,0"
+                                    Visibility="{Binding SelectedProfile, Converter={StaticResource NotNullToVisibilityConverter}}">
+                            <TextBlock Style="{StaticResource EyebrowText}" Text="{DynamicResource Settings.Profile}" />
+                            <TextBlock Margin="0,4,0,0" FontSize="16" FontWeight="SemiBold"
+                                       Text="{Binding SelectedProfile.Name}" />
+                            <TextBlock Margin="0,16,0,0" Style="{StaticResource EyebrowText}"
+                                       Text="{DynamicResource Settings.ProfileBehavior}" />
+                            <CheckBox Margin="0,9,0,0"
+                                      IsChecked="{Binding SelectedProfile.CloseSwitchBoardAfterSuccessfulCompletion, Mode=TwoWay}">
+                                <TextBlock Text="{DynamicResource Editor.CloseAfterProfile}" TextWrapping="Wrap" />
+                            </CheckBox>
+                        </StackPanel>
+
+                        <Border Height="1" Margin="0,18" Background="{DynamicResource BorderBrush}" />
+                        <TextBlock Style="{StaticResource SectionTitle}" Text="{DynamicResource Settings.SwitchBoard}" />
+                        <TextBlock Margin="0,17,0,0" Style="{StaticResource EyebrowText}"
+                                   Text="{DynamicResource Settings.Personalization}" />
 
                         <TextBlock Style="{StaticResource EyebrowText}" Text="{DynamicResource Settings.Appearance}" />
                         <TextBlock Margin="0,7,0,6"
@@ -480,6 +525,11 @@
                                                               CommandParameter="{Binding Id}">
                                                         <MenuItem.Style><Style TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding IsCustom}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></MenuItem.Style>
                                                     </MenuItem>
+                                                    <MenuItem Header="{DynamicResource CustomTheme.Export}"
+                                                              Command="{Binding PlacementTarget.Tag.ExportThemeCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                              CommandParameter="{Binding Id}">
+                                                        <MenuItem.Style><Style TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding IsCustom}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></MenuItem.Style>
+                                                    </MenuItem>
                                                     <Separator />
                                                     <MenuItem Header="{DynamicResource CustomTheme.Delete}"
                                                               Command="{Binding PlacementTarget.Tag.DeleteThemeCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
@@ -494,18 +544,22 @@
                             </ListBox.ItemTemplate>
                         </ListBox>
                         <Button Margin="0,9,0,0" Command="{Binding AddThemeCommand}" Content="{DynamicResource CustomTheme.AddWithPlus}" />
+                        <Button Margin="0,6,0,0" Command="{Binding ImportThemeCommand}" Content="{DynamicResource CustomTheme.Import}" />
 
                         <Border Height="1" Margin="0,18" Background="{DynamicResource BorderBrush}" />
 
-                        <TextBlock Style="{StaticResource EyebrowText}" Text="{DynamicResource Settings.Language}" />
-                        <CheckBox Margin="0,14,0,0" IsChecked="{Binding ShowCurrentActionState, Mode=TwoWay}"
+                        <TextBlock Style="{StaticResource EyebrowText}" Text="{DynamicResource Settings.Interface}" />
+                        <CheckBox Margin="0,10,0,0" IsChecked="{Binding ShowCurrentActionState, Mode=TwoWay}"
                                   Content="{DynamicResource Settings.ShowCurrentActionState}" />
+                        <Border Height="1" Margin="0,18" Background="{DynamicResource BorderBrush}" />
+                        <TextBlock Style="{StaticResource EyebrowText}" Text="{DynamicResource Settings.Language}" />
                         <ComboBox Margin="0,7,0,0"
                                   ItemsSource="{Binding LanguageOptions}"
                                   DisplayMemberPath="DisplayName"
                                   SelectedItem="{Binding SelectedLanguageOption, Mode=TwoWay}" />
 
                     </StackPanel>
+                    </ScrollViewer>
                 </ContentControl>
             </Popup>
         </Grid>

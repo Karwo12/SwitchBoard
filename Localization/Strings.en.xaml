@@ -22,6 +22,17 @@
 
     <system:String x:Key="Editor.NewActionType">NEW ACTION TYPE</system:String>
     <system:String x:Key="Editor.AddAction">+ Add Action</system:String>
+    <system:String x:Key="Editor.SearchActions">Search actions...</system:String>
+    <system:String x:Key="Editor.NoActionsFound">No actions found</system:String>
+    <system:String x:Key="Editor.DuplicateAction">Duplicate action</system:String>
+    <system:String x:Key="Editor.UndoActionTest">Undo test</system:String>
+    <system:String x:Key="Editor.TestAction">Test action</system:String>
+    <system:String x:Key="Editor.DeleteAction">Delete action</system:String>
+    <system:String x:Key="Tooltip.MoreOptions">More options</system:String>
+    <system:String x:Key="ActionPicker.Category.Programs">Programs and processes</system:String>
+    <system:String x:Key="ActionPicker.Category.Windows">Windows</system:String>
+    <system:String x:Key="ActionPicker.Category.Multimedia">Multimedia</system:String>
+    <system:String x:Key="ActionPicker.Category.Automation">Automation</system:String>
     <system:String x:Key="Editor.CloseAfterProfile">Close SwitchBoard after profile actions finish</system:String>
     <system:String x:Key="ActionEditor.FriendlyName">NAME</system:String>
     <system:String x:Key="ActionEditor.Target">TARGET / PROGRAM PATH OR URI</system:String>
@@ -173,6 +184,8 @@
     <system:String x:Key="Execution.RunProfile">Run profile</system:String>
     <system:String x:Key="Execution.RunningButton">Running...</system:String>
     <system:String x:Key="Execution.Cancel">Cancel</system:String>
+    <system:String x:Key="Execution.TestingAction">Testing action...</system:String>
+    <system:String x:Key="Execution.Cancelled">Action test cancelled</system:String>
     <system:String x:Key="Execution.StatusPrefix">Status:</system:String>
     <system:String x:Key="Execution.Status.Pending">Pending</system:String>
     <system:String x:Key="Execution.Status.Running">Running</system:String>
@@ -201,6 +214,17 @@
     <system:String x:Key="Tooltip.RemoveAction">Remove action</system:String>
 
     <system:String x:Key="Settings.Title">Settings</system:String>
+    <system:String x:Key="Settings.Profile">Profile</system:String>
+    <system:String x:Key="Settings.ProfileBehavior">Profile behavior</system:String>
+    <system:String x:Key="Settings.SwitchBoard">SwitchBoard</system:String>
+    <system:String x:Key="Settings.Interface">Interface</system:String>
+    <system:String x:Key="Profile.Import">Import profile</system:String>
+    <system:String x:Key="Profile.Export">Export profile</system:String>
+    <system:String x:Key="Profile.MoreOptions">More profile options</system:String>
+    <system:String x:Key="Status.ProfileExported">Profile exported</system:String>
+    <system:String x:Key="Status.ProfileImported">Profile imported</system:String>
+    <system:String x:Key="Status.ProfileExportFailed">Profile export failed: {0}</system:String>
+    <system:String x:Key="Status.ProfileImportFailed">Profile import failed: {0}</system:String>
     <system:String x:Key="Settings.Personalization">Personalization</system:String>
     <system:String x:Key="Settings.Appearance">Appearance</system:String>
     <system:String x:Key="Settings.Theme">Theme</system:String>
@@ -293,7 +317,8 @@
     <system:String x:Key="CustomTheme.Save">Add theme</system:String>
     <system:String x:Key="CustomTheme.SavedStatus">Custom theme saved.</system:String>
     <system:String x:Key="CustomTheme.ImageFilter">Images|*.jpg;*.jpeg;*.png;*.bmp;*.gif|All files|*.*</system:String>
-    <system:String x:Key="CustomTheme.InvalidImage">Select a JPG, JPEG, PNG, BMP, or GIF image.</system:String>
+    <system:String x:Key="CustomTheme.InvalidImage">Select a JPG, JPEG, PNG, BMP, or GIF file.</system:String>
+    <system:String x:Key="CustomTheme.UnsupportedBackgroundMedia">This theme contains an MP4 background, which is no longer supported and was not imported.</system:String>
     <system:String x:Key="CustomTheme.InvalidColor">Correct invalid color values before saving.</system:String>
     <system:String x:Key="CustomTheme.LargeImageWarning">This is a large image. It may increase memory or GPU usage, especially when animated.</system:String>
 
@@ -370,6 +395,10 @@
     <system:String x:Key="Status.ProfileCreated">Profile created — remember to save</system:String>
     <system:String x:Key="Status.ProfileDeleted">Profile deleted — remember to save</system:String>
     <system:String x:Key="Status.ActionAdded">Action definition added — no system operation will be executed</system:String>
+    <system:String x:Key="Status.ActionDuplicated">Action duplicated — remember to save</system:String>
+    <system:String x:Key="Status.ActionTestCompleted">Action test completed successfully</system:String>
+    <system:String x:Key="Status.ActionTestFailed">Action test failed</system:String>
+    <system:String x:Key="Activity.ActionTest">Action test: {0}</system:String>
     <system:String x:Key="Status.ActionRemoved">Action removed — remember to save</system:String>
     <system:String x:Key="Status.ActionOrderChanged">Action order changed — remember to save</system:String>
     <system:String x:Key="Status.CategoryOrderChanged">Category order changed</system:String>
@@ -464,5 +493,13 @@
     <system:String x:Key="Dialog.SelectAudioInput">Select audio input</system:String><system:String x:Key="Dialog.SelectAudioOutput">Select audio output</system:String><system:String x:Key="Dialog.SelectDevice">Select Windows device</system:String>
     <system:String x:Key="Picker.Name">Name</system:String><system:String x:Key="Picker.Type">Type</system:String><system:String x:Key="Picker.Default">Default</system:String><system:String x:Key="Picker.Class">Class</system:String><system:String x:Key="Picker.State">State</system:String><system:String x:Key="Picker.InstanceId">Instance ID</system:String>
     <system:String x:Key="Validation.NestedAction">A nested THEN/ELSE action is incomplete.</system:String>
+    <system:String x:Key="Validation.NoOp">This action will not make any change.</system:String>
     <system:String x:Key="Picker.Input">Input</system:String><system:String x:Key="Picker.Output">Output</system:String><system:String x:Key="Picker.Multimedia">Multimedia</system:String><system:String x:Key="Picker.Communications">Communications</system:String><system:String x:Key="Picker.BothRoles">Multimedia + communications</system:String>
+    <system:String x:Key="CustomTheme.Export">Export theme</system:String>
+    <system:String x:Key="CustomTheme.Import">Import theme</system:String>
+    <system:String x:Key="CustomTheme.PackageFilter">SwitchBoard Theme (*.sbtheme)|*.sbtheme</system:String>
+    <system:String x:Key="CustomTheme.ExportSuccess">Theme exported.</system:String>
+    <system:String x:Key="CustomTheme.ImportSuccess">Theme imported: {0}</system:String>
+    <system:String x:Key="CustomTheme.ExchangeTitle">Theme exchange error</system:String>
+    <system:String x:Key="CustomTheme.ExchangeError">The theme could not be exchanged: {0}</system:String>
 </ResourceDictionary>

@@ -1,4 +1,4 @@
-<UserControl x:Class="SwitchBoard.Controls.ActionEditorControl"
+<UserControl x:Name="Root" x:Class="SwitchBoard.Controls.ActionEditorControl"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:controls="clr-namespace:SwitchBoard.Controls"
@@ -7,7 +7,7 @@
              mc:Ignorable="d"
              d:DesignHeight="640"
              d:DesignWidth="700">
-    <ContentControl Padding="24,22,24,68" Background="{DynamicResource ProfileEditorSurfaceBrush}"
+    <ContentControl Padding="24,22,24,4" Background="{DynamicResource ProfileEditorSurfaceBrush}"
                     Style="{StaticResource GlassPanel}">
         <Grid>
             <StackPanel HorizontalAlignment="Center"
@@ -32,19 +32,20 @@
                     <RowDefinition Height="18" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="14" />
-                    <RowDefinition Height="*" />
                     <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" MinHeight="0" />
                     <RowDefinition Height="Auto" />
+                    <!-- Reserve a compact footer below the separator so the action list never resizes. -->
+                    <RowDefinition Height="48" MinHeight="0" />
                 </Grid.RowDefinitions>
 
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="134" />
                         <ColumnDefinition Width="8" />
-                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="146" />
                         <ColumnDefinition Width="4" />
-                        <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
@@ -63,7 +64,8 @@
                         </TextBlock>
                     </StackPanel>
                     <Button Grid.Column="1"
-                            MinWidth="118"
+                            Width="134"
+                            Height="36"
                             Command="{Binding RunProfileCommand}">
                         <Button.Style>
                             <Style TargetType="Button" BasedOn="{StaticResource AccentButton}">
@@ -81,7 +83,7 @@
                             <TextBlock VerticalAlignment="Center" Text="{Binding Tag, RelativeSource={RelativeSource AncestorType=Button}}" />
                         </StackPanel>
                     </Button>
-                    <Button Grid.Column="3" MinWidth="108" Command="{Binding RestoreProfileCommand}"
+                    <Button Grid.Column="3" Width="146" Height="36" Command="{Binding RestoreProfileCommand}"
                             ToolTip="{Binding RestorePreviewText}">
                         <StackPanel Orientation="Horizontal">
                             <Path Width="16" Height="16" Margin="0,0,7,0" Stretch="Uniform"
@@ -91,26 +93,19 @@
                             <TextBlock VerticalAlignment="Center" Text="{Binding RestoreButtonText}" />
                         </StackPanel>
                     </Button>
-                    <Button Grid.Column="5" Width="30" Height="30" Padding="0"
+                    <Button Grid.Column="5" Width="30" Height="30" Padding="0" Margin="0,0,8,0"
                             VerticalAlignment="Center"
                             Visibility="{Binding HasPendingRestore, Converter={StaticResource BooleanToVisibilityConverter}}"
                             Command="{Binding DiscardPendingRestoreCommand}"
                             Content="×"
                             FontSize="16"
                             ToolTip="{DynamicResource Restore.DiscardTooltip}" />
-                    <Button Grid.Column="6" Width="30" Height="30" Padding="0" Margin="4,0,0,0"
-                            Command="{Binding RefreshCurrentStatesCommand}"
-                            ToolTip="{Binding RefreshButtonTooltip}">
-                        <Path Width="16" Height="16" Stretch="Uniform"
-                              Style="{StaticResource SemanticStrokeIcon}"
-                              Data="M16,8 A7,7 0 1 1 13,2 M13,2 H17 M13,2 V6"
-                              StrokeThickness="1.7" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
-                    </Button>
-                    <Border Grid.Column="7"
-                            Padding="10,5"
+                    <Border Grid.Column="6" Width="82" Height="32"
+                            Padding="8,5"
                             VerticalAlignment="Center"
+                            HorizontalAlignment="Right"
                             Style="{StaticResource GlassCard}">
-                        <TextBlock Style="{StaticResource CaptionText}">
+                        <TextBlock HorizontalAlignment="Center" Style="{StaticResource CaptionText}">
                             <Run Text="{Binding SelectedProfile.Actions.Count, Mode=OneWay}" />
                             <Run Text=" " />
                             <Run Text="{DynamicResource Common.ActionsLower}" />
@@ -125,22 +120,87 @@
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <StackPanel>
-                        <TextBlock Margin="0,0,0,7"
-                                   Style="{StaticResource EyebrowText}"
+                        <TextBlock Margin="0,0,0,7" Style="{StaticResource EyebrowText}"
                                    Text="{DynamicResource Editor.NewActionType}" />
-                        <ComboBox ItemsSource="{Binding AvailableActionTypes}"
-                                  DisplayMemberPath="DisplayName"
-                                  SelectedItem="{Binding SelectedActionType}" />
+                        <Button x:Name="ActionPickerButton" MinWidth="170" HorizontalContentAlignment="Left"
+                                Command="{Binding ToggleActionPickerCommand}"
+                                Content="{DynamicResource Editor.AddAction}" />
+                        <Popup PlacementTarget="{Binding ElementName=ActionPickerButton}"
+                               Placement="Bottom" VerticalOffset="6" HorizontalOffset="0"
+                               AllowsTransparency="True" PopupAnimation="Slide" StaysOpen="False"
+                               IsOpen="{Binding IsActionPickerOpen, Mode=TwoWay}"
+                               Opened="ActionPicker_OnOpened">
+                            <Border Width="500" MaxHeight="500" Padding="14"
+                                    Style="{StaticResource PopupSurface}">
+                                <DockPanel>
+                                    <TextBox x:Name="ActionPickerSearchBox" DockPanel.Dock="Top" Margin="0,0,0,10"
+                                             Text="{Binding ActionPickerSearch, UpdateSourceTrigger=PropertyChanged}"
+                                             ToolTip="{DynamicResource Editor.SearchActions}" PreviewKeyDown="ActionPickerSearch_OnPreviewKeyDown" />
+                                    <TextBlock Margin="0,12,0,4" Text="{DynamicResource Editor.NoActionsFound}">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding FilteredActionTypes.Count}" Value="0">
+                                                        <Setter Property="Visibility" Value="Visible" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                    <ScrollViewer MaxHeight="430" VerticalScrollBarVisibility="Auto">
+                                        <ItemsControl ItemsSource="{Binding ActionPickerView}">
+                                            <ItemsControl.GroupStyle>
+                                                <GroupStyle>
+                                                    <GroupStyle.HeaderTemplate>
+                                                        <DataTemplate>
+                                                            <TextBlock Margin="4,12,4,4"
+                                                                       Style="{StaticResource EyebrowText}"
+                                                                       FontSize="10"
+                                                                       Opacity="0.72"
+                                                                       Text="{Binding Name}" />
+                                                        </DataTemplate>
+                                                    </GroupStyle.HeaderTemplate>
+                                                </GroupStyle>
+                                            </ItemsControl.GroupStyle>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Button Margin="4,1"
+                                                            Command="{Binding DataContext.SelectActionTypeCommand, Source={x:Reference Root}}"
+                                                            CommandParameter="{Binding}">
+                                                        <TextBlock Text="{Binding DisplayName}" />
+                                                        <Button.Style>
+                                                            <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                                                                <Setter Property="Background" Value="Transparent" />
+                                                                <Setter Property="BorderThickness" Value="0" />
+                                                                <Setter Property="MinHeight" Value="30" />
+                                                                <Setter Property="Padding" Value="10,6" />
+                                                                <Setter Property="HorizontalContentAlignment" Value="Left" />
+                                                                <Style.Triggers>
+                                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                                        <Setter Property="Background" Value="{DynamicResource InputBackgroundBrush}" />
+                                                                    </Trigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </Button.Style>
+                                                    </Button>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </ScrollViewer>
+                                </DockPanel>
+                            </Border>
+                        </Popup>
                     </StackPanel>
-                    <Button Grid.Column="2"
-                            MinWidth="116"
-                            Margin="0,21,0,0"
-                            Command="{Binding AddActionCommand}"
-                            Content="{DynamicResource Editor.AddAction}" />
                 </Grid>
 
-                <Grid Grid.Row="4">
+                <Border Grid.Row="4" Height="1" Margin="0,0,0,10"
+                        Background="{DynamicResource BorderBrush}" />
+
+                <Grid Grid.Row="5">
                     <ListBox x:Name="ActionList"
+                             MinHeight="0"
+                             VerticalAlignment="Stretch"
                              ItemsSource="{Binding SelectedProfile.Actions}"
                              controls:ListBoxDragDrop.DragKind="Action"
                              controls:ListBoxDragDrop.AcceptKinds="Action"
@@ -148,6 +208,7 @@
                              controls:ListBoxDragDrop.TargetParentId="{Binding SelectedProfile.Id}"
                              ScrollViewer.CanContentScroll="False"
                              PreviewMouseWheel="ActionList_OnPreviewMouseWheel"
+                             PreviewKeyDown="ActionList_OnPreviewKeyDown"
                              RequestBringIntoView="ActionList_OnRequestBringIntoView"
                              SelectedItem="{Binding SelectedAction, Mode=TwoWay}">
                         <ListBox.ItemContainerStyle>
@@ -164,7 +225,6 @@
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="Auto" />
                                                 <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="Auto" />
                                                 <ColumnDefinition Width="Auto" />
                                             </Grid.ColumnDefinitions>
                                             <CheckBox Margin="0,0,13,0"
@@ -215,13 +275,31 @@
                                                     </TextBlock>
                                                 </Grid>
                                             </Button>
-                                            <Button Grid.Column="3"
-                                                    Margin="8,0,0,0"
-                                                    Command="{Binding DataContext.DeleteActionCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                    CommandParameter="{Binding}"
-                                                    Content="&#x00D7;"
-                                                    ToolTip="{DynamicResource Tooltip.RemoveAction}"
-                                                    Style="{StaticResource DangerIconButton}" />
+                                            <Button Grid.Column="2" Width="30" Height="30" Padding="0" Margin="8,0,0,0"
+                                                    Style="{StaticResource GhostIconButton}"
+                                                    ToolTip="{DynamicResource Tooltip.MoreOptions}"
+                                                    Click="ActionOverflow_OnClick">
+                                                <Path Width="4" Height="16" Stretch="Uniform" Fill="{DynamicResource TextSecondaryBrush}"
+                                                      Data="M8,1 A2,2 0 1 0 8,5 A2,2 0 1 0 8,1 M8,6 A2,2 0 1 0 8,10 A2,2 0 1 0 8,6 M8,11 A2,2 0 1 0 8,15 A2,2 0 1 0 8,11" />
+                                                <Button.ContextMenu>
+                                                    <ContextMenu>
+                                                        <MenuItem Header="{DynamicResource Editor.TestAction}"
+                                                                  Command="{Binding DataContext.TestActionCommand, Source={x:Reference Root}}"
+                                                                  CommandParameter="{Binding}" />
+                                                        <MenuItem Header="{DynamicResource Editor.DuplicateAction}"
+                                                                  Command="{Binding DataContext.DuplicateActionCommand, Source={x:Reference Root}}"
+                                                                  CommandParameter="{Binding}" />
+                                                        <MenuItem Header="{DynamicResource Editor.UndoActionTest}"
+                                                                  Command="{Binding DataContext.UndoSingleActionTestCommand, Source={x:Reference Root}}"
+                                                                  IsEnabled="{Binding DataContext.CanUndoSingleActionTest, Source={x:Reference Root}}" />
+                                                        <Separator />
+                                                        <MenuItem Header="{DynamicResource Editor.DeleteAction}"
+                                                                  Command="{Binding DataContext.DeleteActionCommand, Source={x:Reference Root}}"
+                                                                  CommandParameter="{Binding}"
+                                                                  Foreground="{DynamicResource DangerBrush}" />
+                                                    </ContextMenu>
+                                                </Button.ContextMenu>
+                                            </Button>
                                         </Grid>
 
                                         <TextBlock Margin="31,6,0,0" Foreground="{DynamicResource DangerBrush}"
@@ -230,7 +308,8 @@
                                                 <Style TargetType="TextBlock">
                                                     <Setter Property="Visibility" Value="Visible" />
                                                     <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding IsValid}" Value="True"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
+                                                        <DataTrigger Binding="{Binding ValidationLevel}" Value="Valid"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
+                                                        <DataTrigger Binding="{Binding ValidationLevel}" Value="Warning"><Setter Property="Foreground" Value="{DynamicResource AccentBrush}" /></DataTrigger>
                                                     </Style.Triggers>
                                                 </Style>
                                             </TextBlock.Style>
@@ -724,55 +803,41 @@
                     </StackPanel>
                 </Grid>
 
-                <Border Grid.Row="5" Margin="0,12,0,0" Padding="12">
-                    <Border.Style>
-                        <Style TargetType="Border" BasedOn="{StaticResource GlassCard}">
-                            <Setter Property="Visibility" Value="Collapsed" />
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding HasExecutionStatus}" Value="True">
-                                    <Setter Property="Visibility" Value="Visible" />
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </Border.Style>
-                    <Grid>
+                <Grid Grid.Row="7" Margin="0,6,24,0" VerticalAlignment="Stretch"
+                      Visibility="{Binding HasExecutionStatus, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <Grid Height="30" VerticalAlignment="Center">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
+                            <!-- Keep the cancel-button slot reserved after execution so the status
+                                 text has identical horizontal and vertical geometry in every state. -->
+                            <ColumnDefinition Width="88" />
                         </Grid.ColumnDefinitions>
-                        <StackPanel>
-                            <TextBlock FontWeight="SemiBold">
-                                <Run Text="[" />
-                                <Run Text="{Binding CurrentExecutionActionNumber, Mode=OneWay}" />
-                                <Run Text="/" />
-                                <Run Text="{Binding TotalExecutionActions, Mode=OneWay}" />
-                                <Run Text="] " />
-                                <Run Text="{Binding CurrentExecutionActionName, Mode=OneWay}" />
-                            </TextBlock>
-                            <TextBlock Margin="0,4,0,0" Style="{StaticResource CaptionText}">
-                                <Run Text="{DynamicResource Execution.StatusPrefix}" />
-                                <Run Text=" " />
-                                <Run Text="{Binding ExecutionStatusText, Mode=OneWay}" />
-                            </TextBlock>
-                            <TextBlock Margin="0,4,0,0"
-                                       Foreground="{DynamicResource DangerBrush}"
-                                       Text="{Binding ExecutionErrorMessage}"
-                                       TextWrapping="Wrap" />
-                        </StackPanel>
+                        <TextBlock VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                   ToolTip="{Binding ExecutionErrorMessage}">
+                            <Run Text="[" />
+                            <Run Text="{Binding CurrentExecutionActionNumber, Mode=OneWay}" />
+                            <Run Text="/" />
+                            <Run Text="{Binding TotalExecutionActions, Mode=OneWay}" />
+                            <Run Text="] " />
+                            <Run Text="{Binding CurrentExecutionActionName, Mode=OneWay}" FontWeight="SemiBold" />
+                            <Run Text="  •  " />
+                            <Run Text="{DynamicResource Execution.StatusPrefix}" />
+                            <Run Text=" " />
+                            <Run Text="{Binding ExecutionStatusText, Mode=OneWay}" />
+                        </TextBlock>
                         <Button Grid.Column="1"
-                                Margin="12,0,0,0"
+                                Margin="10,0,0,0"
+                                Width="78" Height="30" Padding="8,4"
                                 VerticalAlignment="Center"
                                 Command="{Binding CancelProfileCommand}"
+                                Visibility="{Binding IsCancellationAvailable, Converter={StaticResource BooleanToVisibilityConverter}}"
                                 Content="{DynamicResource Execution.Cancel}" />
                     </Grid>
-                </Border>
+                </Grid>
 
-                <CheckBox Grid.Row="6"
-                          Margin="0,14,0,0"
-                          IsChecked="{Binding SelectedProfile.CloseSwitchBoardAfterSuccessfulCompletion, Mode=TwoWay}">
-                    <TextBlock Text="{DynamicResource Editor.CloseAfterProfile}"
-                               TextWrapping="Wrap" />
-                </CheckBox>
+                <Border Grid.Row="6" Height="1" Margin="0"
+                        Background="{DynamicResource BorderBrush}" />
+
             </Grid>
         </Grid>
     </ContentControl>

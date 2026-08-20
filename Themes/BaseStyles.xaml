@@ -84,6 +84,24 @@
         <Setter Property="CornerRadius" Value="11" />
     </Style>
 
+    <!-- Opaque surface for elements rendered in a separate Popup visual tree. -->
+    <Style x:Key="PopupSurface" TargetType="Border" BasedOn="{StaticResource GlassCard}">
+        <Setter Property="Background" Value="{DynamicResource PopupBackgroundBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderHighlightBrush}" />
+        <Setter Property="CornerRadius" Value="11" />
+        <Setter Property="Effect">
+            <Setter.Value>
+                <DropShadowEffect BlurRadius="22" Direction="270" Opacity="0.48" ShadowDepth="7"
+                                  Color="{DynamicResource ShadowColor}" />
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="PopupPanel" TargetType="ContentControl" BasedOn="{StaticResource GlassPanel}">
+        <Setter Property="Background" Value="{DynamicResource PopupBackgroundBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderHighlightBrush}" />
+    </Style>
+
     <Style TargetType="Button">
         <Setter Property="MinHeight" Value="36" />
         <Setter Property="Padding" Value="14,7" />
@@ -534,6 +552,10 @@
                             BorderBrush="{TemplateBinding BorderBrush}"
                             BorderThickness="{TemplateBinding BorderThickness}"
                             CornerRadius="9">
+                        <Border.Effect>
+                            <DropShadowEffect BlurRadius="18" Direction="270" Opacity="0.48" ShadowDepth="6"
+                                              Color="{DynamicResource ShadowColor}" />
+                        </Border.Effect>
                         <StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Cycle" />
                     </Border>
                 </ControlTemplate>

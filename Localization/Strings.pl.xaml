@@ -22,6 +22,17 @@
 
     <system:String x:Key="Editor.NewActionType">NOWY TYP AKCJI</system:String>
     <system:String x:Key="Editor.AddAction">+ Dodaj akcję</system:String>
+    <system:String x:Key="Editor.SearchActions">Szukaj akcji...</system:String>
+    <system:String x:Key="Editor.NoActionsFound">Nie znaleziono akcji</system:String>
+    <system:String x:Key="Editor.DuplicateAction">Duplikuj akcję</system:String>
+    <system:String x:Key="Editor.UndoActionTest">Cofnij test</system:String>
+    <system:String x:Key="Editor.TestAction">Testuj akcję</system:String>
+    <system:String x:Key="Editor.DeleteAction">Usuń akcję</system:String>
+    <system:String x:Key="Tooltip.MoreOptions">Więcej opcji</system:String>
+    <system:String x:Key="ActionPicker.Category.Programs">Programy i procesy</system:String>
+    <system:String x:Key="ActionPicker.Category.Windows">Windows</system:String>
+    <system:String x:Key="ActionPicker.Category.Multimedia">Multimedia</system:String>
+    <system:String x:Key="ActionPicker.Category.Automation">Automatyzacja</system:String>
     <system:String x:Key="Editor.CloseAfterProfile">Zamknij SwitchBoard po zakończeniu wykonywania akcji profilu</system:String>
     <system:String x:Key="ActionEditor.FriendlyName">NAZWA</system:String>
     <system:String x:Key="ActionEditor.Target">CEL / ŚCIEŻKA PROGRAMU LUB URI</system:String>
@@ -173,6 +184,8 @@
     <system:String x:Key="Execution.RunProfile">Uruchom profil</system:String>
     <system:String x:Key="Execution.RunningButton">Uruchamianie...</system:String>
     <system:String x:Key="Execution.Cancel">Anuluj</system:String>
+    <system:String x:Key="Execution.TestingAction">Testowanie akcji...</system:String>
+    <system:String x:Key="Execution.Cancelled">Test akcji anulowany</system:String>
     <system:String x:Key="Execution.StatusPrefix">Status:</system:String>
     <system:String x:Key="Execution.Status.Pending">Oczekuje</system:String>
     <system:String x:Key="Execution.Status.Running">W toku</system:String>
@@ -201,6 +214,17 @@
     <system:String x:Key="Tooltip.RemoveAction">Usuń akcję</system:String>
 
     <system:String x:Key="Settings.Title">Ustawienia</system:String>
+    <system:String x:Key="Settings.Profile">Profil</system:String>
+    <system:String x:Key="Settings.ProfileBehavior">Zachowanie profilu</system:String>
+    <system:String x:Key="Settings.SwitchBoard">SwitchBoard</system:String>
+    <system:String x:Key="Settings.Interface">Interfejs</system:String>
+    <system:String x:Key="Profile.Import">Importuj profil</system:String>
+    <system:String x:Key="Profile.Export">Eksportuj profil</system:String>
+    <system:String x:Key="Profile.MoreOptions">Więcej opcji profilu</system:String>
+    <system:String x:Key="Status.ProfileExported">Profil wyeksportowany</system:String>
+    <system:String x:Key="Status.ProfileImported">Profil zaimportowany</system:String>
+    <system:String x:Key="Status.ProfileExportFailed">Eksport profilu nie powiódł się: {0}</system:String>
+    <system:String x:Key="Status.ProfileImportFailed">Import profilu nie powiódł się: {0}</system:String>
     <system:String x:Key="Settings.Personalization">Personalizacja</system:String>
     <system:String x:Key="Settings.Appearance">Wygląd</system:String>
     <system:String x:Key="Settings.Theme">Motyw</system:String>
@@ -293,7 +317,8 @@
     <system:String x:Key="CustomTheme.Save">Dodaj motyw</system:String>
     <system:String x:Key="CustomTheme.SavedStatus">Zapisano motyw niestandardowy.</system:String>
     <system:String x:Key="CustomTheme.ImageFilter">Obrazy|*.jpg;*.jpeg;*.png;*.bmp;*.gif|Wszystkie pliki|*.*</system:String>
-    <system:String x:Key="CustomTheme.InvalidImage">Wybierz obraz JPG, JPEG, PNG, BMP lub GIF.</system:String>
+    <system:String x:Key="CustomTheme.InvalidImage">Wybierz plik JPG, JPEG, PNG, BMP lub GIF.</system:String>
+    <system:String x:Key="CustomTheme.UnsupportedBackgroundMedia">Ten motyw zawiera tło MP4, które nie jest już obsługiwane. Import został anulowany.</system:String>
     <system:String x:Key="CustomTheme.InvalidColor">Popraw nieprawidłowe wartości kolorów przed zapisem.</system:String>
     <system:String x:Key="CustomTheme.LargeImageWarning">To duży obraz. Może zwiększyć użycie pamięci lub GPU, szczególnie przy animacji.</system:String>
 
@@ -370,6 +395,10 @@
     <system:String x:Key="Status.ProfileCreated">Utworzono profil — pamiętaj o zapisaniu</system:String>
     <system:String x:Key="Status.ProfileDeleted">Usunięto profil — pamiętaj o zapisaniu</system:String>
     <system:String x:Key="Status.ActionAdded">Dodano definicję akcji — żadna operacja systemowa nie zostanie wykonana</system:String>
+    <system:String x:Key="Status.ActionDuplicated">Zduplikowano akcję — pamiętaj o zapisaniu</system:String>
+    <system:String x:Key="Status.ActionTestCompleted">Test akcji zakończony pomyślnie</system:String>
+    <system:String x:Key="Status.ActionTestFailed">Test akcji zakończył się błędem</system:String>
+    <system:String x:Key="Activity.ActionTest">Test akcji: {0}</system:String>
     <system:String x:Key="Status.ActionRemoved">Usunięto akcję — pamiętaj o zapisaniu</system:String>
     <system:String x:Key="Status.ActionOrderChanged">Zmieniono kolejność akcji — pamiętaj o zapisaniu</system:String>
     <system:String x:Key="Status.CategoryOrderChanged">Zmieniono kolejność kategorii</system:String>
@@ -464,5 +493,13 @@
     <system:String x:Key="Dialog.SelectAudioInput">Wybierz wejście audio</system:String><system:String x:Key="Dialog.SelectAudioOutput">Wybierz wyjście audio</system:String><system:String x:Key="Dialog.SelectDevice">Wybierz urządzenie Windows</system:String>
     <system:String x:Key="Picker.Name">Nazwa</system:String><system:String x:Key="Picker.Type">Typ</system:String><system:String x:Key="Picker.Default">Domyślne</system:String><system:String x:Key="Picker.Class">Klasa</system:String><system:String x:Key="Picker.State">Stan</system:String><system:String x:Key="Picker.InstanceId">Identyfikator instancji</system:String>
     <system:String x:Key="Validation.NestedAction">Zagnieżdżona akcja WTEDY/INACZEJ jest niekompletna.</system:String>
+    <system:String x:Key="Validation.NoOp">Ta akcja nie wprowadzi żadnej zmiany.</system:String>
     <system:String x:Key="Picker.Input">Wejście</system:String><system:String x:Key="Picker.Output">Wyjście</system:String><system:String x:Key="Picker.Multimedia">Multimedia</system:String><system:String x:Key="Picker.Communications">Komunikacja</system:String><system:String x:Key="Picker.BothRoles">Multimedia + komunikacja</system:String>
+    <system:String x:Key="CustomTheme.Export">Eksportuj motyw</system:String>
+    <system:String x:Key="CustomTheme.Import">Importuj motyw</system:String>
+    <system:String x:Key="CustomTheme.PackageFilter">Motyw SwitchBoard (*.sbtheme)|*.sbtheme</system:String>
+    <system:String x:Key="CustomTheme.ExportSuccess">Motyw wyeksportowano.</system:String>
+    <system:String x:Key="CustomTheme.ImportSuccess">Zaimportowano motyw: {0}</system:String>
+    <system:String x:Key="CustomTheme.ExchangeTitle">Błąd wymiany motywu</system:String>
+    <system:String x:Key="CustomTheme.ExchangeError">Nie udało się wymienić motywu: {0}</system:String>
 </ResourceDictionary>

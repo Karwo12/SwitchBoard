@@ -1,9 +1,9 @@
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using System.Windows.Media;
 
 namespace SwitchBoard.Controls;
 
@@ -41,7 +41,9 @@ public partial class AnimatedBackground : UserControl
 
     private static void OnImagePropertyChanged(DependencyObject value, DependencyPropertyChangedEventArgs args)
     {
-        if (value is AnimatedBackground control) control.Reload();
+        if (value is not AnimatedBackground control) return;
+        if (args.Property == SourcePathProperty) control.Reload();
+        else control.ApplyVisualSettings();
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
@@ -66,14 +68,14 @@ public partial class AnimatedBackground : UserControl
         if (!IsLoaded) return;
         _timer.Stop();
         ClearFrames();
-        ImageElement.Stretch = ImageStretch;
-        ImageElement.Opacity = Math.Clamp(ImageOpacity, 0, 1);
+        ApplyVisualSettings();
         if (string.IsNullOrWhiteSpace(SourcePath) || !File.Exists(SourcePath)) return;
         try
         {
-            if (string.Equals(Path.GetExtension(SourcePath), ".gif", StringComparison.OrdinalIgnoreCase))
+            var extension = Path.GetExtension(SourcePath);
+            if (string.Equals(extension, ".gif", StringComparison.OrdinalIgnoreCase))
                 LoadGif(SourcePath);
-            else
+            else if (extension is ".png" or ".jpg" or ".jpeg" or ".bmp")
                 LoadStatic(SourcePath);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or NotSupportedException)
@@ -101,14 +103,68 @@ public partial class AnimatedBackground : UserControl
     {
         using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
         var decoder = new GifBitmapDecoder(stream, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad);
+        if (decoder.Frames.Count == 0) return;
+        var globalMetadata = decoder.Metadata as BitmapMetadata;
+        var width = ReadInt(globalMetadata, "/logscrdesc/Width");
+        var height = ReadInt(globalMetadata, "/logscrdesc/Height");
+        if (width <= 0) width = ReadInt(decoder.Frames[0].Metadata as BitmapMetadata, "/logscrdesc/Width");
+        if (height <= 0) height = ReadInt(decoder.Frames[0].Metadata as BitmapMetadata, "/logscrdesc/Height");
+        if (width <= 0) width = decoder.Frames.Max(frame => ReadInt(frame.Metadata as BitmapMetadata, "/imgdesc/Left") + frame.PixelWidth);
+        if (height <= 0) height = decoder.Frames.Max(frame => ReadInt(frame.Metadata as BitmapMetadata, "/imgdesc/Top") + frame.PixelHeight);
+        width = Math.Max(1, width);
+        height = Math.Max(1, height);
+        BitmapSource canvas = CreateTransparentBitmap(width, height);
+        BitmapSource? previous = null;
         foreach (var source in decoder.Frames)
         {
-            var frame = new WriteableBitmap(source);
-            frame.Freeze();
-            _frames.Add(frame);
+            var disposal = ReadDisposal(source.Metadata as BitmapMetadata);
+            if (disposal == 3) previous = canvas;
+            var left = ReadInt(source.Metadata as BitmapMetadata, "/imgdesc/Left");
+            var top = ReadInt(source.Metadata as BitmapMetadata, "/imgdesc/Top");
+            canvas = DrawGifFrame(canvas, source, width, height, left, top);
+            _frames.Add(canvas);
             _delays.Add(ReadDelay(source.Metadata as BitmapMetadata));
+            if (disposal == 2)
+                canvas = ClearGifRegion(canvas, width, height, left, top, source.PixelWidth, source.PixelHeight);
+            else if (disposal == 3 && previous is not null)
+                canvas = previous;
         }
         if (_frames.Count > 0) ImageElement.Source = _frames[0];
+    }
+
+    private static BitmapSource DrawGifFrame(BitmapSource canvas, BitmapSource source, int width, int height, int left, int top)
+    {
+        var visual = new DrawingVisual();
+        using (var drawing = visual.RenderOpen())
+        {
+            drawing.DrawImage(canvas, new Rect(0, 0, width, height));
+            drawing.DrawImage(source, new Rect(left, top, source.PixelWidth, source.PixelHeight));
+        }
+        var rendered = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
+        rendered.Render(visual);
+        rendered.Freeze();
+        return rendered;
+    }
+
+    private static BitmapSource CreateTransparentBitmap(int width, int height) =>
+        BitmapSource.Create(width, height, 96, 96, PixelFormats.Pbgra32, null,
+            new byte[width * height * 4], width * 4);
+
+    private static BitmapSource ClearGifRegion(BitmapSource source, int width, int height, int left, int top,
+        int regionWidth, int regionHeight)
+    {
+        var pixels = new byte[width * height * 4];
+        source.CopyPixels(pixels, width * 4, 0);
+        ClearRect(pixels, width, height, left, top, regionWidth, regionHeight);
+        var cleared = BitmapSource.Create(width, height, 96, 96, PixelFormats.Pbgra32, null, pixels, width * 4);
+        cleared.Freeze();
+        return cleared;
+    }
+
+    private void ApplyVisualSettings()
+    {
+        ImageElement.Stretch = ImageStretch;
+        ImageElement.Opacity = Math.Clamp(ImageOpacity, 0, 1);
     }
 
     private static TimeSpan ReadDelay(BitmapMetadata? metadata)
@@ -120,6 +176,24 @@ public partial class AnimatedBackground : UserControl
         }
         catch (NotSupportedException) { }
         return TimeSpan.FromMilliseconds(100);
+    }
+
+    private static int ReadInt(BitmapMetadata? metadata, string query)
+    {
+        try { return metadata?.GetQuery(query) is IConvertible value ? Convert.ToInt32(value) : 0; }
+        catch (NotSupportedException) { return 0; }
+    }
+
+    private static int ReadDisposal(BitmapMetadata? metadata)
+    {
+        try { return metadata?.GetQuery("/grctlext/Disposal") is IConvertible value ? Convert.ToInt32(value) : 0; }
+        catch (NotSupportedException) { return 0; }
+    }
+
+    private static void ClearRect(byte[] canvas, int width, int height, int left, int top, int rectWidth, int rectHeight)
+    {
+        for (var y = Math.Max(0, top); y < Math.Min(height, top + rectHeight); y++)
+            Array.Clear(canvas, (y * width + Math.Max(0, left)) * 4, (Math.Min(width, left + rectWidth) - Math.Max(0, left)) * 4);
     }
 
     private void TimerOnTick(object? sender, EventArgs e)

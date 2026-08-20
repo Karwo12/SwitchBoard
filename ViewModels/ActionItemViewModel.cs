@@ -2,6 +2,7 @@ using System.IO;
 using System.Text.Json.Nodes;
 using System.Collections.ObjectModel;
 using SwitchBoard.Localization;
+using SwitchBoard.Models;
 using SwitchBoard.Models.Actions;
 using SwitchBoard.Services.Discovery;
 using System.Text.Json;
@@ -421,7 +422,7 @@ public sealed class ActionItemViewModel : ObservableObject
     public string DeviceInstanceId { get => _deviceInstanceId; set => SetValidationProperty(ref _deviceInstanceId, value); }
     public string DeviceFriendlyName { get => _deviceFriendlyName; set => SetWithSummary(ref _deviceFriendlyName, value); }
     public string DeviceClass { get => _deviceClass; set => SetProperty(ref _deviceClass, value); }
-    public string DeviceState { get => _deviceState; set => SetProperty(ref _deviceState, value); }
+    public string DeviceState { get => _deviceState; set => SetValidationProperty(ref _deviceState, value); }
     public string TargetProfileId
     {
         get => _targetProfileId;
@@ -540,7 +541,7 @@ public sealed class ActionItemViewModel : ObservableObject
         }
     }
 
-    public bool IsValid => !IsEnabled || ValidationMessage.Length == 0;
+    public bool IsValid => !IsEnabled || ValidationLevel != ValidationSeverity.Error;
     public string CurrentStatusText
     {
         get => _currentStatusText;
@@ -596,7 +597,25 @@ public sealed class ActionItemViewModel : ObservableObject
             => _localizationService.GetString("Validation.ProcessRestorePath"),
         ActionTypeIds.ScriptRun when IsRestoreScriptEnabled && string.IsNullOrWhiteSpace(RestoreScriptPath)
             => _localizationService.GetString("Validation.RestoreScriptPath"),
+        ActionTypeIds.ProcessSetState when string.Equals(DesiredProcessState, ProcessDesiredStateIds.Unchanged, StringComparison.OrdinalIgnoreCase)
+            => _localizationService.GetString("Validation.NoOp"),
+        ActionTypeIds.ServiceSetState when string.Equals(DesiredServiceState, ServiceDesiredStateIds.Unchanged, StringComparison.OrdinalIgnoreCase)
+            => _localizationService.GetString("Validation.NoOp"),
+        ActionTypeIds.DeviceSetState when string.Equals(DeviceState, DeviceStateIds.Unchanged, StringComparison.OrdinalIgnoreCase)
+            => _localizationService.GetString("Validation.NoOp"),
         _ => string.Empty
+    };
+
+    public ValidationSeverity ValidationLevel => Type switch
+    {
+        ActionTypeIds.ProcessSetState when string.Equals(DesiredProcessState, ProcessDesiredStateIds.Unchanged, StringComparison.OrdinalIgnoreCase)
+            => ValidationSeverity.Warning,
+        ActionTypeIds.ServiceSetState when string.Equals(DesiredServiceState, ServiceDesiredStateIds.Unchanged, StringComparison.OrdinalIgnoreCase)
+            => ValidationSeverity.Warning,
+        ActionTypeIds.DeviceSetState when string.Equals(DeviceState, DeviceStateIds.Unchanged, StringComparison.OrdinalIgnoreCase)
+            => ValidationSeverity.Warning,
+        _ when ValidationMessage.Length > 0 => ValidationSeverity.Error,
+        _ => ValidationSeverity.Valid
     };
 
     public int DelaySeconds
@@ -853,6 +872,7 @@ public sealed class ActionItemViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(IsValid));
         OnPropertyChanged(nameof(ValidationMessage));
+        OnPropertyChanged(nameof(ValidationLevel));
     }
 
     private string ReadString(string propertyName)
