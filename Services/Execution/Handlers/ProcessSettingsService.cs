@@ -12,8 +12,19 @@ namespace SwitchBoard.Services.Execution.Handlers;
 /// </summary>
 public sealed class ProcessSettingsService
 {
+    public static ProcessSettingsService Shared { get; } = new();
+
     private const int ProcessMemoryPriorityInformation = 0;
     private const uint ProcessMemoryPriorityInformationSize = sizeof(uint);
+    private const int ProcessPowerThrottlingInformation = 4;
+    // Some Windows builds return ERROR_INVALID_PARAMETER for the documented
+    // GetProcessInformation(ProcessPowerThrottling) query even though the
+    // corresponding SetProcessInformation call is supported.
+    private const int ProcessPowerThrottlingStateInformation = 77;
+    private const int ErrorInvalidParameter = 87;
+    private const uint ProcessPowerThrottlingInformationSize = sizeof(uint) * 3;
+    private const uint ProcessPowerThrottlingCurrentVersion = 1;
+    private const uint ProcessPowerThrottlingExecutionSpeed = 0x1;
 
     public void Apply(Process process, JsonObject parameters)
     {
@@ -23,7 +34,10 @@ public sealed class ProcessSettingsService
         var memoryPriority = ActionParameterReader.ReadString(parameters,
             ActionParameterNames.ProcessMemoryPriority);
         var changeMemoryPriority = IsConcreteMemoryPriority(memoryPriority);
-        if (!changeAffinity && !changePriority && !changeMemoryPriority)
+        var performanceMode = ActionParameterReader.ReadString(parameters,
+            ActionParameterNames.ProcessPerformanceMode);
+        var changePerformanceMode = IsConcretePerformanceMode(performanceMode);
+        if (!changeAffinity && !changePriority && !changeMemoryPriority && !changePerformanceMode)
             throw new InvalidOperationException("No process setting was selected.");
 
         if (changeAffinity)
@@ -51,6 +65,9 @@ public sealed class ProcessSettingsService
 
         if (changeMemoryPriority)
             SetMemoryPriority(process, ParseMemoryPriorityValue(memoryPriority));
+
+        if (changePerformanceMode)
+            SetPerformanceMode(process, performanceMode);
     }
 
     public JsonObject Capture(Process process, JsonObject parameters)
@@ -70,6 +87,14 @@ public sealed class ProcessSettingsService
         if (IsConcreteMemoryPriority(ActionParameterReader.ReadString(parameters,
                 ActionParameterNames.ProcessMemoryPriority)))
             state["memoryPriority"] = (int)GetMemoryPriority(process);
+
+        if (IsConcretePerformanceMode(ActionParameterReader.ReadString(parameters,
+                ActionParameterNames.ProcessPerformanceMode)))
+        {
+            var performanceState = GetPerformanceModeState(process);
+            state["performanceControlMask"] = performanceState.ControlMask;
+            state["performanceStateMask"] = performanceState.StateMask;
+        }
 
         return state;
     }
@@ -93,6 +118,9 @@ public sealed class ProcessSettingsService
         }
         if (state["memoryPriority"]?.GetValue<int>() is { } memoryPriority)
             SetMemoryPriority(process, (uint)memoryPriority);
+        if (state["performanceControlMask"]?.GetValue<uint>() is { } controlMask &&
+            state["performanceStateMask"]?.GetValue<uint>() is { } stateMask)
+            SetPerformanceModeState(process, controlMask, stateMask);
     }
 
     public static bool ShouldChangeProcessPriority(JsonObject parameters) =>
@@ -103,6 +131,20 @@ public sealed class ProcessSettingsService
     public static bool IsConcreteMemoryPriority(string value) =>
         !string.IsNullOrWhiteSpace(value) &&
         !string.Equals(value, ProcessMemoryPriorityIds.NoChange, StringComparison.OrdinalIgnoreCase);
+
+    public static bool IsConcretePerformanceMode(string value) =>
+        value is ProcessPerformanceModeIds.WindowsDefault or ProcessPerformanceModeIds.HighPerformance or
+            ProcessPerformanceModeIds.Efficiency;
+
+    public static (uint ControlMask, uint StateMask) PerformanceMasksFor(string value) => value switch
+    {
+        ProcessPerformanceModeIds.WindowsDefault => (0, 0),
+        ProcessPerformanceModeIds.HighPerformance =>
+            (ProcessPowerThrottlingExecutionSpeed, 0),
+        ProcessPerformanceModeIds.Efficiency =>
+            (ProcessPowerThrottlingExecutionSpeed, ProcessPowerThrottlingExecutionSpeed),
+        _ => throw new InvalidOperationException("An unsupported process performance mode was selected.")
+    };
 
     public static ulong ReadAffinityMask(JsonArray? values)
     {
@@ -163,10 +205,54 @@ public sealed class ProcessSettingsService
                 "Windows could not change the process memory priority.");
     }
 
+    private static (uint ControlMask, uint StateMask) GetPerformanceModeState(Process process)
+    {
+        if (!GetProcessInformation(process.Handle, ProcessPowerThrottlingInformation,
+                out ProcessPowerThrottlingState information, ProcessPowerThrottlingInformationSize))
+        {
+            var error = Marshal.GetLastWin32Error();
+            if (error != ErrorInvalidParameter || NtQueryInformationProcess(process.Handle,
+                    ProcessPowerThrottlingStateInformation, out information,
+                    ProcessPowerThrottlingInformationSize, out _) != 0)
+                throw new Win32Exception(error, "Windows could not read the process performance mode.");
+        }
+        if (information.Version == 0)
+            throw new InvalidOperationException("Windows returned an invalid process performance mode.");
+        return (information.ControlMask, information.StateMask);
+    }
+
+    private static void SetPerformanceMode(Process process, string mode)
+    {
+        var (controlMask, stateMask) = PerformanceMasksFor(mode);
+        SetPerformanceModeState(process, controlMask, stateMask);
+    }
+
+    private static void SetPerformanceModeState(Process process, uint controlMask, uint stateMask)
+    {
+        var information = new ProcessPowerThrottlingState
+        {
+            Version = ProcessPowerThrottlingCurrentVersion,
+            ControlMask = controlMask,
+            StateMask = stateMask
+        };
+        if (!SetProcessInformation(process.Handle, ProcessPowerThrottlingInformation,
+                ref information, ProcessPowerThrottlingInformationSize))
+            throw new Win32Exception(Marshal.GetLastWin32Error(),
+                "Windows could not change the process performance mode.");
+    }
+
     [StructLayout(LayoutKind.Sequential)]
     private struct MemoryPriorityInformation
     {
         public uint MemoryPriority;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct ProcessPowerThrottlingState
+    {
+        public uint Version;
+        public uint ControlMask;
+        public uint StateMask;
     }
 
     [DllImport("kernel32.dll", SetLastError = true)]
@@ -184,4 +270,28 @@ public sealed class ProcessSettingsService
         int processInformationClass,
         ref MemoryPriorityInformation processInformation,
         uint processInformationSize);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetProcessInformation(
+        IntPtr processHandle,
+        int processInformationClass,
+        out ProcessPowerThrottlingState processInformation,
+        uint processInformationSize);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetProcessInformation(
+        IntPtr processHandle,
+        int processInformationClass,
+        ref ProcessPowerThrottlingState processInformation,
+        uint processInformationSize);
+
+    [DllImport("ntdll.dll")]
+    private static extern int NtQueryInformationProcess(
+        IntPtr processHandle,
+        int processInformationClass,
+        out ProcessPowerThrottlingState processInformation,
+        uint processInformationLength,
+        out uint returnLength);
 }

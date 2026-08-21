@@ -341,6 +341,46 @@ try
         catch (OperationCanceledException) { Check(true, "wait.processStart cancellation", failures); }
     }
 
+    var delayedProcessPath = Path.Combine(testRoot, "sblateprobe.exe");
+    File.Copy(Path.Combine(Environment.SystemDirectory, "cmd.exe"), delayedProcessPath);
+    Process? delayedProcess = null;
+    try
+    {
+        var delayedStart = Task.Run(async () =>
+        {
+            await Task.Delay(450);
+            delayedProcess = Process.Start(new ProcessStartInfo(delayedProcessPath)
+            { UseShellExecute = false, Arguments = "/c ping -n 30 127.0.0.1 > nul" });
+        });
+        using var delayedWaitCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        using var foundAfterDelay = await ProcessWaitService.WaitForStartAsync("sblateprobe", delayedProcessPath,
+            null, TimeSpan.FromSeconds(4), delayedWaitCts.Token);
+        await delayedStart;
+        Check(foundAfterDelay is not null, "program-run process wait finds a delayed process", failures);
+        using var timeoutProcess = await ProcessWaitService.WaitForStartAsync(
+            $"missing-{Guid.NewGuid():N}", null, null, TimeSpan.FromMilliseconds(250), CancellationToken.None);
+        Check(timeoutProcess is null, "program-run process wait respects its maximum duration", failures);
+        using var processWaitCancellation = new CancellationTokenSource();
+        var cancellableWait = ProcessWaitService.WaitForStartAsync(
+            $"missing-{Guid.NewGuid():N}", null, null, TimeSpan.FromSeconds(10), processWaitCancellation.Token);
+        processWaitCancellation.CancelAfter(150);
+        try
+        {
+            await cancellableWait;
+            Check(false, "program-run process wait respects cancellation", failures);
+        }
+        catch (OperationCanceledException)
+        {
+            Check(true, "program-run process wait respects cancellation", failures);
+        }
+    }
+    finally
+    {
+        try { if (delayedProcess is { HasExited: false }) delayedProcess.Kill(entireProcessTree: true); }
+        catch { }
+        delayedProcess?.Dispose();
+    }
+
     using (var windowProcess = Process.Start(new ProcessStartInfo("notepad.exe") { UseShellExecute = true }))
     {
         if (windowProcess is not null)
@@ -1115,6 +1155,24 @@ try
         new TestCompletionBehavior(), new TestDisplayManager(new("", "", "", 1, 1, 1, 32, 0, 0, 0, 0)),
         themeEditor);
 
+    var pickerCategoryMap = main.AvailableActionTypes.ToDictionary(option => option.TypeId,
+        option => option.CategoryResourceKey);
+    Check(pickerCategoryMap.Count == ActionTypeIds.All.Count - 1 &&
+          pickerCategoryMap[ActionTypeIds.ProgramRun] == "ActionPicker.Category.Programs" &&
+          pickerCategoryMap[ActionTypeIds.ProcessConfigure] == "ActionPicker.Category.Programs" &&
+          pickerCategoryMap[ActionTypeIds.ServiceSetState] == "ActionPicker.Category.SystemDevices" &&
+          pickerCategoryMap[ActionTypeIds.AudioConfigure] == "ActionPicker.Category.SystemDevices" &&
+          pickerCategoryMap[ActionTypeIds.WaitWindow] == "ActionPicker.Category.WaitingTiming" &&
+          pickerCategoryMap[ActionTypeIds.Delay] == "ActionPicker.Category.WaitingTiming" &&
+          pickerCategoryMap[ActionTypeIds.ConditionIf] == "ActionPicker.Category.Automation" &&
+          !pickerCategoryMap.Values.Contains("ActionPicker.Category.Windows") &&
+          !pickerCategoryMap.Values.Contains("ActionPicker.Category.Multimedia"),
+        "action picker uses the four user-facing categories", failures);
+    main.ActionPickerSearch = "warunek";
+    Check(main.FilteredActionTypes.Any(option => option.TypeId == ActionTypeIds.ConditionIf),
+        "action picker search still finds actions by keyword", failures);
+    main.ActionPickerSearch = string.Empty;
+
     var initialActionCount = main.SelectedProfile!.Actions.Count;
     main.AddActionCommand.Execute(null);
     main.UndoCommand.Execute(null);
@@ -1521,6 +1579,7 @@ try
             [ActionParameterNames.ChangeAffinity] = true,
             [ActionParameterNames.CpuIndices] = new JsonArray(0),
             [ActionParameterNames.ProcessPriority] = ProcessPriorityIds.BelowNormal,
+            [ActionParameterNames.ProcessPerformanceMode] = ProcessPerformanceModeIds.HighPerformance,
             [ActionParameterNames.ProcessTargetMode] = ProcessTargetModeIds.Automatic
         });
         var postLaunchResult = await new ProgramRunActionHandler().ExecuteAsync(
@@ -1888,6 +1947,64 @@ try
     Check(!processNoOp.IsValid && processNoOp.ValidationMessage == validationLocalization.GetString("Validation.NoOp"),
         "Adjust process parameter mode rejects a no-op", failures);
 
+    var configureRestore = Action(ActionTypeIds.ProcessConfigure, new JsonObject
+    {
+        [ActionParameterNames.ProcessName] = "example",
+        [ActionParameterNames.ProcessOperation] = ProcessOperationIds.Configure
+    });
+    configureRestore.RestoreBehavior = ActionRestoreBehavior.RestartIfWasRunning;
+    var configureRestoreEditor = new ActionItemViewModel(configureRestore, validationLocalization);
+    var stopRestore = Action(ActionTypeIds.ProcessConfigure, new JsonObject
+    {
+        [ActionParameterNames.ProcessName] = "example",
+        [ActionParameterNames.ProcessOperation] = ProcessOperationIds.Stop
+    });
+    stopRestore.RestoreBehavior = ActionRestoreBehavior.RestorePreviousState;
+    var stopRestoreEditor = new ActionItemViewModel(stopRestore, validationLocalization);
+    Check(configureRestoreEditor.AvailableRestoreBehaviors.Select(option => option.Value).SequenceEqual(["none", "previous"]) &&
+          configureRestoreEditor.RestoreBehaviorId == "none" &&
+          stopRestoreEditor.AvailableRestoreBehaviors.Select(option => option.Value).SequenceEqual(["none", "restart"]) &&
+          stopRestoreEditor.RestoreBehaviorId == "none",
+        "process Restore choices follow the selected operation", failures);
+    configureRestoreEditor.RestoreBehaviorId = "previous";
+    configureRestoreEditor.ProcessOperation = ProcessOperationIds.Stop;
+    var resetToNoneOnStop = configureRestoreEditor.RestoreBehaviorId == "none";
+    configureRestoreEditor.RestoreBehaviorId = "restart";
+    configureRestoreEditor.ProcessOperation = ProcessOperationIds.Configure;
+    Check(resetToNoneOnStop && configureRestoreEditor.RestoreBehaviorId == "none",
+        "switching process operation resets incompatible Restore", failures);
+
+    var serviceStateOnly = new ActionItemViewModel(Action(ActionTypeIds.ServiceSetState, new JsonObject
+    {
+        [ActionParameterNames.ServiceName] = "Example",
+        [ActionParameterNames.DesiredState] = ServiceDesiredStateIds.Unchanged,
+        [ActionParameterNames.ServiceStartupType] = ServiceStartupTypeIds.Manual
+    }), validationLocalization);
+    var serviceStartupOnly = new ActionItemViewModel(Action(ActionTypeIds.ServiceSetState, new JsonObject
+    {
+        [ActionParameterNames.ServiceName] = "Example",
+        [ActionParameterNames.DesiredState] = ServiceDesiredStateIds.Running,
+        [ActionParameterNames.ServiceStartupType] = ServiceStartupTypeIds.Unchanged
+    }), validationLocalization);
+    var serviceNoOp = new ActionItemViewModel(Action(ActionTypeIds.ServiceSetState, new JsonObject
+    {
+        [ActionParameterNames.ServiceName] = "Example",
+        [ActionParameterNames.DesiredState] = ServiceDesiredStateIds.Unchanged,
+        [ActionParameterNames.ServiceStartupType] = ServiceStartupTypeIds.Unchanged
+    }), validationLocalization);
+    Check(serviceStateOnly.IsValid && serviceStartupOnly.IsValid && !serviceNoOp.IsValid &&
+          serviceStateOnly.Summary.Contains("ServiceStartupType.Manual", StringComparison.Ordinal) &&
+          serviceNoOp.ValidationMessage == validationLocalization.GetString("Validation.NoOp"),
+        "service validation and summary recognize startup-only changes", failures);
+    var fakeService = new TestServiceManager(ServiceDesiredStateIds.Running, true,
+        ServiceStartupTypeIds.Automatic);
+    var startupOnlyResult = await new ServiceSetStateActionHandler(fakeService).ExecuteAsync(
+        serviceStateOnly.ToModel(), new(Guid.NewGuid(), Guid.NewGuid()), CancellationToken.None);
+    var noServiceChangeResult = await new ServiceSetStateActionHandler(fakeService).ExecuteAsync(
+        serviceNoOp.ToModel(), new(Guid.NewGuid(), Guid.NewGuid()), CancellationToken.None);
+    Check(startupOnlyResult.IsSuccessful && !startupOnlyResult.IsSkipped && noServiceChangeResult.IsSkipped,
+        "service handler changes startup type without requiring a runtime-state change", failures);
+
     var newProcessAction = new ActionItemViewModel(Action(ActionTypeIds.ProcessConfigure,
         new JsonObject { [ActionParameterNames.ProcessName] = "example" }), validationLocalization);
     var newProcessModel = newProcessAction.ToModel();
@@ -1929,19 +2046,78 @@ try
         }), validationLocalization);
     Check(memoryOnlyAction.IsValid && memoryOnlyAction.ToModel().Parameters[ActionParameterNames.ProcessMemoryPriority]?.GetValue<string>() == ProcessMemoryPriorityIds.Low,
         "memory priority is a real process setting and participates in no-op validation", failures);
+    var performanceOnlyAction = new ActionItemViewModel(Action(ActionTypeIds.ProcessConfigure,
+        new JsonObject
+        {
+            [ActionParameterNames.ProcessName] = "example",
+            [ActionParameterNames.ProcessPerformanceMode] = ProcessPerformanceModeIds.Efficiency
+        }), validationLocalization);
+    Check(performanceOnlyAction.IsValid && performanceOnlyAction.ShouldChangePerformanceMode &&
+          performanceOnlyAction.ToModel().Parameters[ActionParameterNames.ProcessPerformanceMode]?.GetValue<string>() == ProcessPerformanceModeIds.Efficiency,
+        "performance mode alone is a real process setting and participates in no-op validation", failures);
     try
     {
         new ProcessSettingsService().Apply(Process.GetCurrentProcess(), new JsonObject
         {
             [ActionParameterNames.ChangePriority] = false,
             [ActionParameterNames.ProcessPriority] = ProcessPriorityIds.NoChange,
-            [ActionParameterNames.ProcessMemoryPriority] = ProcessMemoryPriorityIds.NoChange
+            [ActionParameterNames.ProcessMemoryPriority] = ProcessMemoryPriorityIds.NoChange,
+            [ActionParameterNames.ProcessPerformanceMode] = ProcessPerformanceModeIds.NoChange
         });
         Check(false, "no-change process settings do not call a setter", failures);
     }
     catch (InvalidOperationException)
     {
         Check(true, "no-change process settings do not call a setter", failures);
+    }
+
+    var performanceSettings = new ProcessSettingsService();
+    var performanceParameters = new JsonObject
+    {
+        [ActionParameterNames.ProcessPerformanceMode] = ProcessPerformanceModeIds.HighPerformance
+    };
+    try
+    {
+        using var currentProcess = Process.GetCurrentProcess();
+        var originalPerformance = performanceSettings.Capture(currentProcess, performanceParameters);
+        performanceSettings.Apply(currentProcess, new JsonObject
+        {
+            [ActionParameterNames.ProcessPerformanceMode] = ProcessPerformanceModeIds.WindowsDefault
+        });
+        var windowsDefault = performanceSettings.Capture(currentProcess, performanceParameters);
+        performanceSettings.Apply(currentProcess, new JsonObject
+        {
+            [ActionParameterNames.ProcessPerformanceMode] = ProcessPerformanceModeIds.HighPerformance
+        });
+        var highPerformance = performanceSettings.Capture(currentProcess, performanceParameters);
+        performanceSettings.Apply(currentProcess, new JsonObject
+        {
+            [ActionParameterNames.ProcessPerformanceMode] = ProcessPerformanceModeIds.Efficiency
+        });
+        var efficiency = performanceSettings.Capture(currentProcess, performanceParameters);
+        performanceSettings.Restore(currentProcess, originalPerformance);
+        var restoredPerformance = performanceSettings.Capture(currentProcess, performanceParameters);
+        Check(windowsDefault["performanceControlMask"]?.GetValue<uint>() == 0 &&
+              windowsDefault["performanceStateMask"]?.GetValue<uint>() == 0,
+            "Windows default clears the explicit execution-throttling policy", failures);
+        Check(ProcessSettingsService.PerformanceMasksFor(ProcessPerformanceModeIds.HighPerformance) == (1u, 0u) &&
+              highPerformance.ContainsKey("performanceControlMask"),
+            "high performance disables execution-speed throttling", failures);
+        Check(ProcessSettingsService.PerformanceMasksFor(ProcessPerformanceModeIds.Efficiency) == (1u, 1u) &&
+              efficiency.ContainsKey("performanceControlMask"),
+            "efficiency mode enables EcoQoS execution-speed throttling", failures);
+        Check(originalPerformance["performanceControlMask"]?.GetValue<uint>() ==
+                  restoredPerformance["performanceControlMask"]?.GetValue<uint>() &&
+              originalPerformance["performanceStateMask"]?.GetValue<uint>() ==
+                  restoredPerformance["performanceStateMask"]?.GetValue<uint>(),
+            "performance Capture and Restore preserve the actual masks", failures);
+    }
+    catch (Exception exception) when (exception is Win32Exception or InvalidOperationException or
+                                      NotSupportedException or UnauthorizedAccessException)
+    {
+        var error = exception is Win32Exception win32 ? $" Win32={win32.NativeErrorCode}" : string.Empty;
+        Console.WriteLine($"LIMIT process performance mode:{error} {exception.Message}");
+        Check(false, "performance mode Win32 integration", failures);
     }
 
     var legacyProcessAction = new ActionItemViewModel(Action(ActionTypeIds.ProcessSetState,
@@ -2014,6 +2190,57 @@ try
           unavailableConfiguredStatus.ShouldMonitorCurrentStatus && unavailableConfiguredStatus.ShouldShowCurrentStatus &&
           unavailableConfiguredStatus.CurrentStatusText == validationLocalization.GetString("ActionStatus.Unavailable"),
         "process live status stays hidden for missing configuration and visible for configured runtime results", failures);
+
+    var nestedConditionModel = Action(ActionTypeIds.ConditionIf, new JsonObject
+    {
+        [ActionParameterNames.ConditionType] = ConditionTypeIds.ProcessRunning,
+        [ActionParameterNames.ConditionValue] = "notepad",
+        [ActionParameterNames.ThenActions] = new JsonArray(
+            JsonSerializer.SerializeToNode(Action(ActionTypeIds.Delay,
+                new JsonObject { [ActionParameterNames.DelaySeconds] = 1 }))!),
+        [ActionParameterNames.ElseActions] = new JsonArray(
+            JsonSerializer.SerializeToNode(Action(ActionTypeIds.NotificationShow, new JsonObject
+            {
+                [ActionParameterNames.NotificationMessage] = "Condition branch",
+                [ActionParameterNames.NotificationLevel] = NotificationLevelIds.Info
+            }))!)
+    });
+    var nestedCondition = new ActionItemViewModel(nestedConditionModel, validationLocalization);
+    var nestedConditionRoundTrip = new ActionItemViewModel(
+        JsonSerializer.Deserialize<ActionDefinition>(JsonSerializer.Serialize(nestedCondition.ToModel()))!,
+        validationLocalization);
+    Check(nestedCondition.Type == ActionTypeIds.ConditionIf &&
+          nestedCondition.ThenActions.Count == 1 && nestedCondition.ElseActions.Count == 1 &&
+          nestedCondition.ThenActions[0].Type == ActionTypeIds.Delay &&
+          nestedCondition.ElseActions[0].Type == ActionTypeIds.NotificationShow &&
+          nestedConditionRoundTrip.ThenActions[0].SortOrder == 0 &&
+          nestedConditionRoundTrip.ElseActions[0].SortOrder == 0,
+        "condition branches accept ordinary actions and preserve order after serialization", failures);
+    var nestedIncomplete = new ActionItemViewModel(Action(ActionTypeIds.ConditionIf, new JsonObject
+    {
+        [ActionParameterNames.ConditionType] = ConditionTypeIds.ProcessRunning,
+        [ActionParameterNames.ConditionValue] = "notepad",
+        [ActionParameterNames.ThenActions] = new JsonArray(JsonSerializer.SerializeToNode(
+            Action(ActionTypeIds.ProgramRun, []))!)
+    }), validationLocalization);
+    Check(!nestedIncomplete.IsValid &&
+          nestedIncomplete.ValidationMessage == validationLocalization.GetString("Validation.NestedAction"),
+        "an incomplete nested action blocks its parent condition", failures);
+    var nestedAdded = new ActionItemViewModel(Action(ActionTypeIds.ConditionIf, new JsonObject
+    {
+        [ActionParameterNames.ConditionType] = ConditionTypeIds.ProcessRunning,
+        [ActionParameterNames.ConditionValue] = "notepad"
+    }), validationLocalization);
+    var addedThen = nestedAdded.AddNestedAction(ActionTypeIds.Delay,
+        new JsonObject { [ActionParameterNames.DelaySeconds] = 1 }, true);
+    var addedElse = nestedAdded.AddNestedAction(ActionTypeIds.NotificationShow, new JsonObject
+    {
+        [ActionParameterNames.NotificationMessage] = "Else",
+        [ActionParameterNames.NotificationLevel] = NotificationLevelIds.Info
+    }, false);
+    Check(addedThen?.Type == ActionTypeIds.Delay && addedElse?.Type == ActionTypeIds.NotificationShow &&
+          nestedAdded.ThenActions.Count == 1 && nestedAdded.ElseActions.Count == 1,
+        "condition branches add actions through the shared action model", failures);
 
     var displays = await displayManager.GetDisplaysAsync();
     foreach (var display in displays)

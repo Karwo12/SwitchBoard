@@ -68,6 +68,9 @@ public sealed class ActionItemViewModel : ObservableObject
     private bool _changePriority;
     private string _processPriority;
     private string _processMemoryPriority;
+    private string _processPerformanceMode;
+    private bool _waitForProcessStart;
+    private int _processStartWaitSeconds;
     private string _windowMatchMode;
     private string _windowTitle;
     private string _audioOutputDeviceId;
@@ -93,10 +96,13 @@ public sealed class ActionItemViewModel : ObservableObject
     private string _currentStatusText = string.Empty;
     private string _currentStatusTooltip = string.Empty;
     private DateTimeOffset? _lastChecked;
+    private readonly int _nestingDepth;
+    private readonly bool _hasNestingDepthViolation;
 
     public ActionItemViewModel(ActionDefinition action, ILocalizationService localizationService, int nestingDepth = 0)
     {
         _localizationService = localizationService;
+        _nestingDepth = nestingDepth;
         var legacyProcessState = action.Type == ActionTypeIds.ProcessSetState;
         var normalizedType = legacyProcessState ? ActionTypeIds.ProcessConfigure : action.Type;
         _displayNameResourceKey = GetDisplayNameResourceKey(normalizedType);
@@ -177,6 +183,10 @@ public sealed class ActionItemViewModel : ObservableObject
             StringComparison.OrdinalIgnoreCase) ? storedProcessPriority : ProcessPriorityIds.NoChange;
         _processMemoryPriority = DefaultIfEmpty(ReadString(ActionParameterNames.ProcessMemoryPriority),
             ProcessMemoryPriorityIds.NoChange);
+        _processPerformanceMode = DefaultIfEmpty(ReadString(ActionParameterNames.ProcessPerformanceMode),
+            ProcessPerformanceModeIds.NoChange);
+        _waitForProcessStart = ReadBoolean(ActionParameterNames.WaitForProcessStart, true);
+        _processStartWaitSeconds = Math.Clamp(ReadInt32(ActionParameterNames.ProcessStartWaitSeconds, 10), 1, 120);
         _windowMatchMode = DefaultIfEmpty(ReadString(ActionParameterNames.WindowMatchMode), WindowMatchModeIds.Any);
         _windowTitle = ReadString(ActionParameterNames.WindowTitle);
         _audioOutputDeviceId = ReadString(ActionParameterNames.AudioOutputDeviceId);
@@ -214,6 +224,9 @@ public sealed class ActionItemViewModel : ObservableObject
         }
         ThenActions = [];
         ElseActions = [];
+        _hasNestingDepthViolation = nestingDepth >= ProfileRunner.MaximumNestingDepth &&
+            (Parameters[ActionParameterNames.ThenActions] is JsonArray { Count: > 0 } ||
+             Parameters[ActionParameterNames.ElseActions] is JsonArray { Count: > 0 });
         if (nestingDepth < ProfileRunner.MaximumNestingDepth)
         {
             LoadNestedActions(ActionParameterNames.ThenActions, ThenActions, nestingDepth + 1);
@@ -277,7 +290,9 @@ public sealed class ActionItemViewModel : ObservableObject
             new("continue", "FailurePolicy.Continue", localizationService),
             new("stop", "FailurePolicy.Stop", localizationService)
         ];
-        AvailableRestoreBehaviors = BuildRestoreBehaviors(action.Type, localizationService);
+        AvailableRestoreBehaviors = BuildRestoreBehaviors(Type, ProcessOperation, localizationService);
+        if (!AvailableRestoreBehaviors.Any(option => option.Value == _restoreBehaviorId))
+            _restoreBehaviorId = "none";
         AvailableProcessPriorities = BuildOptions(localizationService,
             (ProcessPriorityIds.NoChange, "Priority.NoChange"),
             (ProcessPriorityIds.Idle, "Priority.Idle"), (ProcessPriorityIds.BelowNormal, "Priority.BelowNormal"),
@@ -290,6 +305,11 @@ public sealed class ActionItemViewModel : ObservableObject
             (ProcessMemoryPriorityIds.Medium, "MemoryPriority.Medium"),
             (ProcessMemoryPriorityIds.BelowNormal, "MemoryPriority.BelowNormal"),
             (ProcessMemoryPriorityIds.Normal, "MemoryPriority.Normal"));
+        AvailableProcessPerformanceModes = BuildOptions(localizationService,
+            (ProcessPerformanceModeIds.NoChange, "PerformanceMode.NoChange"),
+            (ProcessPerformanceModeIds.WindowsDefault, "PerformanceMode.WindowsDefault"),
+            (ProcessPerformanceModeIds.HighPerformance, "PerformanceMode.HighPerformance"),
+            (ProcessPerformanceModeIds.Efficiency, "PerformanceMode.Efficiency"));
         AvailableWindowMatchModes = BuildOptions(localizationService,
             (WindowMatchModeIds.Any, "WindowMatch.Any"), (WindowMatchModeIds.Contains, "WindowMatch.Contains"),
             (WindowMatchModeIds.Exact, "WindowMatch.Exact"));
@@ -316,11 +336,19 @@ public sealed class ActionItemViewModel : ObservableObject
             (NotificationLevelIds.Success, "NotificationLevel.Success"),
             (NotificationLevelIds.Warning, "NotificationLevel.Warning"),
             (NotificationLevelIds.Error, "NotificationLevel.Error"));
-        AddThenNotificationCommand = new RelayCommand(() => AddNested(ThenActions, ActionTypeIds.NotificationShow));
-        AddThenProgramCommand = new RelayCommand(() => AddNested(ThenActions, ActionTypeIds.ProgramRun));
-        AddElseNotificationCommand = new RelayCommand(() => AddNested(ElseActions, ActionTypeIds.NotificationShow));
-        AddElseProgramCommand = new RelayCommand(() => AddNested(ElseActions, ActionTypeIds.ProgramRun));
+        AddThenNotificationCommand = new RelayCommand(() => AddNestedAction(ActionTypeIds.NotificationShow,
+            DefaultNestedParameters(ActionTypeIds.NotificationShow), true));
+        AddThenProgramCommand = new RelayCommand(() => AddNestedAction(ActionTypeIds.ProgramRun,
+            DefaultNestedParameters(ActionTypeIds.ProgramRun), true));
+        AddElseNotificationCommand = new RelayCommand(() => AddNestedAction(ActionTypeIds.NotificationShow,
+            DefaultNestedParameters(ActionTypeIds.NotificationShow), false));
+        AddElseProgramCommand = new RelayCommand(() => AddNestedAction(ActionTypeIds.ProgramRun,
+            DefaultNestedParameters(ActionTypeIds.ProgramRun), false));
         DeleteNestedActionCommand = new RelayCommand<ActionItemViewModel>(DeleteNestedAction, item => item is not null);
+        MoveNestedActionUpCommand = new RelayCommand<ActionItemViewModel>(item => MoveNestedAction(item, -1),
+            CanMoveNestedActionUp);
+        MoveNestedActionDownCommand = new RelayCommand<ActionItemViewModel>(item => MoveNestedAction(item, 1),
+            CanMoveNestedActionDown);
     }
 
     public Guid Id { get; }
@@ -335,9 +363,10 @@ public sealed class ActionItemViewModel : ObservableObject
     public IReadOnlyList<LocalizedValueOptionViewModel> AvailableServiceStartupTypes { get; }
     public IReadOnlyList<LocalizedValueOptionViewModel> AvailableScriptTypes { get; }
     public IReadOnlyList<LocalizedValueOptionViewModel> AvailableFailurePolicies { get; }
-    public IReadOnlyList<LocalizedValueOptionViewModel> AvailableRestoreBehaviors { get; }
+    public IReadOnlyList<LocalizedValueOptionViewModel> AvailableRestoreBehaviors { get; private set; }
     public IReadOnlyList<LocalizedValueOptionViewModel> AvailableProcessPriorities { get; }
     public IReadOnlyList<LocalizedValueOptionViewModel> AvailableProcessMemoryPriorities { get; }
+    public IReadOnlyList<LocalizedValueOptionViewModel> AvailableProcessPerformanceModes { get; }
     public IReadOnlyList<LocalizedValueOptionViewModel> AvailableWindowMatchModes { get; }
     public IReadOnlyList<LocalizedValueOptionViewModel> AvailableWindowBehaviors { get; }
     public IReadOnlyList<LocalizedValueOptionViewModel> AvailableInstanceBehaviors { get; }
@@ -347,11 +376,15 @@ public sealed class ActionItemViewModel : ObservableObject
     public ObservableCollection<LogicalCpuOptionViewModel> LogicalCpus { get; }
     public ObservableCollection<ActionItemViewModel> ThenActions { get; }
     public ObservableCollection<ActionItemViewModel> ElseActions { get; }
+    public bool CanAddNestedActions => _nestingDepth + 1 < ProfileRunner.MaximumNestingDepth &&
+        Type == ActionTypeIds.ConditionIf;
     public RelayCommand AddThenNotificationCommand { get; }
     public RelayCommand AddThenProgramCommand { get; }
     public RelayCommand AddElseNotificationCommand { get; }
     public RelayCommand AddElseProgramCommand { get; }
     public RelayCommand<ActionItemViewModel> DeleteNestedActionCommand { get; }
+    public RelayCommand<ActionItemViewModel> MoveNestedActionUpCommand { get; }
+    public RelayCommand<ActionItemViewModel> MoveNestedActionDownCommand { get; }
 
     public string? Name
     {
@@ -376,7 +409,7 @@ public sealed class ActionItemViewModel : ObservableObject
     {
         ActionTypeIds.ProgramRun => GetProgramSummary(),
         ActionTypeIds.ProcessConfigure => GetProcessSummary(),
-        ActionTypeIds.ServiceSetState => _localizationService.Format("ActionSummary.Service", GetServiceSummaryTarget()),
+        ActionTypeIds.ServiceSetState => GetServiceSummary(),
         ActionTypeIds.PowerSetPlan => _localizationService.Format("ActionSummary.PowerPlan", GetPowerPlanSummaryTarget()),
         ActionTypeIds.ScriptRun => _localizationService.Format("ActionSummary.Script", GetFileSummary(ScriptPath)),
         ActionTypeIds.DisplayConfigure => _localizationService.Format("ActionSummary.Display", GetDisplaySummaryTarget()),
@@ -469,8 +502,9 @@ public sealed class ActionItemViewModel : ObservableObject
     public bool ChangePriority { get => _changePriority; set { if (SetProperty(ref _changePriority, value)) { OnPropertyChanged(nameof(HasPostLaunchProcessSettings)); NotifyValidation(); } } }
     public bool ShouldChangeProcessPriority => !string.Equals(ProcessPriority, ProcessPriorityIds.NoChange, StringComparison.OrdinalIgnoreCase);
     public bool ShouldChangeMemoryPriority => ProcessSettingsService.IsConcreteMemoryPriority(ProcessMemoryPriority);
+    public bool ShouldChangePerformanceMode => ProcessSettingsService.IsConcretePerformanceMode(ProcessPerformanceMode);
     public bool HasPostLaunchProcessSettings => Type == ActionTypeIds.ProgramRun &&
-        (ChangeAffinity || ShouldChangeProcessPriority || ShouldChangeMemoryPriority);
+        (ChangeAffinity || ShouldChangeProcessPriority || ShouldChangeMemoryPriority || ShouldChangePerformanceMode);
     public string ProcessPriority
     {
         get => _processPriority;
@@ -499,6 +533,27 @@ public sealed class ActionItemViewModel : ObservableObject
             NotifyValidation();
         }
     }
+    public string ProcessPerformanceMode
+    {
+        get => _processPerformanceMode;
+        set
+        {
+            if (!SetProperty(ref _processPerformanceMode, value)) return;
+            OnPropertyChanged(nameof(HasPostLaunchProcessSettings));
+            OnPropertyChanged(nameof(Summary));
+            NotifyValidation();
+        }
+    }
+    public bool WaitForProcessStart
+    {
+        get => _waitForProcessStart;
+        set => SetProperty(ref _waitForProcessStart, value);
+    }
+    public int ProcessStartWaitSeconds
+    {
+        get => _processStartWaitSeconds;
+        set => SetProperty(ref _processStartWaitSeconds, Math.Clamp(value, 1, 120));
+    }
     public string ProcessOperation
     {
         get => _processOperation;
@@ -507,6 +562,9 @@ public sealed class ActionItemViewModel : ObservableObject
             if (!SetProperty(ref _processOperation, value)) return;
             OnPropertyChanged(nameof(IsProcessStopMode));
             OnPropertyChanged(nameof(IsProcessConfigureOperation));
+            AvailableRestoreBehaviors = BuildRestoreBehaviors(Type, value, _localizationService);
+            if (!IsRestoreBehaviorAvailable(RestoreBehaviorId)) RestoreBehaviorId = "none";
+            OnPropertyChanged(nameof(AvailableRestoreBehaviors));
             OnPropertyChanged(nameof(Summary));
             NotifyValidation();
         }
@@ -574,24 +632,69 @@ public sealed class ActionItemViewModel : ObservableObject
         NotifyValidation();
     }
 
-    private void AddNested(ObservableCollection<ActionItemViewModel> target, string type)
+    public ActionItemViewModel? AddNestedAction(string type, JsonObject? parameters, bool thenBranch)
     {
-        var parameters = type == ActionTypeIds.NotificationShow
-            ? new JsonObject { [ActionParameterNames.NotificationLevel] = NotificationLevelIds.Info }
-            : new JsonObject
-            {
-                [ActionParameterNames.StartOnlyIfNotAlreadyRunning] = true,
-                [ActionParameterNames.InstanceBehavior] = InstanceBehaviorIds.DoNotStartAgain
-            };
+        if (!CanAddNestedActions) return null;
+        var target = thenBranch ? ThenActions : ElseActions;
         var item = new ActionItemViewModel(new ActionDefinition
         {
-            Type = type, SortOrder = target.Count, Parameters = parameters
-        }, _localizationService, 1);
+            Type = type,
+            SortOrder = target.Count,
+            Parameters = parameters?.DeepClone().AsObject() ?? DefaultNestedParameters(type)
+        }, _localizationService, _nestingDepth + 1);
         SubscribeNested(item);
         target.Add(item);
         NotifyValidation();
         OnPropertyChanged("NestedConfiguration");
+        return item;
     }
+
+    private static JsonObject DefaultNestedParameters(string type) => type switch
+    {
+        ActionTypeIds.ProgramRun => new JsonObject
+        {
+            [ActionParameterNames.StartOnlyIfNotAlreadyRunning] = true,
+            [ActionParameterNames.InstanceBehavior] = InstanceBehaviorIds.DoNotStartAgain,
+            [ActionParameterNames.ProcessPriority] = ProcessPriorityIds.NoChange,
+            [ActionParameterNames.ProcessMemoryPriority] = ProcessMemoryPriorityIds.NoChange,
+            [ActionParameterNames.ProcessPerformanceMode] = ProcessPerformanceModeIds.NoChange,
+            [ActionParameterNames.ProcessTargetMode] = ProcessTargetModeIds.Automatic,
+            [ActionParameterNames.WaitForProcessStart] = true,
+            [ActionParameterNames.ProcessStartWaitSeconds] = 10
+        },
+        ActionTypeIds.ProcessConfigure => new JsonObject
+        {
+            [ActionParameterNames.ProcessOperation] = ProcessOperationIds.Configure,
+            [ActionParameterNames.ProcessPriority] = ProcessPriorityIds.NoChange,
+            [ActionParameterNames.ProcessMemoryPriority] = ProcessMemoryPriorityIds.NoChange,
+            [ActionParameterNames.ProcessPerformanceMode] = ProcessPerformanceModeIds.NoChange
+        },
+        ActionTypeIds.ServiceSetState => new JsonObject
+        {
+            [ActionParameterNames.DesiredState] = ServiceDesiredStateIds.Unchanged,
+            [ActionParameterNames.ServiceStartupType] = ServiceStartupTypeIds.Unchanged
+        },
+        ActionTypeIds.ScriptRun => new JsonObject
+        {
+            [ActionParameterNames.ScriptType] = ScriptTypeIds.AutoDetect,
+            [ActionParameterNames.WaitForExit] = true
+        },
+        ActionTypeIds.WaitWindow => new JsonObject { [ActionParameterNames.WindowMatchMode] = WindowMatchModeIds.Any },
+        ActionTypeIds.AudioConfigure => new JsonObject
+        {
+            [ActionParameterNames.SetDefaultMultimedia] = true,
+            [ActionParameterNames.SetDefaultCommunications] = false
+        },
+        ActionTypeIds.DeviceSetState => new JsonObject { [ActionParameterNames.DesiredState] = DeviceStateIds.Unchanged },
+        ActionTypeIds.ConditionIf => new JsonObject
+        {
+            [ActionParameterNames.ConditionType] = ConditionTypeIds.ProcessRunning,
+            [ActionParameterNames.ThenActions] = new JsonArray(),
+            [ActionParameterNames.ElseActions] = new JsonArray()
+        },
+        ActionTypeIds.NotificationShow => new JsonObject { [ActionParameterNames.NotificationLevel] = NotificationLevelIds.Info },
+        _ => []
+    };
 
     private void DeleteNestedAction(ActionItemViewModel? item)
     {
@@ -600,6 +703,44 @@ public sealed class ActionItemViewModel : ObservableObject
         ElseActions.Remove(item);
         NotifyValidation();
         OnPropertyChanged("NestedConfiguration");
+        MoveNestedActionUpCommand.NotifyCanExecuteChanged();
+        MoveNestedActionDownCommand.NotifyCanExecuteChanged();
+    }
+
+    private bool CanMoveNestedActionUp(ActionItemViewModel? item) =>
+        TryFindNestedAction(item, out _, out var index) && index > 0;
+
+    private bool CanMoveNestedActionDown(ActionItemViewModel? item) =>
+        TryFindNestedAction(item, out var branch, out var index) && index < branch.Count - 1;
+
+    private void MoveNestedAction(ActionItemViewModel? item, int direction)
+    {
+        if (!TryFindNestedAction(item, out var branch, out var index)) return;
+        var newIndex = index + direction;
+        if (newIndex < 0 || newIndex >= branch.Count) return;
+        branch.Move(index, newIndex);
+        NotifyValidation();
+        OnPropertyChanged("NestedConfiguration");
+        MoveNestedActionUpCommand.NotifyCanExecuteChanged();
+        MoveNestedActionDownCommand.NotifyCanExecuteChanged();
+    }
+
+    private bool TryFindNestedAction(ActionItemViewModel? item,
+        out ObservableCollection<ActionItemViewModel> branch, out int index)
+    {
+        if (item is not null && (index = ThenActions.IndexOf(item)) >= 0)
+        {
+            branch = ThenActions;
+            return true;
+        }
+        if (item is not null && (index = ElseActions.IndexOf(item)) >= 0)
+        {
+            branch = ElseActions;
+            return true;
+        }
+        branch = ThenActions;
+        index = -1;
+        return false;
     }
 
     private void SubscribeNested(ActionItemViewModel item) => item.PropertyChanged += (_, _) =>
@@ -720,9 +861,9 @@ public sealed class ActionItemViewModel : ObservableObject
     {
         ActionTypeIds.ProgramRun when string.IsNullOrWhiteSpace(Target) => _localizationService.GetString("Validation.ProgramTarget"),
         ActionTypeIds.ProcessConfigure when string.IsNullOrWhiteSpace(ProcessName) => _localizationService.GetString("Validation.ProcessName"),
-        ActionTypeIds.ProcessConfigure when !IsProcessStopMode && !ChangeAffinity && !ShouldChangeProcessPriority && !ShouldChangeMemoryPriority => _localizationService.GetString("Validation.NoOp"),
+        ActionTypeIds.ProcessConfigure when !IsProcessStopMode && !ChangeAffinity && !ShouldChangeProcessPriority && !ShouldChangeMemoryPriority && !ShouldChangePerformanceMode => _localizationService.GetString("Validation.NoOp"),
         ActionTypeIds.ProcessConfigure when !IsProcessStopMode && ChangeAffinity && !LogicalCpus.Any(cpu => cpu.IsSelected) => _localizationService.GetString("Validation.CpuAffinity"),
-        ActionTypeIds.ProgramRun when (ChangeAffinity || ShouldChangeProcessPriority || ShouldChangeMemoryPriority) && IsManualProcessTarget && string.IsNullOrWhiteSpace(ProcessName)
+        ActionTypeIds.ProgramRun when (ChangeAffinity || ShouldChangeProcessPriority || ShouldChangeMemoryPriority || ShouldChangePerformanceMode) && IsManualProcessTarget && string.IsNullOrWhiteSpace(ProcessName)
             => _localizationService.GetString("Validation.PostLaunchProcess"),
         ActionTypeIds.WaitProcessStart or ActionTypeIds.WaitProcessExit when string.IsNullOrWhiteSpace(ProcessName) => _localizationService.GetString("Validation.ProcessName"),
         ActionTypeIds.WaitWindow when string.IsNullOrWhiteSpace(ProcessName) => _localizationService.GetString("Validation.ProcessName"),
@@ -736,6 +877,8 @@ public sealed class ActionItemViewModel : ObservableObject
             => _localizationService.GetString("Validation.Condition"),
         ActionTypeIds.ConditionIf when ThenActions.Concat(ElseActions).Any(action => !action.IsValid)
             => _localizationService.GetString("Validation.NestedAction"),
+        ActionTypeIds.ConditionIf when _hasNestingDepthViolation
+            => _localizationService.GetString("Validation.NestingDepth"),
         ActionTypeIds.NotificationShow when string.IsNullOrWhiteSpace(NotificationMessage) => _localizationService.GetString("Validation.Notification"),
         ActionTypeIds.ServiceSetState when string.IsNullOrWhiteSpace(ServiceName) => _localizationService.GetString("Validation.ServiceName"),
         ActionTypeIds.PowerSetPlan when !Guid.TryParse(PowerPlanGuid, out _) => _localizationService.GetString("Validation.PowerPlan"),
@@ -748,7 +891,8 @@ public sealed class ActionItemViewModel : ObservableObject
             => _localizationService.GetString("Validation.ProcessRestorePath"),
         ActionTypeIds.ScriptRun when IsRestoreScriptEnabled && string.IsNullOrWhiteSpace(RestoreScriptPath)
             => _localizationService.GetString("Validation.RestoreScriptPath"),
-        ActionTypeIds.ServiceSetState when string.Equals(DesiredServiceState, ServiceDesiredStateIds.Unchanged, StringComparison.OrdinalIgnoreCase)
+        ActionTypeIds.ServiceSetState when string.Equals(DesiredServiceState, ServiceDesiredStateIds.Unchanged, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(DesiredServiceStartupType, ServiceStartupTypeIds.Unchanged, StringComparison.OrdinalIgnoreCase)
             => _localizationService.GetString("Validation.NoOp"),
         ActionTypeIds.DeviceSetState when string.Equals(DeviceState, DeviceStateIds.Unchanged, StringComparison.OrdinalIgnoreCase)
             => _localizationService.GetString("Validation.NoOp"),
@@ -757,8 +901,9 @@ public sealed class ActionItemViewModel : ObservableObject
 
     public ValidationSeverity ValidationLevel => Type switch
     {
-        ActionTypeIds.ServiceSetState when string.Equals(DesiredServiceState, ServiceDesiredStateIds.Unchanged, StringComparison.OrdinalIgnoreCase)
-            => ValidationSeverity.Warning,
+        ActionTypeIds.ServiceSetState when string.Equals(DesiredServiceState, ServiceDesiredStateIds.Unchanged, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(DesiredServiceStartupType, ServiceStartupTypeIds.Unchanged, StringComparison.OrdinalIgnoreCase)
+            => ValidationSeverity.Error,
         ActionTypeIds.DeviceSetState when string.Equals(DeviceState, DeviceStateIds.Unchanged, StringComparison.OrdinalIgnoreCase)
             => ValidationSeverity.Warning,
         _ when ValidationMessage.Length > 0 => ValidationSeverity.Error,
@@ -785,6 +930,7 @@ public sealed class ActionItemViewModel : ObservableObject
         foreach (var option in AvailableProcessStates.Concat(AvailableServiceStates).Concat(AvailableServiceStartupTypes)
                      .Concat(AvailableScriptTypes).Concat(AvailableFailurePolicies).Concat(AvailableRestoreBehaviors)
                      .Concat(AvailableProcessPriorities).Concat(AvailableProcessMemoryPriorities)
+                     .Concat(AvailableProcessPerformanceModes)
                      .Concat(AvailableWindowMatchModes).Concat(AvailableWindowBehaviors)
                      .Concat(AvailableInstanceBehaviors).Concat(AvailableDeviceStates).Concat(AvailableConditions)
                      .Concat(AvailableNotificationLevels).Concat(AvailableProcessOperations)
@@ -870,6 +1016,9 @@ public sealed class ActionItemViewModel : ObservableObject
                     .Select(cpu => (JsonNode?)JsonValue.Create(cpu.Index)).ToArray());
                 parameters[ActionParameterNames.ProcessPriority] = ProcessPriority;
                 parameters[ActionParameterNames.ProcessMemoryPriority] = ProcessMemoryPriority;
+                parameters[ActionParameterNames.ProcessPerformanceMode] = ProcessPerformanceMode;
+                parameters[ActionParameterNames.WaitForProcessStart] = WaitForProcessStart;
+                parameters[ActionParameterNames.ProcessStartWaitSeconds] = ProcessStartWaitSeconds;
                 parameters[ActionParameterNames.ProcessTargetMode] = ProcessTargetMode;
                 SetString(parameters, ActionParameterNames.ProcessName, ProcessName);
                 SetString(parameters, ActionParameterNames.ExecutablePath, ExecutablePath);
@@ -884,6 +1033,7 @@ public sealed class ActionItemViewModel : ObservableObject
                     .Select(cpu => (JsonNode?)JsonValue.Create(cpu.Index)).ToArray());
                 parameters[ActionParameterNames.ProcessPriority] = ProcessPriority;
                 parameters[ActionParameterNames.ProcessMemoryPriority] = ProcessMemoryPriority;
+                parameters[ActionParameterNames.ProcessPerformanceMode] = ProcessPerformanceMode;
                 break;
             case ActionTypeIds.ServiceSetState:
                 SetString(parameters, ActionParameterNames.ServiceName, ServiceName);
@@ -1084,7 +1234,12 @@ public sealed class ActionItemViewModel : ObservableObject
     }
 
     private static JsonArray SerializeNested(IEnumerable<ActionItemViewModel> actions) =>
-        new(actions.Select(action => JsonSerializer.SerializeToNode(action.ToModel())).ToArray());
+        new(actions.Select((action, index) =>
+        {
+            var model = action.ToModel();
+            model.SortOrder = index;
+            return JsonSerializer.SerializeToNode(model);
+        }).ToArray());
 
     private static void SetString(JsonObject parameters, string propertyName, string? value)
     {
@@ -1121,6 +1276,9 @@ public sealed class ActionItemViewModel : ObservableObject
         if (ShouldChangeMemoryPriority)
             options.Add(_localizationService.Format("ActionSummary.ProcessMemoryPriority",
                 AvailableProcessMemoryPriorities.FirstOrDefault(option => option.Value == ProcessMemoryPriority)?.DisplayName ?? ProcessMemoryPriority));
+        if (ShouldChangePerformanceMode)
+            options.Add(_localizationService.Format("ActionSummary.ProcessPerformanceMode",
+                AvailableProcessPerformanceModes.FirstOrDefault(option => option.Value == ProcessPerformanceMode)?.DisplayName ?? ProcessPerformanceMode));
         if (ChangeAffinity)
             options.Add(_localizationService.Format("ActionSummary.ProcessAffinity", GetSelectedCpuSummary()));
         if (!string.Equals(RestoreBehaviorId, "none", StringComparison.OrdinalIgnoreCase))
@@ -1144,6 +1302,9 @@ public sealed class ActionItemViewModel : ObservableObject
         if (ShouldChangeMemoryPriority)
             options.Add(_localizationService.Format("ActionSummary.ProcessMemoryPriority",
                 AvailableProcessMemoryPriorities.FirstOrDefault(option => option.Value == ProcessMemoryPriority)?.DisplayName ?? ProcessMemoryPriority));
+        if (ShouldChangePerformanceMode)
+            options.Add(_localizationService.Format("ActionSummary.ProcessPerformanceMode",
+                AvailableProcessPerformanceModes.FirstOrDefault(option => option.Value == ProcessPerformanceMode)?.DisplayName ?? ProcessPerformanceMode));
         if (ChangeAffinity)
             options.Add(_localizationService.Format("ActionSummary.ProcessAffinity", GetSelectedCpuSummary()));
         return options.Count == 0 ? summary : $"{summary} • {string.Join(" • ", options)}";
@@ -1166,6 +1327,19 @@ public sealed class ActionItemViewModel : ObservableObject
         ? ServiceDisplayName
         : string.IsNullOrWhiteSpace(ServiceName) ? _localizationService.GetString("ActionSummary.NotConfigured") : ServiceName;
 
+    private string GetServiceSummary()
+    {
+        var target = GetServiceSummaryTarget();
+        var changes = new List<string>();
+        if (!string.Equals(DesiredServiceState, ServiceDesiredStateIds.Unchanged, StringComparison.OrdinalIgnoreCase))
+            changes.Add(AvailableServiceStates.FirstOrDefault(option => option.Value == DesiredServiceState)?.DisplayName ?? DesiredServiceState);
+        if (!string.Equals(DesiredServiceStartupType, ServiceStartupTypeIds.Unchanged, StringComparison.OrdinalIgnoreCase))
+            changes.Add(AvailableServiceStartupTypes.FirstOrDefault(option => option.Value == DesiredServiceStartupType)?.DisplayName ?? DesiredServiceStartupType);
+        return changes.Count == 0
+            ? _localizationService.Format("ActionSummary.Service", target)
+            : _localizationService.Format("ActionSummary.ServiceConfigured", target, string.Join(", ", changes));
+    }
+
     private string GetPowerPlanSummaryTarget() => !string.IsNullOrWhiteSpace(PowerPlanName)
         ? PowerPlanName
         : string.IsNullOrWhiteSpace(PowerPlanGuid) ? _localizationService.GetString("ActionSummary.NotConfigured") : PowerPlanGuid;
@@ -1180,13 +1354,18 @@ public sealed class ActionItemViewModel : ObservableObject
     private static bool IsFullExecutablePath(string? value) => !string.IsNullOrWhiteSpace(value) &&
         Path.IsPathRooted(value) && string.Equals(Path.GetExtension(value), ".exe", StringComparison.OrdinalIgnoreCase);
 
+    private bool IsRestoreBehaviorAvailable(string value) =>
+        AvailableRestoreBehaviors.Any(option => string.Equals(option.Value, value, StringComparison.OrdinalIgnoreCase));
+
     private static IReadOnlyList<LocalizedValueOptionViewModel> BuildRestoreBehaviors(
-        string actionType, ILocalizationService localization) => actionType switch
+        string actionType, string operation, ILocalizationService localization) => actionType switch
     {
         ActionTypeIds.ProgramRun =>
         [new("none", "RestoreBehavior.None", localization), new("closeStarted", "RestoreBehavior.CloseStarted", localization)],
+        ActionTypeIds.ProcessConfigure when string.Equals(operation, ProcessOperationIds.Stop, StringComparison.OrdinalIgnoreCase) =>
+        [new("none", "RestoreBehavior.None", localization), new("restart", "RestoreBehavior.RestartProcess", localization)],
         ActionTypeIds.ProcessConfigure =>
-        [new("none", "RestoreBehavior.None", localization), new("previous", "RestoreBehavior.ProcessSettings", localization), new("restart", "RestoreBehavior.RestartProcess", localization)],
+        [new("none", "RestoreBehavior.None", localization), new("previous", "RestoreBehavior.ProcessSettings", localization)],
         ActionTypeIds.PowerSetPlan =>
         [new("none", "RestoreBehavior.None", localization), new("previous", "RestoreBehavior.PreviousPlan", localization)],
         ActionTypeIds.DisplayConfigure =>

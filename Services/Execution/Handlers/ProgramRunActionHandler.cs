@@ -8,12 +8,21 @@ using SwitchBoard.Localization;
 
 namespace SwitchBoard.Services.Execution.Handlers;
 
-public sealed class ProgramRunActionHandler(ILocalizationService? localization = null) : IReversibleActionHandler
+public sealed class ProgramRunActionHandler : IReversibleActionHandler
 {
     private static readonly TimeSpan IdentityTolerance = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan DiscoveryWindow = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan DiscoveryInterval = TimeSpan.FromMilliseconds(100);
     private static readonly TimeSpan RestoreTimeout = TimeSpan.FromSeconds(8);
+    private readonly ILocalizationService? _localization;
+    private readonly ProcessSettingsService _settingsService;
+
+    public ProgramRunActionHandler(ILocalizationService? localization = null,
+        ProcessSettingsService? settingsService = null)
+    {
+        _localization = localization;
+        _settingsService = settingsService ?? ProcessSettingsService.Shared;
+    }
 
     public string ActionType => ActionTypeIds.ProgramRun;
 
@@ -49,24 +58,27 @@ public sealed class ProgramRunActionHandler(ILocalizationService? localization =
                 var windowResult = await ApplyWindowBehaviorAsync(action, target, cancellationToken);
                 if (windowResult is not null) return windowResult;
                 if (IsProtocolTarget(target) || string.Equals(Path.GetExtension(target), ".lnk", StringComparison.OrdinalIgnoreCase))
+                {
+                    var postLaunchResult = await ApplyPostLaunchProcessSettingsAsync(action, target,
+                        untrackedProcess.Id, cancellationToken);
+                    if (postLaunchResult is not null) return postLaunchResult;
                     return ActionExecutionResult.Success(
                         "Windows accepted the shell handoff. The target application cannot be identified reliably for full verification.");
+                }
                 var expectedName = Path.GetFileNameWithoutExtension(target);
                 var expectedPath = Path.IsPathRooted(target) &&
                                    string.Equals(Path.GetExtension(target), ".exe", StringComparison.OrdinalIgnoreCase)
                     ? Path.GetFullPath(target) : null;
-                var verification = ProcessTargetResolver.Find(expectedName, expectedPath);
-                try
-                {
-                    var result = verification.Count > 0
-                        ? ActionExecutionResult.Success($"Verified: '{expectedName}' is running.")
-                        : ActionExecutionResult.Failure(
-                            $"Windows accepted the start request, but no matching '{expectedName}' process was found.");
-                    if (!result.IsSuccessful) return result;
-                    return await ApplyPostLaunchProcessSettingsAsync(action, target, untrackedProcess.Id, cancellationToken)
-                        ?? result;
-                }
-                finally { foreach (var process in verification) process.Dispose(); }
+                var wait = GetPostLaunchWait(action);
+                using var verificationProcess = await ProcessWaitService.WaitForStartAsync(expectedName, expectedPath,
+                    wait.UseDirectProcessId ? untrackedProcess.Id : null, wait.MaximumWait, cancellationToken);
+                var result = verificationProcess is not null
+                    ? ActionExecutionResult.Success($"Verified: '{expectedName}' is running.")
+                    : ActionExecutionResult.Failure(
+                        $"Windows accepted the start request, but no matching '{expectedName}' process was found.");
+                if (!result.IsSuccessful) return result;
+                return await ApplyPostLaunchProcessSettingsAsync(action, target, untrackedProcess.Id, cancellationToken)
+                    ?? result;
             }
 
             var fullPath = ValidateRestorableTarget(target);
@@ -166,7 +178,9 @@ public sealed class ProgramRunActionHandler(ILocalizationService? localization =
         var changePriority = ProcessSettingsService.ShouldChangeProcessPriority(action.Parameters);
         var changeMemoryPriority = ProcessSettingsService.IsConcreteMemoryPriority(
             ActionParameterReader.ReadString(action.Parameters, ActionParameterNames.ProcessMemoryPriority));
-        if (!changeAffinity && !changePriority && !changeMemoryPriority) return null;
+        var changePerformanceMode = ProcessSettingsService.IsConcretePerformanceMode(
+            ActionParameterReader.ReadString(action.Parameters, ActionParameterNames.ProcessPerformanceMode));
+        if (!changeAffinity && !changePriority && !changeMemoryPriority && !changePerformanceMode) return null;
 
         var targetMode = ActionParameterReader.ReadString(action.Parameters, ActionParameterNames.ProcessTargetMode);
         if (string.IsNullOrWhiteSpace(targetMode)) targetMode = ProcessTargetModeIds.Automatic;
@@ -189,43 +203,43 @@ public sealed class ProgramRunActionHandler(ILocalizationService? localization =
                 "A process target is required when manual selection is enabled."));
         }
 
-        var settingsService = new ProcessSettingsService();
-        var deadline = Stopwatch.StartNew();
-        while (deadline.Elapsed < TimeSpan.FromSeconds(3))
+        var wait = GetPostLaunchWait(action);
+        using var process = await ProcessWaitService.WaitForStartAsync(processName, executablePath,
+            string.Equals(targetMode, ProcessTargetModeIds.Automatic, StringComparison.OrdinalIgnoreCase)
+                ? directProcessId : null,
+            wait.MaximumWait, cancellationToken);
+        if (process is null)
+            return ActionExecutionResult.Failure(Format("Result.PostLaunchProcessNotFound",
+                $"The post-launch process '{processName}' could not be found.", processName));
+        try
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            var matches = ProcessTargetResolver.Find(processName, executablePath,
-                string.Equals(targetMode, ProcessTargetModeIds.Automatic, StringComparison.OrdinalIgnoreCase)
-                    ? directProcessId : null);
-            if (string.Equals(targetMode, ProcessTargetModeIds.Automatic, StringComparison.OrdinalIgnoreCase) &&
-                directProcessId > 0)
-            {
-                var direct = matches.FirstOrDefault(process => process.Id == directProcessId);
-                foreach (var extra in matches.Where(process => process.Id != directProcessId)) extra.Dispose();
-                matches = direct is null ? [] : [direct];
-            }
-            if (matches.Count > 0)
-            {
-                using var process = matches[0];
-                foreach (var extra in matches.Skip(1)) extra.Dispose();
-                try
-                {
-                    settingsService.Apply(process, action.Parameters);
-                    return ActionExecutionResult.Success(Format("Result.PostLaunchSettingsVerified",
-                        "Verified: the requested post-launch process settings are active."));
-                }
-                catch (Exception exception) when (exception is InvalidOperationException or ArgumentException or
-                                                   Win32Exception or NotSupportedException)
-                {
-                    return ActionExecutionResult.Failure(Format("Result.PostLaunchSettingsFailed",
-                        $"Could not change post-launch process settings: {exception.Message}", exception.Message));
-                }
-            }
-            await Task.Delay(100, cancellationToken);
+            _settingsService.Apply(process, action.Parameters);
+            return ActionExecutionResult.Success(Format("Result.PostLaunchSettingsVerified",
+                "Verified: the requested post-launch process settings are active."));
         }
+        catch (Exception exception) when (exception is InvalidOperationException or ArgumentException or
+                                           Win32Exception or NotSupportedException)
+        {
+            return ActionExecutionResult.Failure(Format("Result.PostLaunchSettingsFailed",
+                $"Could not change post-launch process settings: {exception.Message}", exception.Message));
+        }
+    }
 
-        return ActionExecutionResult.Failure(Format("Result.PostLaunchProcessNotFound",
-            $"The post-launch process '{processName}' could not be found.", processName));
+    private static (bool UseDirectProcessId, TimeSpan MaximumWait) GetPostLaunchWait(ActionDefinition action)
+    {
+        var settingsRequested = ActionParameterReader.ReadBoolean(action.Parameters,
+            ActionParameterNames.ChangeAffinity, false) ||
+            ProcessSettingsService.ShouldChangeProcessPriority(action.Parameters) ||
+            ProcessSettingsService.IsConcreteMemoryPriority(ActionParameterReader.ReadString(action.Parameters,
+                ActionParameterNames.ProcessMemoryPriority)) ||
+            ProcessSettingsService.IsConcretePerformanceMode(ActionParameterReader.ReadString(action.Parameters,
+                ActionParameterNames.ProcessPerformanceMode));
+        if (!settingsRequested) return (false, TimeSpan.Zero);
+        var enabled = ActionParameterReader.ReadBoolean(action.Parameters,
+            ActionParameterNames.WaitForProcessStart, true);
+        var seconds = Math.Clamp(ActionParameterReader.ReadInt32(action.Parameters,
+            ActionParameterNames.ProcessStartWaitSeconds, 10), 1, 120);
+        return (true, enabled ? TimeSpan.FromSeconds(seconds) : TimeSpan.Zero);
     }
 
     internal static bool IsAlreadyRunning(string target)
@@ -383,9 +397,9 @@ public sealed class ProgramRunActionHandler(ILocalizationService? localization =
             (failures.Count == 0 ? string.Empty : " Administrator privileges may be required. " + string.Join(" ", failures.Distinct())));
     }
 
-    private string Format(string key, string fallback, params object?[] arguments) => localization is null
+    private string Format(string key, string fallback, params object?[] arguments) => _localization is null
         ? string.Format(System.Globalization.CultureInfo.CurrentCulture, fallback, arguments)
-        : localization.Format(key, arguments);
+        : _localization.Format(key, arguments);
 
     private static List<TrackedProcessIdentity> FindRestoreCandidates(string processName, string? fullPath,
         IReadOnlyCollection<TrackedProcessIdentity> baseline, IReadOnlyCollection<TrackedProcessIdentity> originallyTracked,

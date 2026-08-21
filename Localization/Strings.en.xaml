@@ -29,10 +29,12 @@
     <system:String x:Key="Editor.UndoActionTest">Undo test</system:String>
     <system:String x:Key="Editor.TestAction">Test action</system:String>
     <system:String x:Key="Editor.DeleteAction">Delete action</system:String>
+    <system:String x:Key="Editor.MoveUp">Move up</system:String>
+    <system:String x:Key="Editor.MoveDown">Move down</system:String>
     <system:String x:Key="Tooltip.MoreOptions">More options</system:String>
     <system:String x:Key="ActionPicker.Category.Programs">Programs and processes</system:String>
-    <system:String x:Key="ActionPicker.Category.Windows">Windows</system:String>
-    <system:String x:Key="ActionPicker.Category.Multimedia">Multimedia</system:String>
+    <system:String x:Key="ActionPicker.Category.SystemDevices">System and devices</system:String>
+    <system:String x:Key="ActionPicker.Category.WaitingTiming">Waiting and timing</system:String>
     <system:String x:Key="ActionPicker.Category.Automation">Automation</system:String>
     <system:String x:Key="Editor.CloseAfterProfile">Close SwitchBoard after profile actions finish</system:String>
     <system:String x:Key="ActionEditor.FriendlyName">Name</system:String>
@@ -80,7 +82,7 @@
     <system:String x:Key="ActionSummary.ProgramRestore">restore: {0}</system:String>
     <system:String x:Key="ActionSummary.StopProcess">Stop process • {0}</system:String>
     <system:String x:Key="ActionSummary.StopProcessInAction">Stop process • {0}</system:String>
-    <system:String x:Key="ActionSummary.ConfigureProcess">Adjust parameters • {0}</system:String>
+    <system:String x:Key="ActionSummary.ConfigureProcess">Change settings • {0}</system:String>
     <system:String x:Key="ActionSummary.ProcessPriority">Priority: {0}</system:String>
     <system:String x:Key="ActionSummary.ProcessMemoryPriority">Memory: {0}</system:String>
     <system:String x:Key="ActionSummary.ProcessAffinity">CPU: {0}</system:String>
@@ -105,6 +107,7 @@
     <system:String x:Key="ServiceStartupType.Disabled">Disabled</system:String>
     <system:String x:Key="ActionEditor.ServiceRuntimeState">Service status</system:String>
     <system:String x:Key="ActionEditor.ServiceStartupType">Startup type</system:String>
+    <system:String x:Key="Common.Seconds">s</system:String>
     <system:String x:Key="ActionStatus.Unavailable">? State unavailable</system:String>
     <system:String x:Key="ActionStatus.LastChecked">Last checked: {0}</system:String>
     <system:String x:Key="ActionStatus.Service">{0}; startup: {1}</system:String>
@@ -442,7 +445,7 @@
     <system:String x:Key="Status.ProfileFailed">Profile execution failed</system:String>
     <system:String x:Key="Status.SettingsSaveFailed">Settings could not be saved: {0}</system:String>
     <system:String x:Key="Action.ProcessSettings">Adjust process</system:String>
-    <system:String x:Key="ProcessOperation.Configure">Adjust parameters</system:String>
+    <system:String x:Key="ProcessOperation.Configure">Change settings</system:String>
     <system:String x:Key="ProcessOperation.Stop">Stop process</system:String>
     <system:String x:Key="ProcessTargetMode.Automatic">Automatically</system:String>
     <system:String x:Key="ProcessTargetMode.Manual">Choose process</system:String>
@@ -452,7 +455,7 @@
     <system:String x:Key="Action.AudioSettings">Audio settings</system:String>
     <system:String x:Key="Action.DeviceState">Device state</system:String>
     <system:String x:Key="Action.RunProfile">Run another profile</system:String>
-    <system:String x:Key="Action.If">IF condition</system:String>
+    <system:String x:Key="Action.If">Condition</system:String>
     <system:String x:Key="Action.Notification">Notification</system:String>
     <system:String x:Key="Activity.Title">Activity</system:String>
     <system:String x:Key="Activity.Clear">Clear</system:String>
@@ -494,6 +497,8 @@
     <system:String x:Key="Advanced.WindowWait">Wait for the window at most (s)</system:String>
     <system:String x:Key="Advanced.Launching">Launching</system:String>
     <system:String x:Key="Advanced.AfterLaunch">After launch</system:String>
+    <system:String x:Key="Advanced.WaitForProcessStart">Wait for process to start</system:String>
+    <system:String x:Key="Advanced.MaximumProcessWait">Maximum wait time</system:String>
     <system:String x:Key="Advanced.ProgramWindow">Program window</system:String>
     <system:String x:Key="Advanced.UseCustomWorkingDirectory">Use custom working directory</system:String>
     <system:String x:Key="Advanced.UseCustomWorkingDirectoryHelp">Uses the selected folder as the process working directory. Disabling it preserves the entered value.</system:String>
@@ -529,7 +534,7 @@
     <system:String x:Key="Validation.Audio">Select at least one audio setting to change.</system:String>
     <system:String x:Key="Validation.Device">Select a Windows device.</system:String>
     <system:String x:Key="Validation.Profile">Select an existing profile.</system:String>
-    <system:String x:Key="Validation.Condition">Configure the IF condition.</system:String>
+    <system:String x:Key="Validation.Condition">Configure the condition.</system:String>
     <system:String x:Key="Validation.Notification">Enter a notification message.</system:String>
     <system:String x:Key="Priority.NoChange">No change</system:String><system:String x:Key="Priority.Idle">Idle</system:String><system:String x:Key="Priority.BelowNormal">Below Normal</system:String><system:String x:Key="Priority.Normal">Normal</system:String><system:String x:Key="Priority.AboveNormal">Above Normal</system:String><system:String x:Key="Priority.High">High</system:String>
     <system:String x:Key="MemoryPriority.NoChange">No change</system:String><system:String x:Key="MemoryPriority.VeryLow">Very low</system:String><system:String x:Key="MemoryPriority.Low">Low</system:String><system:String x:Key="MemoryPriority.Medium">Medium</system:String><system:String x:Key="MemoryPriority.BelowNormal">Below normal</system:String><system:String x:Key="MemoryPriority.Normal">Normal</system:String>
@@ -542,10 +547,13 @@
     <system:String x:Key="RestoreBehavior.ProcessSettings">Restore previous process settings</system:String><system:String x:Key="RestoreBehavior.AudioSettings">Restore previous audio settings</system:String><system:String x:Key="RestoreBehavior.DeviceState">Restore previous device state</system:String>
     <system:String x:Key="ActionEditor.WindowMatch">Window condition</system:String><system:String x:Key="ActionEditor.WindowTitle">Window title</system:String>
     <system:String x:Key="ActionEditor.SelectOutput">Select output</system:String><system:String x:Key="ActionEditor.SelectInput">Select input</system:String><system:String x:Key="ActionEditor.DefaultDevice">Default device</system:String><system:String x:Key="ActionEditor.DefaultCommunications">Communications device</system:String><system:String x:Key="ActionEditor.Volume">Volume</system:String><system:String x:Key="ActionEditor.ChangeMute">Change mute</system:String><system:String x:Key="ActionEditor.Mute">Muted</system:String>
-    <system:String x:Key="ActionEditor.SelectDevice">Select device</system:String><system:String x:Key="ActionEditor.DeviceWarning">Disabling devices may require administrator rights. Critical devices are protected.</system:String><system:String x:Key="ActionEditor.Profile">Profile</system:String><system:String x:Key="ActionEditor.Then">Then</system:String><system:String x:Key="ActionEditor.Else">Else</system:String>
+    <system:String x:Key="ActionEditor.SelectDevice">Select device</system:String><system:String x:Key="ActionEditor.DeviceWarning">Disabling devices may require administrator rights. Critical devices are protected.</system:String><system:String x:Key="ActionEditor.Profile">Profile</system:String><system:String x:Key="ActionEditor.Then">Then</system:String><system:String x:Key="ActionEditor.Else">Otherwise</system:String>
     <system:String x:Key="Dialog.SelectAudioInput">Select audio input</system:String><system:String x:Key="Dialog.SelectAudioOutput">Select audio output</system:String><system:String x:Key="Dialog.SelectDevice">Select Windows device</system:String>
     <system:String x:Key="Picker.Name">Name</system:String><system:String x:Key="Picker.Type">Type</system:String><system:String x:Key="Picker.Default">Default</system:String><system:String x:Key="Picker.Class">Class</system:String><system:String x:Key="Picker.State">State</system:String><system:String x:Key="Picker.InstanceId">Instance ID</system:String>
-    <system:String x:Key="Validation.NestedAction">A nested Then/Else action is incomplete.</system:String>
+    <system:String x:Key="Validation.NestedAction">A nested Then/Otherwise action is incomplete.</system:String>
+    <system:String x:Key="Result.ConditionIncomplete">The condition is incomplete.</system:String>
+    <system:String x:Key="Result.ConditionUnsupported">Unsupported condition: {0}</system:String>
+    <system:String x:Key="Result.ConditionBranchEmpty">The {0} branch is empty.</system:String>
     <system:String x:Key="Validation.RunBlocked">Cannot run profile: {0} enabled action(s) need configuration.</system:String>
     <system:String x:Key="Validation.ProfileReferenceCycle">Cannot run profile: profile references contain a cycle or missing profile.</system:String>
     <system:String x:Key="Validation.RunBusy">Profile cannot run while another operation is active.</system:String>

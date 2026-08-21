@@ -2,11 +2,13 @@ using System.IO;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using SwitchBoard.Models.Actions;
+using SwitchBoard.Localization;
 using SwitchBoard.Services.Windows;
 
 namespace SwitchBoard.Services.Execution.Handlers;
 
-public sealed class ConditionIfActionHandler(IWindowsServiceManager serviceManager) : IActionHandler
+public sealed class ConditionIfActionHandler(IWindowsServiceManager serviceManager,
+    ILocalizationService? localization = null) : IActionHandler
 {
     public string ActionType => ActionTypeIds.ConditionIf;
 
@@ -18,7 +20,8 @@ public sealed class ConditionIfActionHandler(IWindowsServiceManager serviceManag
         var type = ActionParameterReader.ReadString(action.Parameters, ActionParameterNames.ConditionType);
         var value = ActionParameterReader.ReadString(action.Parameters, ActionParameterNames.ConditionValue).Trim();
         if (string.IsNullOrWhiteSpace(type) || string.IsNullOrWhiteSpace(value))
-            return ActionExecutionResult.Failure("The IF condition is incomplete.", false);
+            return ActionExecutionResult.Failure(Format("Result.ConditionIncomplete",
+                "The condition is incomplete."), false);
 
         bool condition;
         switch (type)
@@ -44,13 +47,16 @@ public sealed class ConditionIfActionHandler(IWindowsServiceManager serviceManag
                 condition = !File.Exists(value);
                 break;
             default:
-                return ActionExecutionResult.Failure($"Unsupported IF condition: {type}", false);
+                return ActionExecutionResult.Failure(Format("Result.ConditionUnsupported",
+                    "Unsupported condition: {0}", type), false);
         }
 
         var branch = condition ? "then" : "else";
         var parameter = condition ? ActionParameterNames.ThenActions : ActionParameterNames.ElseActions;
         var actions = ReadActions(action.Parameters[parameter] as JsonArray);
-        if (actions.Count == 0) return ActionExecutionResult.Skipped($"The {branch.ToUpperInvariant()} branch is empty.");
+        if (actions.Count == 0)
+            return ActionExecutionResult.Skipped(Format("Result.ConditionBranchEmpty",
+                "The {0} branch is empty.", condition ? "Then" : "Otherwise"));
         return await context.ExecuteActionsAsync(actions, context.ActionId.Value, branch, cancellationToken);
     }
 
@@ -71,4 +77,8 @@ public sealed class ConditionIfActionHandler(IWindowsServiceManager serviceManag
         }
         return result;
     }
+
+    private string Format(string key, string fallback, params object?[] arguments) => localization is null
+        ? string.Format(System.Globalization.CultureInfo.CurrentCulture, fallback, arguments)
+        : localization.Format(key, arguments);
 }

@@ -13,7 +13,7 @@ public sealed class ActionTypeOption(
     private string _category = localizationService.GetString(categoryResourceKey);
 
     public string TypeId { get; } = typeId;
-    public string CategoryResourceKey { get; } = categoryResourceKey;
+    public string CategoryResourceKey { get; private set; } = categoryResourceKey;
     public IReadOnlyList<string> Keywords { get; } = keywords;
     public string Category => _category;
 
@@ -34,6 +34,14 @@ public sealed class ActionTypeOption(
     {
         RefreshDisplayName();
         _category = localizationService.GetString(CategoryResourceKey);
+        OnPropertyChanged(nameof(Category));
+    }
+
+    public void SetCategoryResourceKey(string resourceKey)
+    {
+        if (string.Equals(CategoryResourceKey, resourceKey, StringComparison.Ordinal)) return;
+        CategoryResourceKey = resourceKey;
+        _category = localizationService.GetString(resourceKey);
         OnPropertyChanged(nameof(Category));
     }
 

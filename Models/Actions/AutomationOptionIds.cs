@@ -20,6 +20,14 @@ public static class ProcessMemoryPriorityIds
     public const string Normal = "normal";
 }
 
+public static class ProcessPerformanceModeIds
+{
+    public const string NoChange = "noChange";
+    public const string WindowsDefault = "windowsDefault";
+    public const string HighPerformance = "highPerformance";
+    public const string Efficiency = "efficiency";
+}
+
 public static class WindowMatchModeIds
 {
     public const string Any = "any";

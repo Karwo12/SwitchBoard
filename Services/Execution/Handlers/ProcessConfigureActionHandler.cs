@@ -14,7 +14,7 @@ public sealed class ProcessConfigureActionHandler : IReversibleActionHandler
         ProcessSettingsService? settingsService = null)
     {
         _stopHandler = stopHandler ?? new ProcessSetStateActionHandler();
-        _settingsService = settingsService ?? new ProcessSettingsService();
+        _settingsService = settingsService ?? ProcessSettingsService.Shared;
     }
 
     public string ActionType => ActionTypeIds.ProcessConfigure;

@@ -46,6 +46,8 @@ public sealed class MainWindowViewModel : ObservableObject
     private ActionTypeOption? _selectedActionType;
     private string _actionPickerSearch = string.Empty;
     private bool _isActionPickerOpen;
+    private ActionItemViewModel? _nestedActionTarget;
+    private bool _nestedActionThenBranch;
     private ThemeOptionViewModel? _selectedThemeOption;
     private LanguageOptionViewModel? _selectedLanguageOption;
     private string _statusMessage;
@@ -144,21 +146,33 @@ public sealed class MainWindowViewModel : ObservableObject
         AvailableActionTypes =
         [
             new(ActionTypeIds.ProgramRun, "Action.RunProgram", localizationService, "ActionPicker.Category.Programs", "program", "programy"),
-            new(ActionTypeIds.ServiceSetState, "Action.WindowsServiceState", localizationService, "ActionPicker.Category.Programs", "service", "usługa", "usluga"),
+            new(ActionTypeIds.ServiceSetState, "Action.WindowsServiceState", localizationService, "ActionPicker.Category.SystemDevices", "service", "usługa", "usluga"),
             new(ActionTypeIds.ProcessConfigure, "Action.ProcessSettings", localizationService, "ActionPicker.Category.Programs", "process", "proces"),
-            new(ActionTypeIds.WaitProcessStart, "Action.WaitProcess", localizationService, "ActionPicker.Category.Programs", "process", "proces"),
-            new(ActionTypeIds.WaitProcessExit, "Action.WaitProcessExit", localizationService, "ActionPicker.Category.Programs", "process", "proces"),
-            new(ActionTypeIds.WaitWindow, "Action.WaitWindow", localizationService, "ActionPicker.Category.Programs", "window", "okno"),
-            new(ActionTypeIds.PowerSetPlan, "Action.PowerPlan", localizationService, "ActionPicker.Category.Windows", "power", "zasilanie"),
-            new(ActionTypeIds.DisplayConfigure, "Action.DisplaySettings", localizationService, "ActionPicker.Category.Windows", "display", "ekran"),
-            new(ActionTypeIds.DeviceSetState, "Action.DeviceState", localizationService, "ActionPicker.Category.Windows", "device", "urządzenie", "urzadzenie"),
-            new(ActionTypeIds.AudioConfigure, "Action.AudioSettings", localizationService, "ActionPicker.Category.Multimedia", "audio", "dźwięk", "dzwiek"),
-            new(ActionTypeIds.Delay, "Action.Delay", localizationService, "ActionPicker.Category.Automation", "delay", "opóźnienie", "opoznienie"),
+            new(ActionTypeIds.WaitProcessStart, "Action.WaitProcess", localizationService, "ActionPicker.Category.WaitingTiming", "process", "proces"),
+            new(ActionTypeIds.WaitProcessExit, "Action.WaitProcessExit", localizationService, "ActionPicker.Category.WaitingTiming", "process", "proces"),
+            new(ActionTypeIds.WaitWindow, "Action.WaitWindow", localizationService, "ActionPicker.Category.WaitingTiming", "window", "okno"),
+            new(ActionTypeIds.PowerSetPlan, "Action.PowerPlan", localizationService, "ActionPicker.Category.SystemDevices", "power", "zasilanie"),
+            new(ActionTypeIds.DisplayConfigure, "Action.DisplaySettings", localizationService, "ActionPicker.Category.SystemDevices", "display", "ekran"),
+            new(ActionTypeIds.DeviceSetState, "Action.DeviceState", localizationService, "ActionPicker.Category.SystemDevices", "device", "urządzenie", "urzadzenie"),
+            new(ActionTypeIds.AudioConfigure, "Action.AudioSettings", localizationService, "ActionPicker.Category.SystemDevices", "audio", "dźwięk", "dzwiek"),
+            new(ActionTypeIds.Delay, "Action.Delay", localizationService, "ActionPicker.Category.WaitingTiming", "delay", "opóźnienie", "opoznienie"),
             new(ActionTypeIds.ScriptRun, "Action.RunScript", localizationService, "ActionPicker.Category.Automation", "script", "skrypt"),
             new(ActionTypeIds.NotificationShow, "Action.Notification", localizationService, "ActionPicker.Category.Automation", "notification", "powiadomienie"),
             new(ActionTypeIds.ProfileRun, "Action.RunProfile", localizationService, "ActionPicker.Category.Automation", "profile", "profil"),
             new(ActionTypeIds.ConditionIf, "Action.If", localizationService, "ActionPicker.Category.Automation", "if", "warunek")
         ];
+        foreach (var option in AvailableActionTypes)
+        {
+            option.SetCategoryResourceKey(option.TypeId switch
+            {
+                ActionTypeIds.ProgramRun or ActionTypeIds.ProcessConfigure => "ActionPicker.Category.Programs",
+                ActionTypeIds.ServiceSetState or ActionTypeIds.PowerSetPlan or ActionTypeIds.DisplayConfigure or
+                    ActionTypeIds.DeviceSetState or ActionTypeIds.AudioConfigure => "ActionPicker.Category.SystemDevices",
+                ActionTypeIds.WaitProcessStart or ActionTypeIds.WaitProcessExit or ActionTypeIds.WaitWindow or ActionTypeIds.Delay =>
+                    "ActionPicker.Category.WaitingTiming",
+                _ => "ActionPicker.Category.Automation"
+            });
+        }
         FilteredActionTypes = new ObservableCollection<ActionTypeOption>(AvailableActionTypes);
         ActionPickerView = CollectionViewSource.GetDefaultView(FilteredActionTypes);
         ActionPickerView.GroupDescriptions.Add(new PropertyGroupDescription(nameof(ActionTypeOption.Category)));
@@ -186,8 +200,12 @@ public sealed class MainWindowViewModel : ObservableObject
         ExportProfileCommand = new AsyncRelayCommand<ProfileItemViewModel>(ExportProfileAsync, profile => profile is not null);
         ImportProfileCommand = new AsyncRelayCommand(ImportProfileAsync, () => SelectedCategory is not null && !HasCriticalOperation);
         AddActionCommand = new RelayCommand(AddAction, () => SelectedProfile is not null && SelectedActionType is not null && !HasCriticalOperation);
-        ToggleActionPickerCommand = new RelayCommand(() => IsActionPickerOpen = !IsActionPickerOpen);
+        ToggleActionPickerCommand = new RelayCommand(ToggleMainActionPicker);
         SelectActionTypeCommand = new RelayCommand<ActionTypeOption>(SelectActionType, option => option is not null);
+        OpenThenActionPickerCommand = new RelayCommand<ActionItemViewModel>(action => OpenNestedActionPicker(action, true),
+            action => action?.CanAddNestedActions == true);
+        OpenElseActionPickerCommand = new RelayCommand<ActionItemViewModel>(action => OpenNestedActionPicker(action, false),
+            action => action?.CanAddNestedActions == true);
         DeleteActionCommand = new RelayCommand<ActionItemViewModel>(DeleteAction, action => action is not null);
         DuplicateActionCommand = new RelayCommand<ActionItemViewModel>(DuplicateAction, action => action is not null && SelectedProfile is not null && !HasCriticalOperation);
         TestActionCommand = new AsyncRelayCommand<ActionItemViewModel>(TestActionAsync, CanTestAction);
@@ -700,6 +718,8 @@ public sealed class MainWindowViewModel : ObservableObject
     public RelayCommand AddActionCommand { get; }
     public RelayCommand ToggleActionPickerCommand { get; }
     public RelayCommand<ActionTypeOption> SelectActionTypeCommand { get; }
+    public RelayCommand<ActionItemViewModel> OpenThenActionPickerCommand { get; }
+    public RelayCommand<ActionItemViewModel> OpenElseActionPickerCommand { get; }
 
     public RelayCommand<ActionItemViewModel> DeleteActionCommand { get; }
     public RelayCommand<ActionItemViewModel> DuplicateActionCommand { get; }
@@ -1088,11 +1108,39 @@ public sealed class MainWindowViewModel : ObservableObject
         foreach (var option in matches) FilteredActionTypes.Add(option);
     }
 
+    private void ToggleMainActionPicker()
+    {
+        _nestedActionTarget = null;
+        IsActionPickerOpen = !IsActionPickerOpen;
+    }
+
+    private void OpenNestedActionPicker(ActionItemViewModel? action, bool thenBranch)
+    {
+        if (action is null || !action.CanAddNestedActions) return;
+        _nestedActionTarget = action;
+        _nestedActionThenBranch = thenBranch;
+        IsActionPickerOpen = true;
+    }
+
     private void SelectActionType(ActionTypeOption? option)
     {
         if (option is null) return;
         SelectedActionType = option;
         IsActionPickerOpen = false;
+        if (_nestedActionTarget is { } nestedParent)
+        {
+            RecordStructuralUndo("add-nested-action");
+            var nested = nestedParent.AddNestedAction(option.TypeId,
+                CreateDefaultActionParameters(option.TypeId), _nestedActionThenBranch);
+            _nestedActionTarget = null;
+            if (nested is not null)
+            {
+                Subscribe(nested);
+                nested.IsExpanded = true;
+                MarkDirty(_localizationService.GetString("Status.ActionAdded"));
+            }
+            return;
+        }
         AddAction();
     }
 
@@ -2703,6 +2751,9 @@ public sealed class MainWindowViewModel : ObservableObject
             [ActionParameterNames.ChangePriority] = false,
             [ActionParameterNames.ProcessPriority] = ProcessPriorityIds.NoChange,
             [ActionParameterNames.ProcessMemoryPriority] = ProcessMemoryPriorityIds.NoChange,
+            [ActionParameterNames.ProcessPerformanceMode] = ProcessPerformanceModeIds.NoChange,
+            [ActionParameterNames.WaitForProcessStart] = true,
+            [ActionParameterNames.ProcessStartWaitSeconds] = 10,
             [ActionParameterNames.ProcessTargetMode] = ProcessTargetModeIds.Automatic
         },
         ActionTypeIds.ProcessSetState => new JsonObject
@@ -2730,7 +2781,8 @@ public sealed class MainWindowViewModel : ObservableObject
             [ActionParameterNames.ChangeAffinity] = false,
             [ActionParameterNames.ChangePriority] = false,
             [ActionParameterNames.ProcessPriority] = ProcessPriorityIds.NoChange,
-            [ActionParameterNames.ProcessMemoryPriority] = ProcessMemoryPriorityIds.NoChange
+            [ActionParameterNames.ProcessMemoryPriority] = ProcessMemoryPriorityIds.NoChange,
+            [ActionParameterNames.ProcessPerformanceMode] = ProcessPerformanceModeIds.NoChange
         },
         ActionTypeIds.WaitWindow => new JsonObject
         {

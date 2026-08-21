@@ -103,26 +103,27 @@ public partial class App : Application
             var displayManager = new WindowsDisplayManager();
             var audioManager = new WindowsAudioManager();
             var deviceManager = new WindowsDeviceManager();
+            var processSettingsService = new ProcessSettingsService();
             var activityService = new ActivityService(paths, _localizationService, _logger);
             await activityService.ReconcileServiceChangesAsync(windowsServiceManager);
             var displayConfirmationService = new WpfDisplayConfirmationService(_localizationService);
             var actionRegistry = new ActionRegistry
             ([
-                new ProgramRunActionHandler(_localizationService),
+                new ProgramRunActionHandler(_localizationService, processSettingsService),
                 new ProcessSetStateActionHandler(),
                 new ServiceSetStateActionHandler(windowsServiceManager, _localizationService),
                 new PowerSetPlanActionHandler(powerPlanManager),
                 new DisplayConfigureActionHandler(displayManager, displayConfirmationService),
                 new ScriptRunActionHandler(),
                 new DelayActionHandler(),
-                new ProcessConfigureActionHandler(),
+                new ProcessConfigureActionHandler(settingsService: processSettingsService),
                 new WaitProcessActionHandler(ActionTypeIds.WaitProcessStart),
                 new WaitProcessActionHandler(ActionTypeIds.WaitProcessExit),
                 new WaitWindowActionHandler(),
                 new AudioConfigureActionHandler(audioManager),
                 new DeviceSetStateActionHandler(deviceManager),
                 new ProfileRunActionHandler(),
-                new ConditionIfActionHandler(windowsServiceManager),
+                new ConditionIfActionHandler(windowsServiceManager, _localizationService),
                 new NotificationShowActionHandler(activityService)
             ]);
             MainWindowViewModel? viewModel = null;
