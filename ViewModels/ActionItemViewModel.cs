@@ -8,6 +8,8 @@ using SwitchBoard.Services.Discovery;
 using System.Text.Json;
 using SwitchBoard.Services.Execution;
 using SwitchBoard.Services.Execution.Handlers;
+using SwitchBoard.Services.Actions;
+using SwitchBoard.ViewModels.Actions;
 
 namespace SwitchBoard.ViewModels;
 
@@ -105,7 +107,7 @@ public sealed class ActionItemViewModel : ObservableObject
         _nestingDepth = nestingDepth;
         var legacyProcessState = action.Type == ActionTypeIds.ProcessSetState;
         var normalizedType = legacyProcessState ? ActionTypeIds.ProcessConfigure : action.Type;
-        _displayNameResourceKey = GetDisplayNameResourceKey(normalizedType);
+        _displayNameResourceKey = ActionDescriptorRegistry.Get(normalizedType)?.DisplayNameResourceKey;
         Id = action.Id;
         Type = normalizedType;
         ActionSchemaVersion = action.ActionSchemaVersion;
@@ -290,7 +292,7 @@ public sealed class ActionItemViewModel : ObservableObject
             new("continue", "FailurePolicy.Continue", localizationService),
             new("stop", "FailurePolicy.Stop", localizationService)
         ];
-        AvailableRestoreBehaviors = BuildRestoreBehaviors(Type, ProcessOperation, localizationService);
+        AvailableRestoreBehaviors = ActionRestoreBehaviorProvider.Get(Type, ProcessOperation, localizationService);
         if (!AvailableRestoreBehaviors.Any(option => option.Value == _restoreBehaviorId))
             _restoreBehaviorId = "none";
         AvailableProcessPriorities = BuildOptions(localizationService,
@@ -376,6 +378,10 @@ public sealed class ActionItemViewModel : ObservableObject
     public ObservableCollection<LogicalCpuOptionViewModel> LogicalCpus { get; }
     public ObservableCollection<ActionItemViewModel> ThenActions { get; }
     public ObservableCollection<ActionItemViewModel> ElseActions { get; }
+    internal ILocalizationService LocalizationService => _localizationService;
+    internal bool HasNestingDepthViolation => _hasNestingDepthViolation;
+    internal int DisplayWidth => _displayWidth;
+    internal int DisplayHeight => _displayHeight;
     public bool CanAddNestedActions => _nestingDepth + 1 < ProfileRunner.MaximumNestingDepth &&
         Type == ActionTypeIds.ConditionIf;
     public RelayCommand AddThenNotificationCommand { get; }
@@ -405,24 +411,7 @@ public sealed class ActionItemViewModel : ObservableObject
             ? _localizationService.GetString(_displayNameResourceKey)
             : Type;
 
-    public string Summary => Type switch
-    {
-        ActionTypeIds.ProgramRun => GetProgramSummary(),
-        ActionTypeIds.ProcessConfigure => GetProcessSummary(),
-        ActionTypeIds.ServiceSetState => GetServiceSummary(),
-        ActionTypeIds.PowerSetPlan => _localizationService.Format("ActionSummary.PowerPlan", GetPowerPlanSummaryTarget()),
-        ActionTypeIds.ScriptRun => _localizationService.Format("ActionSummary.Script", GetFileSummary(ScriptPath)),
-        ActionTypeIds.DisplayConfigure => _localizationService.Format("ActionSummary.Display", GetDisplaySummaryTarget()),
-        ActionTypeIds.Delay => _localizationService.Format("ActionSummary.Delay", DelaySeconds),
-        ActionTypeIds.ProcessConfigure or ActionTypeIds.WaitProcessStart or ActionTypeIds.WaitProcessExit or ActionTypeIds.WaitWindow
-            => GetProcessSummaryTarget(),
-        ActionTypeIds.AudioConfigure => string.IsNullOrWhiteSpace(AudioOutputDeviceName) ? AudioInputDeviceName : AudioOutputDeviceName,
-        ActionTypeIds.DeviceSetState => string.IsNullOrWhiteSpace(DeviceFriendlyName) ? DeviceInstanceId : DeviceFriendlyName,
-        ActionTypeIds.ProfileRun => string.IsNullOrWhiteSpace(TargetProfileName) ? TargetProfileId : TargetProfileName,
-        ActionTypeIds.ConditionIf => ConditionValue,
-        ActionTypeIds.NotificationShow => NotificationMessage,
-        _ => DisplayName
-    };
+    public string Summary => ActionSummaryService.GetSummary(this);
 
     public bool IsExpanded
     {
@@ -562,7 +551,7 @@ public sealed class ActionItemViewModel : ObservableObject
             if (!SetProperty(ref _processOperation, value)) return;
             OnPropertyChanged(nameof(IsProcessStopMode));
             OnPropertyChanged(nameof(IsProcessConfigureOperation));
-            AvailableRestoreBehaviors = BuildRestoreBehaviors(Type, value, _localizationService);
+            AvailableRestoreBehaviors = ActionRestoreBehaviorProvider.Get(Type, value, _localizationService);
             if (!IsRestoreBehaviorAvailable(RestoreBehaviorId)) RestoreBehaviorId = "none";
             OnPropertyChanged(nameof(AvailableRestoreBehaviors));
             OnPropertyChanged(nameof(Summary));
@@ -649,52 +638,8 @@ public sealed class ActionItemViewModel : ObservableObject
         return item;
     }
 
-    private static JsonObject DefaultNestedParameters(string type) => type switch
-    {
-        ActionTypeIds.ProgramRun => new JsonObject
-        {
-            [ActionParameterNames.StartOnlyIfNotAlreadyRunning] = true,
-            [ActionParameterNames.InstanceBehavior] = InstanceBehaviorIds.DoNotStartAgain,
-            [ActionParameterNames.ProcessPriority] = ProcessPriorityIds.NoChange,
-            [ActionParameterNames.ProcessMemoryPriority] = ProcessMemoryPriorityIds.NoChange,
-            [ActionParameterNames.ProcessPerformanceMode] = ProcessPerformanceModeIds.NoChange,
-            [ActionParameterNames.ProcessTargetMode] = ProcessTargetModeIds.Automatic,
-            [ActionParameterNames.WaitForProcessStart] = true,
-            [ActionParameterNames.ProcessStartWaitSeconds] = 10
-        },
-        ActionTypeIds.ProcessConfigure => new JsonObject
-        {
-            [ActionParameterNames.ProcessOperation] = ProcessOperationIds.Configure,
-            [ActionParameterNames.ProcessPriority] = ProcessPriorityIds.NoChange,
-            [ActionParameterNames.ProcessMemoryPriority] = ProcessMemoryPriorityIds.NoChange,
-            [ActionParameterNames.ProcessPerformanceMode] = ProcessPerformanceModeIds.NoChange
-        },
-        ActionTypeIds.ServiceSetState => new JsonObject
-        {
-            [ActionParameterNames.DesiredState] = ServiceDesiredStateIds.Unchanged,
-            [ActionParameterNames.ServiceStartupType] = ServiceStartupTypeIds.Unchanged
-        },
-        ActionTypeIds.ScriptRun => new JsonObject
-        {
-            [ActionParameterNames.ScriptType] = ScriptTypeIds.AutoDetect,
-            [ActionParameterNames.WaitForExit] = true
-        },
-        ActionTypeIds.WaitWindow => new JsonObject { [ActionParameterNames.WindowMatchMode] = WindowMatchModeIds.Any },
-        ActionTypeIds.AudioConfigure => new JsonObject
-        {
-            [ActionParameterNames.SetDefaultMultimedia] = true,
-            [ActionParameterNames.SetDefaultCommunications] = false
-        },
-        ActionTypeIds.DeviceSetState => new JsonObject { [ActionParameterNames.DesiredState] = DeviceStateIds.Unchanged },
-        ActionTypeIds.ConditionIf => new JsonObject
-        {
-            [ActionParameterNames.ConditionType] = ConditionTypeIds.ProcessRunning,
-            [ActionParameterNames.ThenActions] = new JsonArray(),
-            [ActionParameterNames.ElseActions] = new JsonArray()
-        },
-        ActionTypeIds.NotificationShow => new JsonObject { [ActionParameterNames.NotificationLevel] = NotificationLevelIds.Info },
-        _ => []
-    };
+    private static JsonObject DefaultNestedParameters(string type) =>
+        ActionDescriptorRegistry.Get(type)?.CreateDefaultParameters(nested: true) ?? [];
 
     private void DeleteNestedAction(ActionItemViewModel? item)
     {
@@ -857,58 +802,9 @@ public sealed class ActionItemViewModel : ObservableObject
         OnPropertyChanged(nameof(LastChecked));
         OnPropertyChanged(nameof(ShouldShowCurrentStatus));
     }
-    public string ValidationMessage => Type switch
-    {
-        ActionTypeIds.ProgramRun when string.IsNullOrWhiteSpace(Target) => _localizationService.GetString("Validation.ProgramTarget"),
-        ActionTypeIds.ProcessConfigure when string.IsNullOrWhiteSpace(ProcessName) => _localizationService.GetString("Validation.ProcessName"),
-        ActionTypeIds.ProcessConfigure when !IsProcessStopMode && !ChangeAffinity && !ShouldChangeProcessPriority && !ShouldChangeMemoryPriority && !ShouldChangePerformanceMode => _localizationService.GetString("Validation.NoOp"),
-        ActionTypeIds.ProcessConfigure when !IsProcessStopMode && ChangeAffinity && !LogicalCpus.Any(cpu => cpu.IsSelected) => _localizationService.GetString("Validation.CpuAffinity"),
-        ActionTypeIds.ProgramRun when (ChangeAffinity || ShouldChangeProcessPriority || ShouldChangeMemoryPriority || ShouldChangePerformanceMode) && IsManualProcessTarget && string.IsNullOrWhiteSpace(ProcessName)
-            => _localizationService.GetString("Validation.PostLaunchProcess"),
-        ActionTypeIds.WaitProcessStart or ActionTypeIds.WaitProcessExit when string.IsNullOrWhiteSpace(ProcessName) => _localizationService.GetString("Validation.ProcessName"),
-        ActionTypeIds.WaitWindow when string.IsNullOrWhiteSpace(ProcessName) => _localizationService.GetString("Validation.ProcessName"),
-        ActionTypeIds.WaitWindow when WindowMatchMode is WindowMatchModeIds.Contains or WindowMatchModeIds.Exact && string.IsNullOrWhiteSpace(WindowTitle)
-            => _localizationService.GetString("Validation.WindowTitle"),
-        ActionTypeIds.AudioConfigure when string.IsNullOrWhiteSpace(AudioOutputDeviceId) && string.IsNullOrWhiteSpace(AudioInputDeviceId) && !ChangeVolume && !ChangeMute
-            => _localizationService.GetString("Validation.Audio"),
-        ActionTypeIds.DeviceSetState when string.IsNullOrWhiteSpace(DeviceInstanceId) => _localizationService.GetString("Validation.Device"),
-        ActionTypeIds.ProfileRun when !Guid.TryParse(TargetProfileId, out _) => _localizationService.GetString("Validation.Profile"),
-        ActionTypeIds.ConditionIf when string.IsNullOrWhiteSpace(ConditionType) || string.IsNullOrWhiteSpace(ConditionValue)
-            => _localizationService.GetString("Validation.Condition"),
-        ActionTypeIds.ConditionIf when ThenActions.Concat(ElseActions).Any(action => !action.IsValid)
-            => _localizationService.GetString("Validation.NestedAction"),
-        ActionTypeIds.ConditionIf when _hasNestingDepthViolation
-            => _localizationService.GetString("Validation.NestingDepth"),
-        ActionTypeIds.NotificationShow when string.IsNullOrWhiteSpace(NotificationMessage) => _localizationService.GetString("Validation.Notification"),
-        ActionTypeIds.ServiceSetState when string.IsNullOrWhiteSpace(ServiceName) => _localizationService.GetString("Validation.ServiceName"),
-        ActionTypeIds.PowerSetPlan when !Guid.TryParse(PowerPlanGuid, out _) => _localizationService.GetString("Validation.PowerPlan"),
-        ActionTypeIds.DisplayConfigure when string.IsNullOrWhiteSpace(DisplayDeviceName) || _displayWidth <= 0 || _displayHeight <= 0 || DisplayRefreshRate <= 0
-            => _localizationService.GetString("Validation.Display"),
-        ActionTypeIds.ScriptRun when string.IsNullOrWhiteSpace(ScriptPath) => _localizationService.GetString("Validation.ScriptPath"),
-        ActionTypeIds.ProgramRun when RestoreBehaviorId == "closeStarted" && !IsFullExecutablePath(Target)
-            => _localizationService.GetString("Validation.ProgramRestorePath"),
-        ActionTypeIds.ProcessConfigure when IsProcessStopMode && RestoreBehaviorId == "restart" && !IsFullExecutablePath(ExecutablePath)
-            => _localizationService.GetString("Validation.ProcessRestorePath"),
-        ActionTypeIds.ScriptRun when IsRestoreScriptEnabled && string.IsNullOrWhiteSpace(RestoreScriptPath)
-            => _localizationService.GetString("Validation.RestoreScriptPath"),
-        ActionTypeIds.ServiceSetState when string.Equals(DesiredServiceState, ServiceDesiredStateIds.Unchanged, StringComparison.OrdinalIgnoreCase) &&
-            string.Equals(DesiredServiceStartupType, ServiceStartupTypeIds.Unchanged, StringComparison.OrdinalIgnoreCase)
-            => _localizationService.GetString("Validation.NoOp"),
-        ActionTypeIds.DeviceSetState when string.Equals(DeviceState, DeviceStateIds.Unchanged, StringComparison.OrdinalIgnoreCase)
-            => _localizationService.GetString("Validation.NoOp"),
-        _ => string.Empty
-    };
+    public string ValidationMessage => ActionValidationService.GetMessage(this);
 
-    public ValidationSeverity ValidationLevel => Type switch
-    {
-        ActionTypeIds.ServiceSetState when string.Equals(DesiredServiceState, ServiceDesiredStateIds.Unchanged, StringComparison.OrdinalIgnoreCase) &&
-            string.Equals(DesiredServiceStartupType, ServiceStartupTypeIds.Unchanged, StringComparison.OrdinalIgnoreCase)
-            => ValidationSeverity.Error,
-        ActionTypeIds.DeviceSetState when string.Equals(DeviceState, DeviceStateIds.Unchanged, StringComparison.OrdinalIgnoreCase)
-            => ValidationSeverity.Warning,
-        _ when ValidationMessage.Length > 0 => ValidationSeverity.Error,
-        _ => ValidationSeverity.Valid
-    };
+    public ValidationSeverity ValidationLevel => ActionValidationService.GetSeverity(this);
 
     public int DelaySeconds
     {
@@ -939,6 +835,8 @@ public sealed class ActionItemViewModel : ObservableObject
             option.RefreshDisplayName();
         }
     }
+
+    internal string GetLocalizedText(string key) => _localizationService.GetString(key);
 
     public void TrySetSuggestedName(string? suggestedName)
     {
@@ -1247,107 +1145,6 @@ public sealed class ActionItemViewModel : ObservableObject
         else parameters[propertyName] = value.Trim();
     }
 
-    private string GetFileSummary(string value)
-    {
-        if (string.IsNullOrWhiteSpace(value)) return _localizationService.GetString("ActionSummary.NotConfigured");
-        if (Uri.TryCreate(value, UriKind.Absolute, out var uri) && !uri.IsFile) return value;
-        return Path.GetFileName(value.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
-    }
-
-    private string GetProgramSummary()
-    {
-        var summary = _localizationService.Format("ActionSummary.RunProgram", GetFileSummary(Target));
-        var options = new List<string>();
-
-        if (InstanceBehavior == InstanceBehaviorIds.StartAnother)
-            options.Add(_localizationService.GetString("ActionSummary.ProgramStartsAnother"));
-        else if (InstanceBehavior == InstanceBehaviorIds.DoNotStartAgain)
-            options.Add(_localizationService.GetString("ActionSummary.ProgramDoesNotDuplicate"));
-        if (!string.Equals(WindowBehavior, WindowBehaviorIds.None, StringComparison.OrdinalIgnoreCase))
-            options.Add(_localizationService.Format("ActionSummary.ProgramWindow",
-                AvailableWindowBehaviors.FirstOrDefault(option => option.Value == WindowBehavior)?.DisplayName ?? WindowBehavior));
-        if (RetryOnFailure)
-            options.Add(_localizationService.GetString("ActionSummary.ProgramRetry"));
-        if (UseCustomWorkingDirectory)
-            options.Add(_localizationService.GetString("ActionSummary.ProgramCustomDirectory"));
-        if (ShouldChangeProcessPriority)
-            options.Add(_localizationService.Format("ActionSummary.ProcessPriority",
-                AvailableProcessPriorities.FirstOrDefault(option => option.Value == ProcessPriority)?.DisplayName ?? ProcessPriority));
-        if (ShouldChangeMemoryPriority)
-            options.Add(_localizationService.Format("ActionSummary.ProcessMemoryPriority",
-                AvailableProcessMemoryPriorities.FirstOrDefault(option => option.Value == ProcessMemoryPriority)?.DisplayName ?? ProcessMemoryPriority));
-        if (ShouldChangePerformanceMode)
-            options.Add(_localizationService.Format("ActionSummary.ProcessPerformanceMode",
-                AvailableProcessPerformanceModes.FirstOrDefault(option => option.Value == ProcessPerformanceMode)?.DisplayName ?? ProcessPerformanceMode));
-        if (ChangeAffinity)
-            options.Add(_localizationService.Format("ActionSummary.ProcessAffinity", GetSelectedCpuSummary()));
-        if (!string.Equals(RestoreBehaviorId, "none", StringComparison.OrdinalIgnoreCase))
-            options.Add(_localizationService.Format("ActionSummary.ProgramRestore",
-                AvailableRestoreBehaviors.FirstOrDefault(option => option.Value == RestoreBehaviorId)?.DisplayName ?? RestoreBehaviorId));
-
-        return options.Count == 0 ? summary : $"{summary} · {string.Join(" · ", options)}";
-    }
-
-    private string GetProcessSummary()
-    {
-        var target = GetProcessSummaryTarget();
-        if (IsProcessStopMode)
-            return _localizationService.Format("ActionSummary.StopProcessInAction", target);
-
-        var summary = _localizationService.Format("ActionSummary.ConfigureProcess", target);
-        var options = new List<string>();
-        if (ShouldChangeProcessPriority)
-            options.Add(_localizationService.Format("ActionSummary.ProcessPriority",
-                AvailableProcessPriorities.FirstOrDefault(option => option.Value == ProcessPriority)?.DisplayName ?? ProcessPriority));
-        if (ShouldChangeMemoryPriority)
-            options.Add(_localizationService.Format("ActionSummary.ProcessMemoryPriority",
-                AvailableProcessMemoryPriorities.FirstOrDefault(option => option.Value == ProcessMemoryPriority)?.DisplayName ?? ProcessMemoryPriority));
-        if (ShouldChangePerformanceMode)
-            options.Add(_localizationService.Format("ActionSummary.ProcessPerformanceMode",
-                AvailableProcessPerformanceModes.FirstOrDefault(option => option.Value == ProcessPerformanceMode)?.DisplayName ?? ProcessPerformanceMode));
-        if (ChangeAffinity)
-            options.Add(_localizationService.Format("ActionSummary.ProcessAffinity", GetSelectedCpuSummary()));
-        return options.Count == 0 ? summary : $"{summary} • {string.Join(" • ", options)}";
-    }
-
-    private string GetSelectedCpuSummary()
-    {
-        var selected = LogicalCpus.Where(cpu => cpu.IsSelected).Select(cpu => cpu.Index).ToArray();
-        return selected.Length == 0 ? _localizationService.GetString("ActionSummary.NotConfigured") :
-            selected.Length == LogicalCpus.Count ? _localizationService.GetString("ActionSummary.AllCpus") : string.Join(", ", selected);
-    }
-
-    private string GetProcessSummaryTarget() => !string.IsNullOrWhiteSpace(ExecutablePath)
-        ? Path.GetFileName(ExecutablePath)
-        : string.IsNullOrWhiteSpace(ProcessName)
-            ? _localizationService.GetString("ActionSummary.NotConfigured")
-            : $"{Path.GetFileNameWithoutExtension(ProcessName)}.exe";
-
-    private string GetServiceSummaryTarget() => !string.IsNullOrWhiteSpace(ServiceDisplayName)
-        ? ServiceDisplayName
-        : string.IsNullOrWhiteSpace(ServiceName) ? _localizationService.GetString("ActionSummary.NotConfigured") : ServiceName;
-
-    private string GetServiceSummary()
-    {
-        var target = GetServiceSummaryTarget();
-        var changes = new List<string>();
-        if (!string.Equals(DesiredServiceState, ServiceDesiredStateIds.Unchanged, StringComparison.OrdinalIgnoreCase))
-            changes.Add(AvailableServiceStates.FirstOrDefault(option => option.Value == DesiredServiceState)?.DisplayName ?? DesiredServiceState);
-        if (!string.Equals(DesiredServiceStartupType, ServiceStartupTypeIds.Unchanged, StringComparison.OrdinalIgnoreCase))
-            changes.Add(AvailableServiceStartupTypes.FirstOrDefault(option => option.Value == DesiredServiceStartupType)?.DisplayName ?? DesiredServiceStartupType);
-        return changes.Count == 0
-            ? _localizationService.Format("ActionSummary.Service", target)
-            : _localizationService.Format("ActionSummary.ServiceConfigured", target, string.Join(", ", changes));
-    }
-
-    private string GetPowerPlanSummaryTarget() => !string.IsNullOrWhiteSpace(PowerPlanName)
-        ? PowerPlanName
-        : string.IsNullOrWhiteSpace(PowerPlanGuid) ? _localizationService.GetString("ActionSummary.NotConfigured") : PowerPlanGuid;
-
-    private string GetDisplaySummaryTarget() => string.IsNullOrWhiteSpace(DisplayMonitorName) || _displayWidth <= 0
-        ? _localizationService.GetString("ActionSummary.NotConfigured")
-        : $"{DisplayMonitorName} • {_displayWidth} × {_displayHeight} @ {DisplayRefreshRate} Hz";
-
     private static string DefaultIfEmpty(string value, string defaultValue) =>
         string.IsNullOrWhiteSpace(value) ? defaultValue : value;
 
@@ -1357,47 +1154,7 @@ public sealed class ActionItemViewModel : ObservableObject
     private bool IsRestoreBehaviorAvailable(string value) =>
         AvailableRestoreBehaviors.Any(option => string.Equals(option.Value, value, StringComparison.OrdinalIgnoreCase));
 
-    private static IReadOnlyList<LocalizedValueOptionViewModel> BuildRestoreBehaviors(
-        string actionType, string operation, ILocalizationService localization) => actionType switch
-    {
-        ActionTypeIds.ProgramRun =>
-        [new("none", "RestoreBehavior.None", localization), new("closeStarted", "RestoreBehavior.CloseStarted", localization)],
-        ActionTypeIds.ProcessConfigure when string.Equals(operation, ProcessOperationIds.Stop, StringComparison.OrdinalIgnoreCase) =>
-        [new("none", "RestoreBehavior.None", localization), new("restart", "RestoreBehavior.RestartProcess", localization)],
-        ActionTypeIds.ProcessConfigure =>
-        [new("none", "RestoreBehavior.None", localization), new("previous", "RestoreBehavior.ProcessSettings", localization)],
-        ActionTypeIds.PowerSetPlan =>
-        [new("none", "RestoreBehavior.None", localization), new("previous", "RestoreBehavior.PreviousPlan", localization)],
-        ActionTypeIds.DisplayConfigure =>
-        [new("none", "RestoreBehavior.None", localization), new("previous", "RestoreBehavior.PreviousDisplay", localization)],
-        ActionTypeIds.ScriptRun =>
-        [new("none", "RestoreBehavior.None", localization), new("restoreScript", "RestoreBehavior.RestoreScript", localization)],
-        ActionTypeIds.AudioConfigure =>
-        [new("none", "RestoreBehavior.None", localization), new("previous", "RestoreBehavior.AudioSettings", localization)],
-        ActionTypeIds.DeviceSetState =>
-        [new("none", "RestoreBehavior.None", localization), new("previous", "RestoreBehavior.DeviceState", localization)],
-        _ => [new("none", "RestoreBehavior.None", localization), new("previous", "RestoreBehavior.Previous", localization)]
-    };
 
-    private static string? GetDisplayNameResourceKey(string actionType) => actionType switch
-    {
-        ActionTypeIds.ProcessConfigure => "Action.ProcessSettings",
-        ActionTypeIds.ProgramRun => "Action.RunProgram",
-        ActionTypeIds.ServiceSetState => "Action.WindowsServiceState",
-        ActionTypeIds.DisplayConfigure => "Action.DisplaySettings",
-        ActionTypeIds.PowerSetPlan => "Action.PowerPlan",
-        ActionTypeIds.ScriptRun => "Action.RunScript",
-        ActionTypeIds.Delay => "Action.Delay",
-        ActionTypeIds.WaitProcessStart => "Action.WaitProcess",
-        ActionTypeIds.WaitProcessExit => "Action.WaitProcessExit",
-        ActionTypeIds.WaitWindow => "Action.WaitWindow",
-        ActionTypeIds.AudioConfigure => "Action.AudioSettings",
-        ActionTypeIds.DeviceSetState => "Action.DeviceState",
-        ActionTypeIds.ProfileRun => "Action.RunProfile",
-        ActionTypeIds.ConditionIf => "Action.If",
-        ActionTypeIds.NotificationShow => "Action.Notification",
-        _ => null
-    };
 
     private static IReadOnlyList<LocalizedValueOptionViewModel> BuildOptions(ILocalizationService localization,
         params (string Value, string ResourceKey)[] values) =>
