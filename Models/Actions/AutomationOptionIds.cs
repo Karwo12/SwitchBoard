@@ -2,11 +2,22 @@ namespace SwitchBoard.Models.Actions;
 
 public static class ProcessPriorityIds
 {
+    public const string NoChange = "noChange";
     public const string Idle = "idle";
     public const string BelowNormal = "belowNormal";
     public const string Normal = "normal";
     public const string AboveNormal = "aboveNormal";
     public const string High = "high";
+}
+
+public static class ProcessMemoryPriorityIds
+{
+    public const string NoChange = "noChange";
+    public const string VeryLow = "veryLow";
+    public const string Low = "low";
+    public const string Medium = "medium";
+    public const string BelowNormal = "belowNormal";
+    public const string Normal = "normal";
 }
 
 public static class WindowMatchModeIds

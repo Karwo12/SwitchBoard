@@ -19,7 +19,7 @@
     <system:String x:Key="Panel.ProfileEditor">Edytor profilu</system:String>
     <system:String x:Key="Panel.ProfileEditorSubtitle">Uporządkowane akcje wybranego profilu</system:String>
 
-    <system:String x:Key="Editor.NewActionType">NOWY TYP AKCJI</system:String>
+    <system:String x:Key="Editor.NewActionType">Nowy typ akcji</system:String>
     <system:String x:Key="Editor.AddAction">+ Dodaj akcję</system:String>
     <system:String x:Key="Editor.SearchActions">Szukaj akcji...</system:String>
     <system:String x:Key="Editor.NoActionsFound">Nie znaleziono akcji</system:String>
@@ -60,7 +60,7 @@
     <system:String x:Key="ActionEditor.SelectArguments">Wybierz</system:String>
     <system:String x:Key="ActionEditor.AdvancedOptions">Opcje zaawansowane</system:String>
     <system:String x:Key="ActionEditor.SelectDisplay">Wybierz monitor</system:String>
-    <system:String x:Key="ActionEditor.SelectedDisplay">WYBRANY MONITOR</system:String>
+    <system:String x:Key="ActionEditor.SelectedDisplay">Wybrany monitor</system:String>
     <system:String x:Key="ActionEditor.Resolution">Rozdzielczość</system:String>
     <system:String x:Key="ActionEditor.RefreshRate">Częstotliwość odświeżania</system:String>
     <system:String x:Key="ActionEditor.DisplaySafetyHint">Po zmianie trybu pojawi się 15-sekundowe potwierdzenie. Bez potwierdzenia poprzedni tryb zostanie przywrócony.</system:String>
@@ -79,6 +79,12 @@
     <system:String x:Key="ActionSummary.ProgramCustomDirectory">własny katalog roboczy</system:String>
     <system:String x:Key="ActionSummary.ProgramRestore">przywracanie: {0}</system:String>
     <system:String x:Key="ActionSummary.StopProcess">Zatrzymaj proces • {0}</system:String>
+    <system:String x:Key="ActionSummary.StopProcessInAction">Zatrzymaj proces • {0}</system:String>
+    <system:String x:Key="ActionSummary.ConfigureProcess">Dostosuj parametry • {0}</system:String>
+    <system:String x:Key="ActionSummary.ProcessPriority">Priorytet: {0}</system:String>
+    <system:String x:Key="ActionSummary.ProcessMemoryPriority">Pamięć: {0}</system:String>
+    <system:String x:Key="ActionSummary.ProcessAffinity">CPU: {0}</system:String>
+    <system:String x:Key="ActionSummary.AllCpus">wszystkie CPU</system:String>
     <system:String x:Key="ActionSummary.ProcessUnchanged">Bez zmian • {0}</system:String>
     <system:String x:Key="ActionSummary.Service">Usługa Windows • {0}</system:String>
     <system:String x:Key="ActionSummary.PowerPlan">Plan zasilania • {0}</system:String>
@@ -97,8 +103,8 @@
     <system:String x:Key="ServiceStartupType.AutomaticDelayed">Automatyczny (opóźniony start)</system:String>
     <system:String x:Key="ServiceStartupType.Manual">Ręczny</system:String>
     <system:String x:Key="ServiceStartupType.Disabled">Wyłączony</system:String>
-    <system:String x:Key="ActionEditor.ServiceRuntimeState">STAN USŁUGI</system:String>
-    <system:String x:Key="ActionEditor.ServiceStartupType">TYP URUCHOMIENIA</system:String>
+    <system:String x:Key="ActionEditor.ServiceRuntimeState">Stan usługi</system:String>
+    <system:String x:Key="ActionEditor.ServiceStartupType">Typ uruchomienia</system:String>
     <system:String x:Key="ActionStatus.Unavailable">? Stan niedostępny</system:String>
     <system:String x:Key="ActionStatus.LastChecked">Ostatnie sprawdzenie: {0}</system:String>
     <system:String x:Key="ActionStatus.Service">{0}; uruchamianie: {1}</system:String>
@@ -131,7 +137,7 @@
     <system:String x:Key="RestoreBehavior.PreviousDisplay">Przywróć poprzednie ustawienia ekranu</system:String>
     <system:String x:Key="RestoreBehavior.RestoreScript">Uruchom skrypt przywracający</system:String>
     <system:String x:Key="RestoreScript.Help">Skrypty nie mają automatycznego stanu do przywrócenia. Możesz opcjonalnie wskazać osobny skrypt cofający zmiany.</system:String>
-    <system:String x:Key="RestoreScript.Path">ŚCIEŻKA SKRYPTU PRZYWRACAJĄCEGO</system:String>
+    <system:String x:Key="RestoreScript.Path">Ścieżka skryptu przywracającego</system:String>
     <system:String x:Key="RestoreScript.Wait">Czekaj na zakończenie skryptu przywracającego</system:String>
     <system:String x:Key="Dialog.SelectRestoreScriptTitle">Wybierz skrypt przywracający</system:String>
     <system:String x:Key="Validation.ProgramTarget">Wybierz program przed uruchomieniem tego profilu.</system:String>
@@ -282,7 +288,7 @@
     <system:String x:Key="CustomTheme.Rename">Zmień nazwę</system:String>
     <system:String x:Key="CustomTheme.Delete">Usuń motyw</system:String>
     <system:String x:Key="CustomTheme.Manage">Zarządzaj motywem</system:String>
-    <system:String x:Key="CustomTheme.ThemeName">NAZWA MOTYWU</system:String>
+    <system:String x:Key="CustomTheme.ThemeName">Nazwa motywu</system:String>
     <system:String x:Key="CustomTheme.NameRequired">Podaj nazwę motywu.</system:String>
     <system:String x:Key="CustomTheme.DuplicateName">Motyw o tej nazwie już istnieje.</system:String>
     <system:String x:Key="CustomTheme.DeleteConfirm">Usunąć motyw „{0}”?</system:String>
@@ -296,7 +302,7 @@
     <system:String x:Key="CustomTheme.RenamedStatus">Zmieniono nazwę motywu.</system:String>
     <system:String x:Key="CustomTheme.DeletedStatus">Usunięto motyw.</system:String>
     <system:String x:Key="CustomTheme.Subtitle">Utwórz czytelny motyw z kolorów semantycznych. Zmiany są widoczne od razu.</system:String>
-    <system:String x:Key="CustomTheme.Colors">KOLORY</system:String>
+    <system:String x:Key="CustomTheme.Colors">Kolory</system:String>
     <system:String x:Key="CustomTheme.Color.Background">Tło</system:String>
     <system:String x:Key="CustomTheme.Color.Panel">Panele</system:String>
     <system:String x:Key="CustomTheme.Color.Card">Karty</system:String>
@@ -313,19 +319,19 @@
     <system:String x:Key="CustomTheme.Color.MenuBackground">Tło menu</system:String>
     <system:String x:Key="CustomTheme.Color.MenuHover">Wskazanie w menu</system:String>
     <system:String x:Key="CustomTheme.AutomaticForegroundHint">Kolory tekstu przycisków i menu są dobierane automatycznie, aby zachować czytelny kontrast.</system:String>
-    <system:String x:Key="CustomTheme.SurfaceOpacity">PRZEZROCZYSTOŚĆ PANELI</system:String>
+    <system:String x:Key="CustomTheme.SurfaceOpacity">Przezroczystość paneli</system:String>
     <system:String x:Key="CustomTheme.SurfaceOpacityHint">100% oznacza nieprzezroczyste panele. Suwak ustawia też cztery główne bloki, które możesz dostroić osobno poniżej. Nie zmienia tła obrazu, tekstu, ikon ani obramowań.</system:String>
-    <system:String x:Key="CustomTheme.CategoriesOpacity">BLOK KATEGORII</system:String>
-    <system:String x:Key="CustomTheme.ProfilesOpacity">BLOK PROFILI</system:String>
-    <system:String x:Key="CustomTheme.ProfileEditorOpacity">BLOK EDYTORA PROFILU</system:String>
-    <system:String x:Key="CustomTheme.ActivityOpacity">BLOK AKTYWNOŚCI</system:String>
+    <system:String x:Key="CustomTheme.CategoriesOpacity">Blok kategorii</system:String>
+    <system:String x:Key="CustomTheme.ProfilesOpacity">Blok profili</system:String>
+    <system:String x:Key="CustomTheme.ProfileEditorOpacity">Blok edytora profilu</system:String>
+    <system:String x:Key="CustomTheme.ActivityOpacity">Blok aktywności</system:String>
     <system:String x:Key="CustomTheme.ChooseColor">Wybierz kolor</system:String>
-    <system:String x:Key="CustomTheme.BackgroundImage">TŁO OBRAZU</system:String>
+    <system:String x:Key="CustomTheme.BackgroundImage">Tło obrazu</system:String>
     <system:String x:Key="CustomTheme.ChooseImage">Wybierz obraz</system:String>
     <system:String x:Key="CustomTheme.RemoveBackground">Usuń tło</system:String>
-    <system:String x:Key="CustomTheme.ImageFit">DOPASOWANIE OBRAZU</system:String>
-    <system:String x:Key="CustomTheme.BackgroundOpacity">KRYCIE TŁA</system:String>
-    <system:String x:Key="CustomTheme.DarkOverlay">PRZYCIEMNIENIE</system:String>
+    <system:String x:Key="CustomTheme.ImageFit">Dopasowanie obrazu</system:String>
+    <system:String x:Key="CustomTheme.BackgroundOpacity">Krycie tła</system:String>
+    <system:String x:Key="CustomTheme.DarkOverlay">Przyciemnienie</system:String>
     <system:String x:Key="CustomTheme.Fit.Fill">Wypełnij</system:String>
     <system:String x:Key="CustomTheme.Fit.Uniform">Jednolicie</system:String>
     <system:String x:Key="CustomTheme.Fit.UniformToFill">Jednolicie z wypełnieniem</system:String>
@@ -435,7 +441,11 @@
     <system:String x:Key="Status.ProfileCancelled">Anulowano wykonywanie profilu</system:String>
     <system:String x:Key="Status.ProfileFailed">Wykonywanie profilu zakończyło się błędem</system:String>
     <system:String x:Key="Status.SettingsSaveFailed">Nie można zapisać ustawień: {0}</system:String>
-    <system:String x:Key="Action.ProcessSettings">Ustawienia procesu</system:String>
+    <system:String x:Key="Action.ProcessSettings">Dostosuj proces</system:String>
+    <system:String x:Key="ProcessOperation.Configure">Dostosuj parametry</system:String>
+    <system:String x:Key="ProcessOperation.Stop">Zatrzymaj proces</system:String>
+    <system:String x:Key="ProcessTargetMode.Automatic">Automatycznie</system:String>
+    <system:String x:Key="ProcessTargetMode.Manual">Wskaż proces</system:String>
     <system:String x:Key="Action.WaitProcess">Czekaj na proces</system:String>
     <system:String x:Key="Action.WaitProcessExit">Czekaj na zamknięcie procesu</system:String>
     <system:String x:Key="Action.WaitWindow">Czekaj na okno</system:String>
@@ -483,29 +493,46 @@
     <system:String x:Key="Advanced.WindowBehavior">Zachowanie okna</system:String>
     <system:String x:Key="Advanced.WindowWait">Czekaj na okno maksymalnie (s)</system:String>
     <system:String x:Key="Advanced.Launching">Uruchamianie</system:String>
+    <system:String x:Key="Advanced.AfterLaunch">Po uruchomieniu</system:String>
     <system:String x:Key="Advanced.ProgramWindow">Okno programu</system:String>
     <system:String x:Key="Advanced.UseCustomWorkingDirectory">Użyj własnego katalogu roboczego</system:String>
     <system:String x:Key="Advanced.UseCustomWorkingDirectoryHelp">Używa wskazanego katalogu jako bieżącego katalogu procesu. Wyłączenie zachowuje wpisaną wartość.</system:String>
     <system:String x:Key="Advanced.RetryAndErrors">Błędy i ponawianie</system:String>
+    <system:String x:Key="Advanced.ProcessParameters">Parametry procesu</system:String>
+    <system:String x:Key="Advanced.Stopping">Zatrzymywanie</system:String>
+    <system:String x:Key="Advanced.ErrorHandling">Obsługa błędów</system:String>
     <system:String x:Key="Advanced.Restoring">Przywracanie</system:String>
     <system:String x:Key="ActionEditor.CpuAffinity">Koligacja CPU</system:String>
     <system:String x:Key="ActionEditor.SelectAll">Zaznacz wszystkie</system:String>
     <system:String x:Key="ActionEditor.ClearAll">Odznacz wszystkie</system:String>
     <system:String x:Key="ActionEditor.AllExceptCpu0">Wszystkie oprócz CPU0</system:String>
     <system:String x:Key="ActionEditor.Priority">Priorytet procesu</system:String>
+    <system:String x:Key="ActionEditor.MemoryPriority">Priorytet pamięci</system:String>
+    <system:String x:Key="ActionEditor.MemoryPriorityHelp">Określa, jak Windows traktuje strony pamięci procesu przy presji na RAM. Niższy priorytet pozwala wcześniej usuwać je z working set. Nie ogranicza ilości pamięci dostępnej dla procesu.</system:String>
+    <system:String x:Key="ActionEditor.ProcessOperation">Rodzaj operacji</system:String>
+    <system:String x:Key="ActionEditor.ChangePriority">Zmień priorytet procesu</system:String>
+    <system:String x:Key="ActionEditor.ChangeAffinity">Zmień koligację CPU</system:String>
+    <system:String x:Key="ActionEditor.ProcessTarget">Proces docelowy</system:String>
     <system:String x:Key="ActionEditor.Condition">Warunek</system:String>
     <system:String x:Key="ActionEditor.Value">Wartość</system:String>
     <system:String x:Key="ActionEditor.Message">Wiadomość</system:String>
     <system:String x:Key="ActionEditor.Level">Poziom</system:String>
     <system:String x:Key="Validation.ProcessSetting">Wybierz affinity, priorytet albo obie zmiany.</system:String>
     <system:String x:Key="Validation.CpuAffinity">Affinity CPU musi zawierać co najmniej jeden procesor logiczny.</system:String>
+    <system:String x:Key="Validation.PostLaunchProcess">Wskaż proces docelowy po uruchomieniu.</system:String>
+    <system:String x:Key="Result.PostLaunchAutomaticTargetUnavailable">Automatyczny proces docelowy jest niedostępny dla odnośnika protokołu. Wskaż proces ręcznie.</system:String>
+    <system:String x:Key="Result.PostLaunchTargetRequired">Wskaż proces docelowy, gdy używasz ręcznego wyboru.</system:String>
+    <system:String x:Key="Result.PostLaunchSettingsVerified">Potwierdzono zastosowanie ustawień procesu po uruchomieniu.</system:String>
+    <system:String x:Key="Result.PostLaunchSettingsFailed">Nie udało się zmienić ustawień procesu po uruchomieniu: {0}</system:String>
+    <system:String x:Key="Result.PostLaunchProcessNotFound">Nie znaleziono procesu po uruchomieniu: {0}</system:String>
     <system:String x:Key="Validation.WindowTitle">Wpisz tytuł okna do dopasowania.</system:String>
     <system:String x:Key="Validation.Audio">Wybierz co najmniej jedno ustawienie audio do zmiany.</system:String>
     <system:String x:Key="Validation.Device">Wybierz urządzenie Windows.</system:String>
     <system:String x:Key="Validation.Profile">Wybierz istniejący profil.</system:String>
     <system:String x:Key="Validation.Condition">Skonfiguruj warunek IF.</system:String>
     <system:String x:Key="Validation.Notification">Wpisz treść powiadomienia.</system:String>
-    <system:String x:Key="Priority.Idle">Bezczynny</system:String><system:String x:Key="Priority.BelowNormal">Poniżej normalnego</system:String><system:String x:Key="Priority.Normal">Normalny</system:String><system:String x:Key="Priority.AboveNormal">Powyżej normalnego</system:String><system:String x:Key="Priority.High">Wysoki</system:String>
+    <system:String x:Key="Priority.NoChange">Bez zmian</system:String><system:String x:Key="Priority.Idle">Bezczynny</system:String><system:String x:Key="Priority.BelowNormal">Poniżej normalnego</system:String><system:String x:Key="Priority.Normal">Normalny</system:String><system:String x:Key="Priority.AboveNormal">Powyżej normalnego</system:String><system:String x:Key="Priority.High">Wysoki</system:String>
+    <system:String x:Key="MemoryPriority.NoChange">Bez zmian</system:String><system:String x:Key="MemoryPriority.VeryLow">Bardzo niski</system:String><system:String x:Key="MemoryPriority.Low">Niski</system:String><system:String x:Key="MemoryPriority.Medium">Średni</system:String><system:String x:Key="MemoryPriority.BelowNormal">Poniżej normalnego</system:String><system:String x:Key="MemoryPriority.Normal">Normalny</system:String>
     <system:String x:Key="WindowMatch.Any">Dowolne główne okno</system:String><system:String x:Key="WindowMatch.Contains">Tytuł zawiera</system:String><system:String x:Key="WindowMatch.Exact">Dokładny tytuł</system:String>
     <system:String x:Key="WindowBehavior.None">Bez zmian</system:String><system:String x:Key="WindowBehavior.Minimize">Minimalizuj</system:String><system:String x:Key="WindowBehavior.Maximize">Maksymalizuj</system:String><system:String x:Key="WindowBehavior.Restore">Przywróć</system:String><system:String x:Key="WindowBehavior.Hide">Ukryj</system:String>
     <system:String x:Key="InstanceBehavior.DoNotStart">Nie uruchamiaj ponownie</system:String><system:String x:Key="InstanceBehavior.StartAnother">Uruchom kolejną instancję</system:String><system:String x:Key="InstanceBehavior.Restart">Zakończ istniejącą i uruchom ponownie</system:String>
@@ -515,10 +542,10 @@
     <system:String x:Key="RestoreBehavior.ProcessSettings">Przywróć poprzednie ustawienia procesu</system:String><system:String x:Key="RestoreBehavior.AudioSettings">Przywróć poprzednie ustawienia audio</system:String><system:String x:Key="RestoreBehavior.DeviceState">Przywróć poprzedni stan urządzenia</system:String>
     <system:String x:Key="ActionEditor.WindowMatch">Warunek okna</system:String><system:String x:Key="ActionEditor.WindowTitle">Tytuł okna</system:String>
     <system:String x:Key="ActionEditor.SelectOutput">Wybierz wyjście</system:String><system:String x:Key="ActionEditor.SelectInput">Wybierz wejście</system:String><system:String x:Key="ActionEditor.DefaultDevice">Urządzenie domyślne</system:String><system:String x:Key="ActionEditor.DefaultCommunications">Urządzenie komunikacyjne</system:String><system:String x:Key="ActionEditor.Volume">Głośność</system:String><system:String x:Key="ActionEditor.ChangeMute">Zmień wyciszenie</system:String><system:String x:Key="ActionEditor.Mute">Wyciszone</system:String>
-    <system:String x:Key="ActionEditor.SelectDevice">Wybierz urządzenie</system:String><system:String x:Key="ActionEditor.DeviceWarning">Wyłączenie urządzeń może wymagać administratora. Urządzenia krytyczne są chronione.</system:String><system:String x:Key="ActionEditor.Profile">Profil</system:String><system:String x:Key="ActionEditor.Then">WTEDY</system:String><system:String x:Key="ActionEditor.Else">INACZEJ</system:String>
+    <system:String x:Key="ActionEditor.SelectDevice">Wybierz urządzenie</system:String><system:String x:Key="ActionEditor.DeviceWarning">Wyłączenie urządzeń może wymagać administratora. Urządzenia krytyczne są chronione.</system:String><system:String x:Key="ActionEditor.Profile">Profil</system:String><system:String x:Key="ActionEditor.Then">Wtedy</system:String><system:String x:Key="ActionEditor.Else">Inaczej</system:String>
     <system:String x:Key="Dialog.SelectAudioInput">Wybierz wejście audio</system:String><system:String x:Key="Dialog.SelectAudioOutput">Wybierz wyjście audio</system:String><system:String x:Key="Dialog.SelectDevice">Wybierz urządzenie Windows</system:String>
     <system:String x:Key="Picker.Name">Nazwa</system:String><system:String x:Key="Picker.Type">Typ</system:String><system:String x:Key="Picker.Default">Domyślne</system:String><system:String x:Key="Picker.Class">Klasa</system:String><system:String x:Key="Picker.State">Stan</system:String><system:String x:Key="Picker.InstanceId">Identyfikator instancji</system:String>
-    <system:String x:Key="Validation.NestedAction">Zagnieżdżona akcja WTEDY/INACZEJ jest niekompletna.</system:String>
+    <system:String x:Key="Validation.NestedAction">Zagnieżdżona akcja Wtedy/Inaczej jest niekompletna.</system:String>
     <system:String x:Key="Validation.RunBlocked">Nie można uruchomić profilu: {0} aktywnych akcji wymaga konfiguracji.</system:String>
     <system:String x:Key="Validation.ProfileReferenceCycle">Nie można uruchomić profilu: odwołania zawierają cykl lub brakujący profil.</system:String>
     <system:String x:Key="Validation.RunBusy">Profil nie może zostać uruchomiony podczas innej operacji.</system:String>

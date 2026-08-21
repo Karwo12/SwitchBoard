@@ -143,7 +143,6 @@ public sealed class MainWindowViewModel : ObservableObject
         Profiles = [];
         AvailableActionTypes =
         [
-            new(ActionTypeIds.ProcessSetState, "Action.ProcessState", localizationService, "ActionPicker.Category.Programs", "process", "proces"),
             new(ActionTypeIds.ProgramRun, "Action.RunProgram", localizationService, "ActionPicker.Category.Programs", "program", "programy"),
             new(ActionTypeIds.ServiceSetState, "Action.WindowsServiceState", localizationService, "ActionPicker.Category.Programs", "service", "usługa", "usluga"),
             new(ActionTypeIds.ProcessConfigure, "Action.ProcessSettings", localizationService, "ActionPicker.Category.Programs", "process", "proces"),
@@ -216,7 +215,7 @@ public sealed class MainWindowViewModel : ObservableObject
             action => action?.Type == ActionTypeIds.ProgramRun && action.UseCustomWorkingDirectory);
         FindProgramCommand = new RelayCommand<ActionItemViewModel>(FindProgram, action => action?.Type == ActionTypeIds.ProgramRun);
         SelectProcessCommand = new RelayCommand<ActionItemViewModel>(SelectProcess, action => action?.Type is
-            ActionTypeIds.ProcessSetState or ActionTypeIds.ProcessConfigure or ActionTypeIds.WaitProcessStart or
+            ActionTypeIds.ProcessConfigure or ActionTypeIds.WaitProcessStart or
             ActionTypeIds.WaitProcessExit or ActionTypeIds.WaitWindow);
         SelectServiceCommand = new RelayCommand<ActionItemViewModel>(SelectService, action => action?.Type == ActionTypeIds.ServiceSetState);
         SelectPowerPlanCommand = new RelayCommand<ActionItemViewModel>(SelectPowerPlan, action => action?.Type == ActionTypeIds.PowerSetPlan);
@@ -224,11 +223,11 @@ public sealed class MainWindowViewModel : ObservableObject
         BrowseScriptCommand = new RelayCommand<ActionItemViewModel>(BrowseScript, action => action?.Type == ActionTypeIds.ScriptRun);
         BrowseRestoreScriptCommand = new RelayCommand<ActionItemViewModel>(BrowseRestoreScript, action => action?.Type == ActionTypeIds.ScriptRun);
         SelectAllCpusCommand = new RelayCommand<ActionItemViewModel>(action => action?.SelectAllCpus(true),
-            action => action?.Type == ActionTypeIds.ProcessConfigure);
+            action => action?.Type is ActionTypeIds.ProgramRun or ActionTypeIds.ProcessConfigure);
         ClearAllCpusCommand = new RelayCommand<ActionItemViewModel>(action => action?.SelectAllCpus(false),
-            action => action?.Type == ActionTypeIds.ProcessConfigure);
+            action => action?.Type is ActionTypeIds.ProgramRun or ActionTypeIds.ProcessConfigure);
         SelectAllExceptCpu0Command = new RelayCommand<ActionItemViewModel>(action => action?.SelectAllExceptCpu0(),
-            action => action?.Type == ActionTypeIds.ProcessConfigure);
+            action => action?.Type is ActionTypeIds.ProgramRun or ActionTypeIds.ProcessConfigure);
         SelectAudioOutputCommand = new RelayCommand<ActionItemViewModel>(action => SelectAudio(action, false),
             action => action?.Type == ActionTypeIds.AudioConfigure);
         SelectAudioInputCommand = new RelayCommand<ActionItemViewModel>(action => SelectAudio(action, true),
@@ -1862,7 +1861,7 @@ public sealed class MainWindowViewModel : ObservableObject
 
     private void SelectProcess(ActionItemViewModel? action)
     {
-        if (action is null || action.Type is not (ActionTypeIds.ProcessSetState or ActionTypeIds.ProcessConfigure or
+        if (action is null || action.Type is not (ActionTypeIds.ProgramRun or ActionTypeIds.ProcessConfigure or
             ActionTypeIds.WaitProcessStart or ActionTypeIds.WaitProcessExit or ActionTypeIds.WaitWindow))
         {
             return;
@@ -2504,9 +2503,14 @@ public sealed class MainWindowViewModel : ObservableObject
             nameof(ActionItemViewModel.DisplayName) or
             nameof(ActionItemViewModel.Summary) or
             nameof(ActionItemViewModel.IsValid) or
-            nameof(ActionItemViewModel.ValidationMessage) or
-            nameof(ActionItemViewModel.SupportsRestore) or
-            nameof(ActionItemViewModel.IsRestoreScriptEnabled))
+             nameof(ActionItemViewModel.ValidationMessage) or
+             nameof(ActionItemViewModel.SupportsRestore) or
+             nameof(ActionItemViewModel.IsRestoreScriptEnabled) or
+             nameof(ActionItemViewModel.CurrentStatusText) or
+             nameof(ActionItemViewModel.CurrentStatusTooltip) or
+             nameof(ActionItemViewModel.LastChecked) or
+             nameof(ActionItemViewModel.ShouldMonitorCurrentStatus) or
+             nameof(ActionItemViewModel.ShouldShowCurrentStatus))
         {
             if (e.PropertyName is nameof(ActionItemViewModel.IsValid) or nameof(ActionItemViewModel.ValidationMessage))
             {
@@ -2694,7 +2698,12 @@ public sealed class MainWindowViewModel : ObservableObject
     {
         ActionTypeIds.ProgramRun => new JsonObject
         {
-            [ActionParameterNames.StartOnlyIfNotAlreadyRunning] = true
+            [ActionParameterNames.StartOnlyIfNotAlreadyRunning] = true,
+            [ActionParameterNames.ChangeAffinity] = false,
+            [ActionParameterNames.ChangePriority] = false,
+            [ActionParameterNames.ProcessPriority] = ProcessPriorityIds.NoChange,
+            [ActionParameterNames.ProcessMemoryPriority] = ProcessMemoryPriorityIds.NoChange,
+            [ActionParameterNames.ProcessTargetMode] = ProcessTargetModeIds.Automatic
         },
         ActionTypeIds.ProcessSetState => new JsonObject
         {
@@ -2717,9 +2726,11 @@ public sealed class MainWindowViewModel : ObservableObject
         },
         ActionTypeIds.ProcessConfigure => new JsonObject
         {
-            [ActionParameterNames.ChangeAffinity] = true,
+            [ActionParameterNames.ProcessOperation] = ProcessOperationIds.Configure,
+            [ActionParameterNames.ChangeAffinity] = false,
             [ActionParameterNames.ChangePriority] = false,
-            [ActionParameterNames.ProcessPriority] = ProcessPriorityIds.Normal
+            [ActionParameterNames.ProcessPriority] = ProcessPriorityIds.NoChange,
+            [ActionParameterNames.ProcessMemoryPriority] = ProcessMemoryPriorityIds.NoChange
         },
         ActionTypeIds.WaitWindow => new JsonObject
         {

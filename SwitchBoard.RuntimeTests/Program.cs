@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Text.Json.Nodes;
@@ -394,6 +395,32 @@ try
                     "process.configure restores previous affinity", failures);
             }
             try { affinityProcess.Kill(entireProcessTree: true); } catch { }
+        }
+    }
+
+    var memoryPath = Path.Combine(testRoot, "sbmemory.exe");
+    File.Copy(Path.Combine(Environment.SystemDirectory, "cmd.exe"), memoryPath);
+    using (var memoryProcess = Process.Start(new ProcessStartInfo(memoryPath)
+    { UseShellExecute = false, Arguments = "/c ping -n 30 127.0.0.1 > nul" }))
+    {
+        if (memoryProcess is not null)
+        {
+            var memorySettings = new ProcessSettingsService();
+            var memoryParameters = new JsonObject
+            {
+                [ActionParameterNames.ChangePriority] = false,
+                [ActionParameterNames.ProcessPriority] = ProcessPriorityIds.NoChange,
+                [ActionParameterNames.ProcessMemoryPriority] = ProcessMemoryPriorityIds.Low
+            };
+            var beforeMemory = memorySettings.Capture(memoryProcess, memoryParameters);
+            memorySettings.Apply(memoryProcess, memoryParameters);
+            var changedMemory = memorySettings.Capture(memoryProcess, memoryParameters);
+            memorySettings.Restore(memoryProcess, beforeMemory);
+            var restoredMemory = memorySettings.Capture(memoryProcess, memoryParameters);
+            Check(changedMemory["memoryPriority"]?.GetValue<int>() == 2 &&
+                  restoredMemory["memoryPriority"]?.GetValue<int>() == beforeMemory["memoryPriority"]?.GetValue<int>(),
+                "memory priority applies and restores through Set/GetProcessInformation", failures);
+            try { memoryProcess.Kill(entireProcessTree: true); } catch { }
         }
     }
 
@@ -1411,6 +1438,25 @@ try
         }
     }
 
+    using (var notepad = Process.Start(new ProcessStartInfo("notepad.exe") { UseShellExecute = true }))
+    {
+        if (notepad is not null)
+        {
+            await Task.Delay(500);
+            var adjustStop = Action(ActionTypeIds.ProcessConfigure, new JsonObject
+            {
+                [ActionParameterNames.ProcessName] = "notepad",
+                [ActionParameterNames.ProcessOperation] = ProcessOperationIds.Stop
+            });
+            var adjustStopResult = await new ProcessConfigureActionHandler().ExecuteAsync(
+                adjustStop, new(Guid.NewGuid(), Guid.NewGuid()), CancellationToken.None);
+            Check(adjustStopResult.IsSuccessful && !adjustStopResult.IsSkipped,
+                "process.configure stop operation reuses the process stop handler", failures);
+        }
+        else
+            failures.Add("Notepad could not start for process.configure stop");
+    }
+
     var powershellPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
     var preexistingInfo = new ProcessStartInfo(powershellPath) { UseShellExecute = false };
     preexistingInfo.ArgumentList.Add("-NoProfile");
@@ -1459,6 +1505,37 @@ try
                     "program.run Restore closes exact PID and preserves pre-existing instance", failures);
             }
             if (!preexisting.HasExited) preexisting.Kill();
+        }
+    }
+
+    var postLaunchPath = Path.Combine(testRoot, $"switchboard-post-launch-{Guid.NewGuid():N}.exe");
+    File.Copy(powershellPath, postLaunchPath);
+    try
+    {
+        var postLaunchAction = Action(ActionTypeIds.ProgramRun, new JsonObject
+        {
+            [ActionParameterNames.Target] = postLaunchPath,
+            [ActionParameterNames.Arguments] = "-NoProfile -Command \"Start-Sleep -Seconds 5\"",
+            [ActionParameterNames.StartOnlyIfNotAlreadyRunning] = false,
+            [ActionParameterNames.ChangePriority] = true,
+            [ActionParameterNames.ChangeAffinity] = true,
+            [ActionParameterNames.CpuIndices] = new JsonArray(0),
+            [ActionParameterNames.ProcessPriority] = ProcessPriorityIds.BelowNormal,
+            [ActionParameterNames.ProcessTargetMode] = ProcessTargetModeIds.Automatic
+        });
+        var postLaunchResult = await new ProgramRunActionHandler().ExecuteAsync(
+            postLaunchAction, new(Guid.NewGuid(), Guid.NewGuid()), CancellationToken.None);
+        Check(postLaunchResult.IsSuccessful,
+            "program.run applies automatic post-launch priority and affinity", failures);
+    }
+    finally
+    {
+        var postLaunchProcesses = Process.GetProcessesByName(Path.GetFileNameWithoutExtension(postLaunchPath));
+        foreach (var process in postLaunchProcesses)
+        {
+            try { if (!process.HasExited) process.Kill(entireProcessTree: true); }
+            catch (Exception exception) when (exception is InvalidOperationException or Win32Exception) { }
+            finally { process.Dispose(); }
         }
     }
 
@@ -1806,6 +1883,137 @@ try
     Check(!invalidProgram.IsValid && !invalidProgram.SupportsRestore && !delayWithoutRestore.SupportsRestore &&
           !invalidRestoreScript.IsValid,
         "inline validation blocks obvious errors and Delay has no Restore", failures);
+    var processNoOp = new ActionItemViewModel(Action(ActionTypeIds.ProcessConfigure,
+        new JsonObject { [ActionParameterNames.ProcessName] = "example" }), validationLocalization);
+    Check(!processNoOp.IsValid && processNoOp.ValidationMessage == validationLocalization.GetString("Validation.NoOp"),
+        "Adjust process parameter mode rejects a no-op", failures);
+
+    var newProcessAction = new ActionItemViewModel(Action(ActionTypeIds.ProcessConfigure,
+        new JsonObject { [ActionParameterNames.ProcessName] = "example" }), validationLocalization);
+    var newProcessModel = newProcessAction.ToModel();
+    Check(newProcessAction.ProcessPriority == ProcessPriorityIds.NoChange &&
+          newProcessAction.ProcessMemoryPriority == ProcessMemoryPriorityIds.NoChange &&
+          newProcessModel.Parameters[ActionParameterNames.ChangePriority]?.GetValue<bool>() == false,
+        "new process actions default CPU and memory priority to no change", failures);
+
+    var legacyNoPriority = new ActionItemViewModel(Action(ActionTypeIds.ProcessConfigure,
+        new JsonObject
+        {
+            [ActionParameterNames.ProcessName] = "example",
+            [ActionParameterNames.ChangePriority] = false,
+            [ActionParameterNames.ProcessPriority] = ProcessPriorityIds.High
+        }), validationLocalization);
+    var legacyExplicitPriority = new ActionItemViewModel(Action(ActionTypeIds.ProcessConfigure,
+        new JsonObject
+        {
+            [ActionParameterNames.ProcessName] = "example",
+            [ActionParameterNames.ChangePriority] = true,
+            [ActionParameterNames.ProcessPriority] = ProcessPriorityIds.High
+        }), validationLocalization);
+    Check(legacyNoPriority.ProcessPriority == ProcessPriorityIds.NoChange &&
+          legacyExplicitPriority.ProcessPriority == ProcessPriorityIds.High,
+        "legacy ChangePriority values load as no change or the saved priority", failures);
+
+    Check(ProcessSettingsService.ParseMemoryPriorityValue(ProcessMemoryPriorityIds.VeryLow) == 1 &&
+          ProcessSettingsService.ParseMemoryPriorityValue(ProcessMemoryPriorityIds.Low) == 2 &&
+          ProcessSettingsService.ParseMemoryPriorityValue(ProcessMemoryPriorityIds.Medium) == 3 &&
+          ProcessSettingsService.ParseMemoryPriorityValue(ProcessMemoryPriorityIds.BelowNormal) == 4 &&
+          ProcessSettingsService.ParseMemoryPriorityValue(ProcessMemoryPriorityIds.Normal) == 5,
+        "memory priority maps to the Win32 values 1 through 5", failures);
+
+    var memoryOnlyAction = new ActionItemViewModel(Action(ActionTypeIds.ProcessConfigure,
+        new JsonObject
+        {
+            [ActionParameterNames.ProcessName] = "example",
+            [ActionParameterNames.ProcessMemoryPriority] = ProcessMemoryPriorityIds.Low
+        }), validationLocalization);
+    Check(memoryOnlyAction.IsValid && memoryOnlyAction.ToModel().Parameters[ActionParameterNames.ProcessMemoryPriority]?.GetValue<string>() == ProcessMemoryPriorityIds.Low,
+        "memory priority is a real process setting and participates in no-op validation", failures);
+    try
+    {
+        new ProcessSettingsService().Apply(Process.GetCurrentProcess(), new JsonObject
+        {
+            [ActionParameterNames.ChangePriority] = false,
+            [ActionParameterNames.ProcessPriority] = ProcessPriorityIds.NoChange,
+            [ActionParameterNames.ProcessMemoryPriority] = ProcessMemoryPriorityIds.NoChange
+        });
+        Check(false, "no-change process settings do not call a setter", failures);
+    }
+    catch (InvalidOperationException)
+    {
+        Check(true, "no-change process settings do not call a setter", failures);
+    }
+
+    var legacyProcessAction = new ActionItemViewModel(Action(ActionTypeIds.ProcessSetState,
+        new JsonObject
+        {
+            [ActionParameterNames.ProcessName] = "legacy-app",
+            [ActionParameterNames.DesiredState] = ProcessDesiredStateIds.Stopped
+        }), validationLocalization);
+    var migratedProcessModel = legacyProcessAction.ToModel();
+    Check(legacyProcessAction.Type == ActionTypeIds.ProcessConfigure && legacyProcessAction.IsProcessStopMode &&
+          migratedProcessModel.Type == ActionTypeIds.ProcessConfigure &&
+          migratedProcessModel.Parameters[ActionParameterNames.ProcessOperation]?.GetValue<string>() == ProcessOperationIds.Stop,
+        "legacy process.setState loads as the Adjust process stop operation", failures);
+
+    var processSettingsModel = Action(ActionTypeIds.ProcessConfigure, new JsonObject
+    {
+        [ActionParameterNames.ProcessName] = "example",
+        [ActionParameterNames.ProcessOperation] = ProcessOperationIds.Configure,
+        [ActionParameterNames.ChangeAffinity] = true,
+        [ActionParameterNames.CpuIndices] = new JsonArray(0, 1)
+    });
+    var processSettingsRoundTrip = JsonSerializer.Deserialize<ActionDefinition>(JsonSerializer.Serialize(processSettingsModel));
+    Check(processSettingsRoundTrip?.Parameters[ActionParameterNames.ProcessOperation]?.GetValue<string>() == ProcessOperationIds.Configure &&
+          ProcessConfigureActionHandler.ReadAffinityMask(null) == 0 &&
+          ProcessConfigureActionHandler.ReadAffinityMask(processSettingsModel.Parameters[ActionParameterNames.CpuIndices] as JsonArray) != 0,
+        "process operation and the no-affinity/all-CPU distinction survive serialization", failures);
+
+    var processOperationEditor = new ActionItemViewModel(Action(ActionTypeIds.ProcessConfigure,
+        new JsonObject
+        {
+            [ActionParameterNames.ProcessName] = "example",
+            [ActionParameterNames.ProcessOperation] = ProcessOperationIds.Configure,
+            [ActionParameterNames.ChangeAffinity] = true,
+            [ActionParameterNames.ChangePriority] = true,
+            [ActionParameterNames.CpuIndices] = new JsonArray(1),
+            [ActionParameterNames.ProcessPriority] = ProcessPriorityIds.High
+        }), validationLocalization);
+    processOperationEditor.ProcessOperation = ProcessOperationIds.Stop;
+    var stoppedProcessModel = processOperationEditor.ToModel();
+    processOperationEditor.ProcessOperation = ProcessOperationIds.Configure;
+    Check(!processOperationEditor.IsProcessStopMode && processOperationEditor.IsProcessConfigureOperation &&
+          stoppedProcessModel.Parameters[ActionParameterNames.ProcessOperation]?.GetValue<string>() == ProcessOperationIds.Stop &&
+          stoppedProcessModel.Parameters[ActionParameterNames.ChangeAffinity]?.GetValue<bool>() == true &&
+          stoppedProcessModel.Parameters[ActionParameterNames.ChangePriority]?.GetValue<bool>() == true &&
+          stoppedProcessModel.Parameters[ActionParameterNames.ProcessPriority]?.GetValue<string>() == ProcessPriorityIds.High &&
+          ProcessConfigureActionHandler.ReadAffinityMask(stoppedProcessModel.Parameters[ActionParameterNames.CpuIndices] as JsonArray) == 2,
+        "switching to stop hides process settings without discarding them", failures);
+
+    var unconfiguredProcessStatus = new ActionItemViewModel(
+        Action(ActionTypeIds.ProcessConfigure, []), validationLocalization);
+    unconfiguredProcessStatus.SetCurrentStatus(null, "No process name is configured.", DateTimeOffset.Now);
+    var configuredProcessStatus = new ActionItemViewModel(Action(ActionTypeIds.ProcessConfigure,
+        new JsonObject
+        {
+            [ActionParameterNames.ProcessName] = "example",
+            [ActionParameterNames.ProcessOperation] = ProcessOperationIds.Stop
+        }), validationLocalization);
+    configuredProcessStatus.SetCurrentStatus("Running", "ProcessName=example; MatchingProcesses=1", DateTimeOffset.Now);
+    var unavailableConfiguredStatus = new ActionItemViewModel(Action(ActionTypeIds.ProcessConfigure,
+        new JsonObject
+        {
+            [ActionParameterNames.ProcessName] = "example",
+            [ActionParameterNames.ProcessOperation] = ProcessOperationIds.Stop
+        }), validationLocalization);
+    unavailableConfiguredStatus.SetCurrentStatus(null, "Access denied.", DateTimeOffset.Now);
+    Check(!unconfiguredProcessStatus.ShouldMonitorCurrentStatus &&
+          !unconfiguredProcessStatus.ShouldShowCurrentStatus &&
+          string.IsNullOrWhiteSpace(unconfiguredProcessStatus.CurrentStatusText) &&
+          configuredProcessStatus.ShouldMonitorCurrentStatus && configuredProcessStatus.ShouldShowCurrentStatus &&
+          unavailableConfiguredStatus.ShouldMonitorCurrentStatus && unavailableConfiguredStatus.ShouldShowCurrentStatus &&
+          unavailableConfiguredStatus.CurrentStatusText == validationLocalization.GetString("ActionStatus.Unavailable"),
+        "process live status stays hidden for missing configuration and visible for configured runtime results", failures);
 
     var displays = await displayManager.GetDisplaysAsync();
     foreach (var display in displays)

@@ -58,10 +58,13 @@ public sealed class ProgramRunActionHandler(ILocalizationService? localization =
                 var verification = ProcessTargetResolver.Find(expectedName, expectedPath);
                 try
                 {
-                    return verification.Count > 0
+                    var result = verification.Count > 0
                         ? ActionExecutionResult.Success($"Verified: '{expectedName}' is running.")
                         : ActionExecutionResult.Failure(
                             $"Windows accepted the start request, but no matching '{expectedName}' process was found.");
+                    if (!result.IsSuccessful) return result;
+                    return await ApplyPostLaunchProcessSettingsAsync(action, target, untrackedProcess.Id, cancellationToken)
+                        ?? result;
                 }
                 finally { foreach (var process in verification) process.Dispose(); }
             }
@@ -94,6 +97,8 @@ public sealed class ProgramRunActionHandler(ILocalizationService? localization =
 
             var windowBehaviorResult = await ApplyWindowBehaviorAsync(action, target, cancellationToken);
             if (windowBehaviorResult is not null && !windowBehaviorResult.IsSuccessful) return windowBehaviorResult;
+            var processSettingsResult = await ApplyPostLaunchProcessSettingsAsync(action, target, directProcessId, cancellationToken);
+            if (processSettingsResult is not null) return processSettingsResult;
             var ordered = tracked.Values
                 .OrderBy(identity => identity.StartedAtUtcTicks)
                 .ThenBy(identity => identity.ProcessId)
@@ -152,6 +157,76 @@ public sealed class ProgramRunActionHandler(ILocalizationService? localization =
     internal static bool IsProtocolTarget(string target) =>
         Uri.TryCreate(target, UriKind.Absolute, out var uri) && !uri.IsFile &&
         !string.IsNullOrWhiteSpace(uri.Scheme);
+
+    private async Task<ActionExecutionResult?> ApplyPostLaunchProcessSettingsAsync(
+        ActionDefinition action, string launchTarget, int directProcessId, CancellationToken cancellationToken)
+    {
+        var changeAffinity = ActionParameterReader.ReadBoolean(action.Parameters,
+            ActionParameterNames.ChangeAffinity, false);
+        var changePriority = ProcessSettingsService.ShouldChangeProcessPriority(action.Parameters);
+        var changeMemoryPriority = ProcessSettingsService.IsConcreteMemoryPriority(
+            ActionParameterReader.ReadString(action.Parameters, ActionParameterNames.ProcessMemoryPriority));
+        if (!changeAffinity && !changePriority && !changeMemoryPriority) return null;
+
+        var targetMode = ActionParameterReader.ReadString(action.Parameters, ActionParameterNames.ProcessTargetMode);
+        if (string.IsNullOrWhiteSpace(targetMode)) targetMode = ProcessTargetModeIds.Automatic;
+        var processName = ActionParameterReader.ReadString(action.Parameters, ActionParameterNames.ProcessName).Trim();
+        var executablePath = ActionParameterReader.ReadString(action.Parameters, ActionParameterNames.ExecutablePath).Trim();
+        if (string.Equals(targetMode, ProcessTargetModeIds.Automatic, StringComparison.OrdinalIgnoreCase))
+        {
+            if (IsProtocolTarget(launchTarget))
+                return ActionExecutionResult.Failure(
+                    Format("Result.PostLaunchAutomaticTargetUnavailable",
+                        "The automatic process target is unavailable for protocol links. Choose a process manually."));
+            processName = Path.GetFileNameWithoutExtension(launchTarget);
+            executablePath = Path.IsPathRooted(launchTarget) &&
+                             string.Equals(Path.GetExtension(launchTarget), ".exe", StringComparison.OrdinalIgnoreCase)
+                ? Path.GetFullPath(launchTarget) : string.Empty;
+        }
+        else if (string.IsNullOrWhiteSpace(processName))
+        {
+            return ActionExecutionResult.Failure(Format("Result.PostLaunchTargetRequired",
+                "A process target is required when manual selection is enabled."));
+        }
+
+        var settingsService = new ProcessSettingsService();
+        var deadline = Stopwatch.StartNew();
+        while (deadline.Elapsed < TimeSpan.FromSeconds(3))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var matches = ProcessTargetResolver.Find(processName, executablePath,
+                string.Equals(targetMode, ProcessTargetModeIds.Automatic, StringComparison.OrdinalIgnoreCase)
+                    ? directProcessId : null);
+            if (string.Equals(targetMode, ProcessTargetModeIds.Automatic, StringComparison.OrdinalIgnoreCase) &&
+                directProcessId > 0)
+            {
+                var direct = matches.FirstOrDefault(process => process.Id == directProcessId);
+                foreach (var extra in matches.Where(process => process.Id != directProcessId)) extra.Dispose();
+                matches = direct is null ? [] : [direct];
+            }
+            if (matches.Count > 0)
+            {
+                using var process = matches[0];
+                foreach (var extra in matches.Skip(1)) extra.Dispose();
+                try
+                {
+                    settingsService.Apply(process, action.Parameters);
+                    return ActionExecutionResult.Success(Format("Result.PostLaunchSettingsVerified",
+                        "Verified: the requested post-launch process settings are active."));
+                }
+                catch (Exception exception) when (exception is InvalidOperationException or ArgumentException or
+                                                   Win32Exception or NotSupportedException)
+                {
+                    return ActionExecutionResult.Failure(Format("Result.PostLaunchSettingsFailed",
+                        $"Could not change post-launch process settings: {exception.Message}", exception.Message));
+                }
+            }
+            await Task.Delay(100, cancellationToken);
+        }
+
+        return ActionExecutionResult.Failure(Format("Result.PostLaunchProcessNotFound",
+            $"The post-launch process '{processName}' could not be found.", processName));
+    }
 
     internal static bool IsAlreadyRunning(string target)
     {

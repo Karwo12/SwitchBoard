@@ -7,6 +7,7 @@ using SwitchBoard.Models.Actions;
 using SwitchBoard.Services.Discovery;
 using System.Text.Json;
 using SwitchBoard.Services.Execution;
+using SwitchBoard.Services.Execution.Handlers;
 
 namespace SwitchBoard.ViewModels;
 
@@ -27,6 +28,8 @@ public sealed class ActionItemViewModel : ObservableObject
     private string _executablePath;
     private int? _runtimeProcessIdHint;
     private string _desiredProcessState;
+    private string _processOperation;
+    private string _processTargetMode;
     private string _serviceName;
     private string _serviceDisplayName;
     private string _desiredServiceState;
@@ -64,6 +67,7 @@ public sealed class ActionItemViewModel : ObservableObject
     private bool _changeAffinity;
     private bool _changePriority;
     private string _processPriority;
+    private string _processMemoryPriority;
     private string _windowMatchMode;
     private string _windowTitle;
     private string _audioOutputDeviceId;
@@ -93,9 +97,11 @@ public sealed class ActionItemViewModel : ObservableObject
     public ActionItemViewModel(ActionDefinition action, ILocalizationService localizationService, int nestingDepth = 0)
     {
         _localizationService = localizationService;
-        _displayNameResourceKey = GetDisplayNameResourceKey(action.Type);
+        var legacyProcessState = action.Type == ActionTypeIds.ProcessSetState;
+        var normalizedType = legacyProcessState ? ActionTypeIds.ProcessConfigure : action.Type;
+        _displayNameResourceKey = GetDisplayNameResourceKey(normalizedType);
         Id = action.Id;
-        Type = action.Type;
+        Type = normalizedType;
         ActionSchemaVersion = action.ActionSchemaVersion;
         SortOrder = action.SortOrder;
         _name = action.Name;
@@ -110,6 +116,14 @@ public sealed class ActionItemViewModel : ObservableObject
             _ => "none"
         };
         Parameters = action.Parameters.DeepClone().AsObject();
+        if (legacyProcessState)
+        {
+            var legacyState = DefaultIfEmpty(ReadString(ActionParameterNames.DesiredState), ProcessDesiredStateIds.Stopped);
+            Parameters[ActionParameterNames.ProcessOperation] =
+                string.Equals(legacyState, ProcessDesiredStateIds.Stopped, StringComparison.OrdinalIgnoreCase)
+                    ? ProcessOperationIds.Stop
+                    : ProcessOperationIds.Configure;
+        }
         _target = ReadString(ActionParameterNames.Target);
         _arguments = ReadString(ActionParameterNames.Arguments);
         _workingDirectory = ReadString(ActionParameterNames.WorkingDirectory);
@@ -121,6 +135,8 @@ public sealed class ActionItemViewModel : ObservableObject
         _executablePath = ReadString(ActionParameterNames.ExecutablePath);
         _runtimeProcessIdHint = action.RuntimeProcessIdHint;
         _desiredProcessState = DefaultIfEmpty(ReadString(ActionParameterNames.DesiredState), ProcessDesiredStateIds.Stopped);
+        _processOperation = DefaultIfEmpty(ReadString(ActionParameterNames.ProcessOperation), ProcessOperationIds.Configure);
+        _processTargetMode = DefaultIfEmpty(ReadString(ActionParameterNames.ProcessTargetMode), ProcessTargetModeIds.Automatic);
         _serviceName = ReadString(ActionParameterNames.ServiceName);
         _serviceDisplayName = ReadString(ActionParameterNames.ServiceDisplayName);
         _desiredServiceState = DefaultIfEmpty(ReadString(ActionParameterNames.DesiredState), ServiceDesiredStateIds.Unchanged);
@@ -156,7 +172,11 @@ public sealed class ActionItemViewModel : ObservableObject
         _windowWaitSeconds = Math.Clamp(ReadInt32(ActionParameterNames.WindowWaitSeconds, 10), 1, 300);
         _changeAffinity = ReadBoolean(ActionParameterNames.ChangeAffinity, false);
         _changePriority = ReadBoolean(ActionParameterNames.ChangePriority, false);
-        _processPriority = DefaultIfEmpty(ReadString(ActionParameterNames.ProcessPriority), ProcessPriorityIds.Normal);
+        var storedProcessPriority = DefaultIfEmpty(ReadString(ActionParameterNames.ProcessPriority), ProcessPriorityIds.Normal);
+        _processPriority = _changePriority && !string.Equals(storedProcessPriority, ProcessPriorityIds.NoChange,
+            StringComparison.OrdinalIgnoreCase) ? storedProcessPriority : ProcessPriorityIds.NoChange;
+        _processMemoryPriority = DefaultIfEmpty(ReadString(ActionParameterNames.ProcessMemoryPriority),
+            ProcessMemoryPriorityIds.NoChange);
         _windowMatchMode = DefaultIfEmpty(ReadString(ActionParameterNames.WindowMatchMode), WindowMatchModeIds.Any);
         _windowTitle = ReadString(ActionParameterNames.WindowTitle);
         _audioOutputDeviceId = ReadString(ActionParameterNames.AudioOutputDeviceId);
@@ -222,6 +242,16 @@ public sealed class ActionItemViewModel : ObservableObject
             new(ProcessDesiredStateIds.Stopped, "ProcessState.Stopped", localizationService),
             new(ProcessDesiredStateIds.Unchanged, "ProcessState.Unchanged", localizationService)
         ];
+        AvailableProcessOperations =
+        [
+            new(ProcessOperationIds.Configure, "ProcessOperation.Configure", localizationService),
+            new(ProcessOperationIds.Stop, "ProcessOperation.Stop", localizationService)
+        ];
+        AvailableProcessTargetModes =
+        [
+            new(ProcessTargetModeIds.Automatic, "ProcessTargetMode.Automatic", localizationService),
+            new(ProcessTargetModeIds.Manual, "ProcessTargetMode.Manual", localizationService)
+        ];
         AvailableServiceStates =
         [
             new(ServiceDesiredStateIds.Unchanged, "ServiceState.Unchanged", localizationService),
@@ -249,9 +279,17 @@ public sealed class ActionItemViewModel : ObservableObject
         ];
         AvailableRestoreBehaviors = BuildRestoreBehaviors(action.Type, localizationService);
         AvailableProcessPriorities = BuildOptions(localizationService,
+            (ProcessPriorityIds.NoChange, "Priority.NoChange"),
             (ProcessPriorityIds.Idle, "Priority.Idle"), (ProcessPriorityIds.BelowNormal, "Priority.BelowNormal"),
             (ProcessPriorityIds.Normal, "Priority.Normal"), (ProcessPriorityIds.AboveNormal, "Priority.AboveNormal"),
             (ProcessPriorityIds.High, "Priority.High"));
+        AvailableProcessMemoryPriorities = BuildOptions(localizationService,
+            (ProcessMemoryPriorityIds.NoChange, "MemoryPriority.NoChange"),
+            (ProcessMemoryPriorityIds.VeryLow, "MemoryPriority.VeryLow"),
+            (ProcessMemoryPriorityIds.Low, "MemoryPriority.Low"),
+            (ProcessMemoryPriorityIds.Medium, "MemoryPriority.Medium"),
+            (ProcessMemoryPriorityIds.BelowNormal, "MemoryPriority.BelowNormal"),
+            (ProcessMemoryPriorityIds.Normal, "MemoryPriority.Normal"));
         AvailableWindowMatchModes = BuildOptions(localizationService,
             (WindowMatchModeIds.Any, "WindowMatch.Any"), (WindowMatchModeIds.Contains, "WindowMatch.Contains"),
             (WindowMatchModeIds.Exact, "WindowMatch.Exact"));
@@ -291,12 +329,15 @@ public sealed class ActionItemViewModel : ObservableObject
     public int SortOrder { get; set; }
     public JsonObject Parameters { get; }
     public IReadOnlyList<LocalizedValueOptionViewModel> AvailableProcessStates { get; }
+    public IReadOnlyList<LocalizedValueOptionViewModel> AvailableProcessOperations { get; }
+    public IReadOnlyList<LocalizedValueOptionViewModel> AvailableProcessTargetModes { get; }
     public IReadOnlyList<LocalizedValueOptionViewModel> AvailableServiceStates { get; }
     public IReadOnlyList<LocalizedValueOptionViewModel> AvailableServiceStartupTypes { get; }
     public IReadOnlyList<LocalizedValueOptionViewModel> AvailableScriptTypes { get; }
     public IReadOnlyList<LocalizedValueOptionViewModel> AvailableFailurePolicies { get; }
     public IReadOnlyList<LocalizedValueOptionViewModel> AvailableRestoreBehaviors { get; }
     public IReadOnlyList<LocalizedValueOptionViewModel> AvailableProcessPriorities { get; }
+    public IReadOnlyList<LocalizedValueOptionViewModel> AvailableProcessMemoryPriorities { get; }
     public IReadOnlyList<LocalizedValueOptionViewModel> AvailableWindowMatchModes { get; }
     public IReadOnlyList<LocalizedValueOptionViewModel> AvailableWindowBehaviors { get; }
     public IReadOnlyList<LocalizedValueOptionViewModel> AvailableInstanceBehaviors { get; }
@@ -334,11 +375,7 @@ public sealed class ActionItemViewModel : ObservableObject
     public string Summary => Type switch
     {
         ActionTypeIds.ProgramRun => GetProgramSummary(),
-        ActionTypeIds.ProcessSetState => _localizationService.Format(
-            string.Equals(DesiredProcessState, ProcessDesiredStateIds.Unchanged, StringComparison.OrdinalIgnoreCase)
-                ? "ActionSummary.ProcessUnchanged"
-                : "ActionSummary.StopProcess",
-            GetProcessSummaryTarget()),
+        ActionTypeIds.ProcessConfigure => GetProcessSummary(),
         ActionTypeIds.ServiceSetState => _localizationService.Format("ActionSummary.Service", GetServiceSummaryTarget()),
         ActionTypeIds.PowerSetPlan => _localizationService.Format("ActionSummary.PowerPlan", GetPowerPlanSummaryTarget()),
         ActionTypeIds.ScriptRun => _localizationService.Format("ActionSummary.Script", GetFileSummary(ScriptPath)),
@@ -384,9 +421,9 @@ public sealed class ActionItemViewModel : ObservableObject
     public bool SupportsRestore => Type switch
     {
         ActionTypeIds.ProgramRun => IsFullExecutablePath(Target),
-        ActionTypeIds.ProcessSetState => IsFullExecutablePath(ExecutablePath),
+        ActionTypeIds.ProcessConfigure => true,
         ActionTypeIds.ServiceSetState or ActionTypeIds.PowerSetPlan or ActionTypeIds.DisplayConfigure or ActionTypeIds.ScriptRun or
-            ActionTypeIds.ProcessConfigure or ActionTypeIds.AudioConfigure or ActionTypeIds.DeviceSetState => true,
+            ActionTypeIds.AudioConfigure or ActionTypeIds.DeviceSetState => true,
         _ => false
     };
     public bool IsRestoreScriptEnabled => Type == ActionTypeIds.ScriptRun && RestoreBehaviorId == "restoreScript";
@@ -427,9 +464,67 @@ public sealed class ActionItemViewModel : ObservableObject
     }
     public bool IsWindowWaitEnabled => !string.Equals(WindowBehavior, WindowBehaviorIds.None, StringComparison.OrdinalIgnoreCase);
     public int WindowWaitSeconds { get => _windowWaitSeconds; set => SetProperty(ref _windowWaitSeconds, Math.Clamp(value, 1, 300)); }
-    public bool ChangeAffinity { get => _changeAffinity; set { if (SetProperty(ref _changeAffinity, value)) NotifyValidation(); } }
-    public bool ChangePriority { get => _changePriority; set { if (SetProperty(ref _changePriority, value)) NotifyValidation(); } }
-    public string ProcessPriority { get => _processPriority; set => SetProperty(ref _processPriority, value); }
+    public bool ChangeAffinity { get => _changeAffinity; set { if (SetProperty(ref _changeAffinity, value)) { OnPropertyChanged(nameof(HasPostLaunchProcessSettings)); NotifyValidation(); } } }
+    // Kept as a compatibility property for old profiles and integrations. The dropdown is authoritative for new edits.
+    public bool ChangePriority { get => _changePriority; set { if (SetProperty(ref _changePriority, value)) { OnPropertyChanged(nameof(HasPostLaunchProcessSettings)); NotifyValidation(); } } }
+    public bool ShouldChangeProcessPriority => !string.Equals(ProcessPriority, ProcessPriorityIds.NoChange, StringComparison.OrdinalIgnoreCase);
+    public bool ShouldChangeMemoryPriority => ProcessSettingsService.IsConcreteMemoryPriority(ProcessMemoryPriority);
+    public bool HasPostLaunchProcessSettings => Type == ActionTypeIds.ProgramRun &&
+        (ChangeAffinity || ShouldChangeProcessPriority || ShouldChangeMemoryPriority);
+    public string ProcessPriority
+    {
+        get => _processPriority;
+        set
+        {
+            if (!SetProperty(ref _processPriority, value)) return;
+            var selectedChange = ShouldChangeProcessPriority;
+            if (_changePriority != selectedChange)
+            {
+                _changePriority = selectedChange;
+                OnPropertyChanged(nameof(ChangePriority));
+            }
+            OnPropertyChanged(nameof(HasPostLaunchProcessSettings));
+            OnPropertyChanged(nameof(Summary));
+            NotifyValidation();
+        }
+    }
+    public string ProcessMemoryPriority
+    {
+        get => _processMemoryPriority;
+        set
+        {
+            if (!SetProperty(ref _processMemoryPriority, value)) return;
+            OnPropertyChanged(nameof(HasPostLaunchProcessSettings));
+            OnPropertyChanged(nameof(Summary));
+            NotifyValidation();
+        }
+    }
+    public string ProcessOperation
+    {
+        get => _processOperation;
+        set
+        {
+            if (!SetProperty(ref _processOperation, value)) return;
+            OnPropertyChanged(nameof(IsProcessStopMode));
+            OnPropertyChanged(nameof(IsProcessConfigureOperation));
+            OnPropertyChanged(nameof(Summary));
+            NotifyValidation();
+        }
+    }
+    public bool IsProcessStopMode => string.Equals(ProcessOperation, ProcessOperationIds.Stop, StringComparison.OrdinalIgnoreCase);
+    public bool IsProcessConfigureOperation => Type == ActionTypeIds.ProcessConfigure && !IsProcessStopMode;
+    public string ProcessTargetMode
+    {
+        get => _processTargetMode;
+        set
+        {
+            if (!SetProperty(ref _processTargetMode, value)) return;
+            OnPropertyChanged(nameof(IsManualProcessTarget));
+            OnPropertyChanged(nameof(Summary));
+            NotifyValidation();
+        }
+    }
+    public bool IsManualProcessTarget => string.Equals(ProcessTargetMode, ProcessTargetModeIds.Manual, StringComparison.OrdinalIgnoreCase);
     public string WindowMatchMode { get => _windowMatchMode; set { if (SetProperty(ref _windowMatchMode, value)) NotifyValidation(); } }
     public string WindowTitle { get => _windowTitle; set => SetValidationProperty(ref _windowTitle, value); }
     public string AudioOutputDeviceId { get => _audioOutputDeviceId; set => SetValidationProperty(ref _audioOutputDeviceId, value); }
@@ -514,9 +609,21 @@ public sealed class ActionItemViewModel : ObservableObject
     };
 
     public string Target { get => _target; set => SetWithSummary(ref _target, value); }
-    public string ProcessName { get => _processName; set => SetWithSummary(ref _processName, value); }
+    public string ProcessName
+    {
+        get => _processName;
+        set
+        {
+            if (!SetProperty(ref _processName, value)) return;
+            ClearCurrentStatus();
+            OnPropertyChanged(nameof(Summary));
+            OnPropertyChanged(nameof(SupportsRestore));
+            NotifyValidation();
+        }
+    }
     public string ExecutablePath { get => _executablePath; set => SetWithSummary(ref _executablePath, value); }
     public int? RuntimeProcessIdHint { get => _runtimeProcessIdHint; set => SetProperty(ref _runtimeProcessIdHint, value); }
+    // Retained for deserializing old process.setState profiles; the editor uses ProcessOperation.
     public string DesiredProcessState { get => _desiredProcessState; set => SetWithSummary(ref _desiredProcessState, value); }
     public string ServiceName { get => _serviceName; set => SetWithSummary(ref _serviceName, value); }
     public string ServiceDisplayName { get => _serviceDisplayName; set => SetWithSummary(ref _serviceDisplayName, value); }
@@ -565,6 +672,10 @@ public sealed class ActionItemViewModel : ObservableObject
     }
 
     public bool IsValid => !IsEnabled || ValidationLevel != ValidationSeverity.Error;
+    public bool ShouldMonitorCurrentStatus => Type != ActionTypeIds.ProcessConfigure ||
+        (IsEnabled && !string.IsNullOrWhiteSpace(ProcessName) && ValidationLevel == ValidationSeverity.Valid);
+    public bool ShouldShowCurrentStatus => IsEnabled && !string.IsNullOrWhiteSpace(CurrentStatusText) &&
+        ShouldMonitorCurrentStatus;
     public string CurrentStatusText
     {
         get => _currentStatusText;
@@ -579,6 +690,12 @@ public sealed class ActionItemViewModel : ObservableObject
 
     public void SetCurrentStatus(string? status, string? technicalDetails, DateTimeOffset checkedAt)
     {
+        if (!ShouldMonitorCurrentStatus)
+        {
+            ClearCurrentStatus();
+            return;
+        }
+
         CurrentStatusText = string.IsNullOrWhiteSpace(status)
             ? _localizationService.GetString("ActionStatus.Unavailable")
             : status;
@@ -588,14 +705,25 @@ public sealed class ActionItemViewModel : ObservableObject
             ? _localizationService.Format("ActionStatus.LastChecked", checkedAt.ToLocalTime().ToString("HH:mm:ss"))
             : technicalDetails + Environment.NewLine +
               _localizationService.Format("ActionStatus.LastChecked", checkedAt.ToLocalTime().ToString("HH:mm:ss"));
+        OnPropertyChanged(nameof(ShouldShowCurrentStatus));
+    }
+
+    public void ClearCurrentStatus()
+    {
+        CurrentStatusText = string.Empty;
+        CurrentStatusTooltip = string.Empty;
+        _lastChecked = null;
+        OnPropertyChanged(nameof(LastChecked));
+        OnPropertyChanged(nameof(ShouldShowCurrentStatus));
     }
     public string ValidationMessage => Type switch
     {
         ActionTypeIds.ProgramRun when string.IsNullOrWhiteSpace(Target) => _localizationService.GetString("Validation.ProgramTarget"),
-        ActionTypeIds.ProcessSetState when string.IsNullOrWhiteSpace(ProcessName) => _localizationService.GetString("Validation.ProcessName"),
         ActionTypeIds.ProcessConfigure when string.IsNullOrWhiteSpace(ProcessName) => _localizationService.GetString("Validation.ProcessName"),
-        ActionTypeIds.ProcessConfigure when !ChangeAffinity && !ChangePriority => _localizationService.GetString("Validation.ProcessSetting"),
-        ActionTypeIds.ProcessConfigure when ChangeAffinity && !LogicalCpus.Any(cpu => cpu.IsSelected) => _localizationService.GetString("Validation.CpuAffinity"),
+        ActionTypeIds.ProcessConfigure when !IsProcessStopMode && !ChangeAffinity && !ShouldChangeProcessPriority && !ShouldChangeMemoryPriority => _localizationService.GetString("Validation.NoOp"),
+        ActionTypeIds.ProcessConfigure when !IsProcessStopMode && ChangeAffinity && !LogicalCpus.Any(cpu => cpu.IsSelected) => _localizationService.GetString("Validation.CpuAffinity"),
+        ActionTypeIds.ProgramRun when (ChangeAffinity || ShouldChangeProcessPriority || ShouldChangeMemoryPriority) && IsManualProcessTarget && string.IsNullOrWhiteSpace(ProcessName)
+            => _localizationService.GetString("Validation.PostLaunchProcess"),
         ActionTypeIds.WaitProcessStart or ActionTypeIds.WaitProcessExit when string.IsNullOrWhiteSpace(ProcessName) => _localizationService.GetString("Validation.ProcessName"),
         ActionTypeIds.WaitWindow when string.IsNullOrWhiteSpace(ProcessName) => _localizationService.GetString("Validation.ProcessName"),
         ActionTypeIds.WaitWindow when WindowMatchMode is WindowMatchModeIds.Contains or WindowMatchModeIds.Exact && string.IsNullOrWhiteSpace(WindowTitle)
@@ -616,12 +744,10 @@ public sealed class ActionItemViewModel : ObservableObject
         ActionTypeIds.ScriptRun when string.IsNullOrWhiteSpace(ScriptPath) => _localizationService.GetString("Validation.ScriptPath"),
         ActionTypeIds.ProgramRun when RestoreBehaviorId == "closeStarted" && !IsFullExecutablePath(Target)
             => _localizationService.GetString("Validation.ProgramRestorePath"),
-        ActionTypeIds.ProcessSetState when RestoreBehaviorId == "restart" && !IsFullExecutablePath(ExecutablePath)
+        ActionTypeIds.ProcessConfigure when IsProcessStopMode && RestoreBehaviorId == "restart" && !IsFullExecutablePath(ExecutablePath)
             => _localizationService.GetString("Validation.ProcessRestorePath"),
         ActionTypeIds.ScriptRun when IsRestoreScriptEnabled && string.IsNullOrWhiteSpace(RestoreScriptPath)
             => _localizationService.GetString("Validation.RestoreScriptPath"),
-        ActionTypeIds.ProcessSetState when string.Equals(DesiredProcessState, ProcessDesiredStateIds.Unchanged, StringComparison.OrdinalIgnoreCase)
-            => _localizationService.GetString("Validation.NoOp"),
         ActionTypeIds.ServiceSetState when string.Equals(DesiredServiceState, ServiceDesiredStateIds.Unchanged, StringComparison.OrdinalIgnoreCase)
             => _localizationService.GetString("Validation.NoOp"),
         ActionTypeIds.DeviceSetState when string.Equals(DeviceState, DeviceStateIds.Unchanged, StringComparison.OrdinalIgnoreCase)
@@ -631,8 +757,6 @@ public sealed class ActionItemViewModel : ObservableObject
 
     public ValidationSeverity ValidationLevel => Type switch
     {
-        ActionTypeIds.ProcessSetState when string.Equals(DesiredProcessState, ProcessDesiredStateIds.Unchanged, StringComparison.OrdinalIgnoreCase)
-            => ValidationSeverity.Warning,
         ActionTypeIds.ServiceSetState when string.Equals(DesiredServiceState, ServiceDesiredStateIds.Unchanged, StringComparison.OrdinalIgnoreCase)
             => ValidationSeverity.Warning,
         ActionTypeIds.DeviceSetState when string.Equals(DeviceState, DeviceStateIds.Unchanged, StringComparison.OrdinalIgnoreCase)
@@ -660,9 +784,11 @@ public sealed class ActionItemViewModel : ObservableObject
         NotifyValidation();
         foreach (var option in AvailableProcessStates.Concat(AvailableServiceStates).Concat(AvailableServiceStartupTypes)
                      .Concat(AvailableScriptTypes).Concat(AvailableFailurePolicies).Concat(AvailableRestoreBehaviors)
-                     .Concat(AvailableProcessPriorities).Concat(AvailableWindowMatchModes).Concat(AvailableWindowBehaviors)
+                     .Concat(AvailableProcessPriorities).Concat(AvailableProcessMemoryPriorities)
+                     .Concat(AvailableWindowMatchModes).Concat(AvailableWindowBehaviors)
                      .Concat(AvailableInstanceBehaviors).Concat(AvailableDeviceStates).Concat(AvailableConditions)
-                     .Concat(AvailableNotificationLevels))
+                     .Concat(AvailableNotificationLevels).Concat(AvailableProcessOperations)
+                     .Concat(AvailableProcessTargetModes))
         {
             option.RefreshDisplayName();
         }
@@ -738,11 +864,26 @@ public sealed class ActionItemViewModel : ObservableObject
                 SetString(parameters, ActionParameterNames.Target, Target);
                 SetCommonLaunchParameters(parameters);
                 parameters[ActionParameterNames.StartOnlyIfNotAlreadyRunning] = StartOnlyIfNotAlreadyRunning;
-                break;
-            case ActionTypeIds.ProcessSetState:
+                parameters[ActionParameterNames.ChangeAffinity] = ChangeAffinity;
+                parameters[ActionParameterNames.ChangePriority] = ShouldChangeProcessPriority;
+                parameters[ActionParameterNames.CpuIndices] = new JsonArray(LogicalCpus.Where(cpu => cpu.IsSelected)
+                    .Select(cpu => (JsonNode?)JsonValue.Create(cpu.Index)).ToArray());
+                parameters[ActionParameterNames.ProcessPriority] = ProcessPriority;
+                parameters[ActionParameterNames.ProcessMemoryPriority] = ProcessMemoryPriority;
+                parameters[ActionParameterNames.ProcessTargetMode] = ProcessTargetMode;
                 SetString(parameters, ActionParameterNames.ProcessName, ProcessName);
                 SetString(parameters, ActionParameterNames.ExecutablePath, ExecutablePath);
-                parameters[ActionParameterNames.DesiredState] = DesiredProcessState;
+                break;
+            case ActionTypeIds.ProcessConfigure:
+                SetString(parameters, ActionParameterNames.ProcessName, ProcessName);
+                SetString(parameters, ActionParameterNames.ExecutablePath, ExecutablePath);
+                parameters[ActionParameterNames.ProcessOperation] = ProcessOperation;
+                parameters[ActionParameterNames.ChangeAffinity] = ChangeAffinity;
+                parameters[ActionParameterNames.ChangePriority] = ShouldChangeProcessPriority;
+                parameters[ActionParameterNames.CpuIndices] = new JsonArray(LogicalCpus.Where(cpu => cpu.IsSelected)
+                    .Select(cpu => (JsonNode?)JsonValue.Create(cpu.Index)).ToArray());
+                parameters[ActionParameterNames.ProcessPriority] = ProcessPriority;
+                parameters[ActionParameterNames.ProcessMemoryPriority] = ProcessMemoryPriority;
                 break;
             case ActionTypeIds.ServiceSetState:
                 SetString(parameters, ActionParameterNames.ServiceName, ServiceName);
@@ -778,15 +919,6 @@ public sealed class ActionItemViewModel : ObservableObject
                 break;
             case ActionTypeIds.Delay:
                 parameters[ActionParameterNames.DelaySeconds] = DelaySeconds;
-                break;
-            case ActionTypeIds.ProcessConfigure:
-                SetString(parameters, ActionParameterNames.ProcessName, ProcessName);
-                SetString(parameters, ActionParameterNames.ExecutablePath, ExecutablePath);
-                parameters[ActionParameterNames.ChangeAffinity] = ChangeAffinity;
-                parameters[ActionParameterNames.ChangePriority] = ChangePriority;
-                parameters[ActionParameterNames.CpuIndices] = new JsonArray(LogicalCpus.Where(cpu => cpu.IsSelected)
-                    .Select(cpu => (JsonNode?)JsonValue.Create(cpu.Index)).ToArray());
-                parameters[ActionParameterNames.ProcessPriority] = ProcessPriority;
                 break;
             case ActionTypeIds.WaitProcessStart:
             case ActionTypeIds.WaitProcessExit:
@@ -897,6 +1029,10 @@ public sealed class ActionItemViewModel : ObservableObject
         OnPropertyChanged(nameof(IsValid));
         OnPropertyChanged(nameof(ValidationMessage));
         OnPropertyChanged(nameof(ValidationLevel));
+        OnPropertyChanged(nameof(ShouldMonitorCurrentStatus));
+        OnPropertyChanged(nameof(ShouldShowCurrentStatus));
+        if (!ShouldMonitorCurrentStatus && !string.IsNullOrWhiteSpace(CurrentStatusText))
+            ClearCurrentStatus();
     }
 
     private string ReadString(string propertyName)
@@ -979,11 +1115,45 @@ public sealed class ActionItemViewModel : ObservableObject
             options.Add(_localizationService.GetString("ActionSummary.ProgramRetry"));
         if (UseCustomWorkingDirectory)
             options.Add(_localizationService.GetString("ActionSummary.ProgramCustomDirectory"));
+        if (ShouldChangeProcessPriority)
+            options.Add(_localizationService.Format("ActionSummary.ProcessPriority",
+                AvailableProcessPriorities.FirstOrDefault(option => option.Value == ProcessPriority)?.DisplayName ?? ProcessPriority));
+        if (ShouldChangeMemoryPriority)
+            options.Add(_localizationService.Format("ActionSummary.ProcessMemoryPriority",
+                AvailableProcessMemoryPriorities.FirstOrDefault(option => option.Value == ProcessMemoryPriority)?.DisplayName ?? ProcessMemoryPriority));
+        if (ChangeAffinity)
+            options.Add(_localizationService.Format("ActionSummary.ProcessAffinity", GetSelectedCpuSummary()));
         if (!string.Equals(RestoreBehaviorId, "none", StringComparison.OrdinalIgnoreCase))
             options.Add(_localizationService.Format("ActionSummary.ProgramRestore",
                 AvailableRestoreBehaviors.FirstOrDefault(option => option.Value == RestoreBehaviorId)?.DisplayName ?? RestoreBehaviorId));
 
         return options.Count == 0 ? summary : $"{summary} · {string.Join(" · ", options)}";
+    }
+
+    private string GetProcessSummary()
+    {
+        var target = GetProcessSummaryTarget();
+        if (IsProcessStopMode)
+            return _localizationService.Format("ActionSummary.StopProcessInAction", target);
+
+        var summary = _localizationService.Format("ActionSummary.ConfigureProcess", target);
+        var options = new List<string>();
+        if (ShouldChangeProcessPriority)
+            options.Add(_localizationService.Format("ActionSummary.ProcessPriority",
+                AvailableProcessPriorities.FirstOrDefault(option => option.Value == ProcessPriority)?.DisplayName ?? ProcessPriority));
+        if (ShouldChangeMemoryPriority)
+            options.Add(_localizationService.Format("ActionSummary.ProcessMemoryPriority",
+                AvailableProcessMemoryPriorities.FirstOrDefault(option => option.Value == ProcessMemoryPriority)?.DisplayName ?? ProcessMemoryPriority));
+        if (ChangeAffinity)
+            options.Add(_localizationService.Format("ActionSummary.ProcessAffinity", GetSelectedCpuSummary()));
+        return options.Count == 0 ? summary : $"{summary} • {string.Join(" • ", options)}";
+    }
+
+    private string GetSelectedCpuSummary()
+    {
+        var selected = LogicalCpus.Where(cpu => cpu.IsSelected).Select(cpu => cpu.Index).ToArray();
+        return selected.Length == 0 ? _localizationService.GetString("ActionSummary.NotConfigured") :
+            selected.Length == LogicalCpus.Count ? _localizationService.GetString("ActionSummary.AllCpus") : string.Join(", ", selected);
     }
 
     private string GetProcessSummaryTarget() => !string.IsNullOrWhiteSpace(ExecutablePath)
@@ -1015,16 +1185,14 @@ public sealed class ActionItemViewModel : ObservableObject
     {
         ActionTypeIds.ProgramRun =>
         [new("none", "RestoreBehavior.None", localization), new("closeStarted", "RestoreBehavior.CloseStarted", localization)],
-        ActionTypeIds.ProcessSetState =>
-        [new("none", "RestoreBehavior.None", localization), new("restart", "RestoreBehavior.RestartProcess", localization)],
+        ActionTypeIds.ProcessConfigure =>
+        [new("none", "RestoreBehavior.None", localization), new("previous", "RestoreBehavior.ProcessSettings", localization), new("restart", "RestoreBehavior.RestartProcess", localization)],
         ActionTypeIds.PowerSetPlan =>
         [new("none", "RestoreBehavior.None", localization), new("previous", "RestoreBehavior.PreviousPlan", localization)],
         ActionTypeIds.DisplayConfigure =>
         [new("none", "RestoreBehavior.None", localization), new("previous", "RestoreBehavior.PreviousDisplay", localization)],
         ActionTypeIds.ScriptRun =>
         [new("none", "RestoreBehavior.None", localization), new("restoreScript", "RestoreBehavior.RestoreScript", localization)],
-        ActionTypeIds.ProcessConfigure =>
-        [new("none", "RestoreBehavior.None", localization), new("previous", "RestoreBehavior.ProcessSettings", localization)],
         ActionTypeIds.AudioConfigure =>
         [new("none", "RestoreBehavior.None", localization), new("previous", "RestoreBehavior.AudioSettings", localization)],
         ActionTypeIds.DeviceSetState =>
@@ -1034,14 +1202,13 @@ public sealed class ActionItemViewModel : ObservableObject
 
     private static string? GetDisplayNameResourceKey(string actionType) => actionType switch
     {
-        ActionTypeIds.ProcessSetState => "Action.ProcessState",
+        ActionTypeIds.ProcessConfigure => "Action.ProcessSettings",
         ActionTypeIds.ProgramRun => "Action.RunProgram",
         ActionTypeIds.ServiceSetState => "Action.WindowsServiceState",
         ActionTypeIds.DisplayConfigure => "Action.DisplaySettings",
         ActionTypeIds.PowerSetPlan => "Action.PowerPlan",
         ActionTypeIds.ScriptRun => "Action.RunScript",
         ActionTypeIds.Delay => "Action.Delay",
-        ActionTypeIds.ProcessConfigure => "Action.ProcessSettings",
         ActionTypeIds.WaitProcessStart => "Action.WaitProcess",
         ActionTypeIds.WaitProcessExit => "Action.WaitProcessExit",
         ActionTypeIds.WaitWindow => "Action.WaitWindow",

@@ -38,6 +38,9 @@ public static class ActionParameterNames
     public const string ChangeAffinity = "changeAffinity";
     public const string ProcessPriority = "processPriority";
     public const string ChangePriority = "changePriority";
+    public const string ProcessMemoryPriority = "processMemoryPriority";
+    public const string ProcessOperation = "processOperation";
+    public const string ProcessTargetMode = "processTargetMode";
     public const string WindowMatchMode = "windowMatchMode";
     public const string WindowTitle = "windowTitle";
     public const string WindowBehavior = "windowBehavior";

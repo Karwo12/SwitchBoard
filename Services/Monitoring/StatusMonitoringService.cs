@@ -42,6 +42,11 @@ public sealed class StatusMonitoringService(
                 foreach (var action in selectedActions)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
+                    if (!action.ShouldMonitorCurrentStatus)
+                    {
+                        action.ClearCurrentStatus();
+                        continue;
+                    }
                     try
                     {
                         var snapshot = await RefreshActionAsync(action, processes, cancellationToken);
