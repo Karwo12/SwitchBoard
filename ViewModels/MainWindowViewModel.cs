@@ -64,6 +64,7 @@ public sealed class MainWindowViewModel : ObservableObject
     private CancellationTokenSource? _profileExecutionCancellation;
     private readonly UndoService<SwitchBoardCatalog> _undoService = new();
     private SwitchBoardCatalog _undoBaseline;
+    private SwitchBoardCatalog _savedCatalogBaseline;
     private bool _suppressUndoTracking;
     private bool _isRestoreRunning;
     private bool _isSaving;
@@ -242,7 +243,9 @@ public sealed class MainWindowViewModel : ObservableObject
         }, action => action is not null);
         RunProfileCommand = new AsyncRelayCommand(RunProfileAsync, CanRunProfile);
         RestoreProfileCommand = new AsyncRelayCommand(RestoreProfileAsync, CanRestoreProfile);
-        DiscardPendingRestoreCommand = new AsyncRelayCommand(DiscardPendingRestoreAsync, CanDiscardPendingRestore);
+        // The X button is always rendered. Resolve the pending session when it is clicked
+        // instead of relying on a potentially stale CanExecute state after a prior discard.
+        DiscardPendingRestoreCommand = new AsyncRelayCommand(DiscardPendingRestoreAsync);
         UndoSingleActionTestCommand = new AsyncRelayCommand(UndoSingleActionTestAsync, () => CanUndoSingleActionTest);
         RefreshCurrentStatesCommand = new AsyncRelayCommand(RefreshCurrentStatesAsync, CanRefreshCurrentStates);
         CancelProfileCommand = new RelayCommand(CancelProfile, () => IsProfileRunning || IsRestoreRunning);
@@ -271,6 +274,7 @@ public sealed class MainWindowViewModel : ObservableObject
 
         SubscribeToItems();
         _undoBaseline = BuildCatalogSnapshot();
+        _savedCatalogBaseline = BuildCatalogSnapshot();
         _isRestoringSelection = true;
         SelectedCategory = Categories.FirstOrDefault(item => item.Id == userSettings.LastSelectedCategoryId) ?? Categories.FirstOrDefault();
         SelectedProfile = Profiles.FirstOrDefault(item => item.Id == userSettings.LastSelectedProfileId) ?? Profiles.FirstOrDefault();
@@ -1376,6 +1380,7 @@ public sealed class MainWindowViewModel : ObservableObject
             };
 
             await _catalogService.SaveAsync(catalog);
+            _savedCatalogBaseline = BuildCatalogSnapshot();
             SetClean(_localizationService.Format("Status.Saved", DateTime.Now.ToString("HH:mm:ss")));
         }
         catch (InvalidOperationException)
@@ -1622,16 +1627,21 @@ public sealed class MainWindowViewModel : ObservableObject
         }
     }
 
-    private bool CanRestoreProfile() => SelectedProfile is not null && RestoreChangeCount > 0 &&
+    private bool CanRestoreProfile() => SelectedProfile is not null &&
+        (RestoreChangeCount > 0 || _pendingRestoreSession?.PendingRestoreCount > 0) &&
         !IsProfileRunning && !IsRestoreRunning && !IsSaving && !_profileRestoreRunner.IsRunning;
 
-    private bool CanDiscardPendingRestore() => _pendingRestoreSession is not null && RestoreChangeCount > 0 &&
+    private bool CanDiscardPendingRestore() => SelectedProfile is not null &&
+        (RestoreChangeCount > 0 || _pendingRestoreSession?.PendingRestoreCount > 0) &&
         !IsProfileRunning && !IsRestoreRunning && !IsSaving;
 
     private async Task DiscardPendingRestoreAsync()
     {
+        if (IsProfileRunning || IsRestoreRunning || IsSaving) return;
+        if (_pendingRestoreSession is null || _pendingRestoreSession.PendingRestoreCount <= 0)
+            await RefreshPendingRestoreAsync();
         var session = _pendingRestoreSession;
-        if (session is null || !CanDiscardPendingRestore()) return;
+        if (session is null || session.PendingRestoreCount <= 0 || IsProfileRunning || IsRestoreRunning || IsSaving) return;
         if (!_dialogService.Confirm(_localizationService.GetString("Restore.DiscardTitle"),
                 _localizationService.GetString("Restore.DiscardConfirm"))) return;
         var discardedItems = session.DiscardPendingRestore();
@@ -1660,6 +1670,7 @@ public sealed class MainWindowViewModel : ObservableObject
         _activityService?.Add(ActivityLevel.Warning,
             _localizationService.Format("Activity.RestoreDiscarded", session.ProfileName), session.ProfileId);
         _pendingRestoreSession = null;
+        _lastSingleActionTestSession = null;
         SetRestoreCount(0);
         RestoreNoticeText = _localizationService.GetString("Restore.Discarded");
     }
@@ -1705,7 +1716,10 @@ public sealed class MainWindowViewModel : ObservableObject
 
     private async Task RestoreProfileAsync()
     {
-        if (_pendingRestoreSession is null || !CanRestoreProfile()) return;
+        if (_pendingRestoreSession is null || _pendingRestoreSession.PendingRestoreCount <= 0)
+            await RefreshPendingRestoreAsync();
+        if (_pendingRestoreSession is null || _pendingRestoreSession.PendingRestoreCount <= 0 || !CanRestoreProfile()) return;
+        SetRestoreCount(_pendingRestoreSession.PendingRestoreCount);
         IsRestoreRunning = true;
         HasExecutionStatus = true;
         CurrentExecutionActionNumber = 0;
@@ -2518,7 +2532,7 @@ public sealed class MainWindowViewModel : ObservableObject
             UndoCommand.NotifyCanExecuteChanged();
             RedoCommand.NotifyCanExecuteChanged();
         }
-        HasUnsavedChanges = true;
+        HasUnsavedChanges = HasCatalogChanges();
         RunProfileCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(RunAvailabilityMessage));
         NavigateToValidationErrorCommand.NotifyCanExecuteChanged();
@@ -2528,7 +2542,7 @@ public sealed class MainWindowViewModel : ObservableObject
     {
         _suppressUndoTracking = false;
         _undoBaseline = BuildCatalogSnapshot();
-        HasUnsavedChanges = true;
+        HasUnsavedChanges = HasCatalogChanges();
         StatusMessage = message;
     }
 
@@ -2548,7 +2562,7 @@ public sealed class MainWindowViewModel : ObservableObject
         {
             _suppressUndoTracking = false;
             _undoBaseline = BuildCatalogSnapshot();
-            HasUnsavedChanges = true;
+            HasUnsavedChanges = HasCatalogChanges();
         }
     }
 
@@ -2581,7 +2595,7 @@ public sealed class MainWindowViewModel : ObservableObject
         SelectedProfile = Profiles.FirstOrDefault(item => item.Id == profileId) ?? Profiles.FirstOrDefault();
         _suppressUndoTracking = false;
         _undoBaseline = BuildCatalogSnapshot();
-        HasUnsavedChanges = true;
+        HasUnsavedChanges = HasCatalogChanges();
         StatusMessage = _localizationService.GetString("Common.Undo");
         UndoCommand.NotifyCanExecuteChanged();
         RedoCommand.NotifyCanExecuteChanged();
@@ -2617,7 +2631,7 @@ public sealed class MainWindowViewModel : ObservableObject
         SelectedProfile = Profiles.FirstOrDefault(item => item.Id == profileId) ?? Profiles.FirstOrDefault();
         _suppressUndoTracking = false;
         _undoBaseline = BuildCatalogSnapshot();
-        HasUnsavedChanges = true;
+        HasUnsavedChanges = HasCatalogChanges();
         StatusMessage = _localizationService.GetString(statusKey);
         UndoCommand.NotifyCanExecuteChanged();
         RedoCommand.NotifyCanExecuteChanged();
@@ -2663,6 +2677,12 @@ public sealed class MainWindowViewModel : ObservableObject
         HasUnsavedChanges = false;
         StatusMessage = message;
     }
+
+    private bool HasCatalogChanges() =>
+        !string.Equals(
+            JsonSerializer.Serialize(BuildCatalogSnapshot()),
+            JsonSerializer.Serialize(_savedCatalogBaseline),
+            StringComparison.Ordinal);
 
     private void NotifyActionCommandStates()
     {
