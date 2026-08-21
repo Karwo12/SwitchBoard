@@ -8,14 +8,6 @@
              mc:Ignorable="d"
              d:DesignHeight="640"
              d:DesignWidth="700">
-    <UserControl.Resources>
-        <Style x:Key="SettingsRowBorderStyle" TargetType="Border">
-            <Setter Property="Background" Value="{DynamicResource SettingsRowBackgroundBrush}" />
-            <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="CornerRadius" Value="6" />
-            <Setter Property="Padding" Value="10,7" />
-        </Style>
-    </UserControl.Resources>
     <ContentControl Padding="24,22,24,4" Background="{DynamicResource ProfileEditorSurfaceBrush}"
                     Style="{StaticResource GlassPanel}">
         <Grid>

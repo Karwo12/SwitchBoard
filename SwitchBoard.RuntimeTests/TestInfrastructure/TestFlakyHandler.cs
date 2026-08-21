@@ -2,6 +2,8 @@ using System.Text.Json.Nodes;
 using SwitchBoard.Models.Actions;
 using SwitchBoard.Services.Execution;
 
+namespace SwitchBoard.RuntimeTests.TestInfrastructure;
+
 sealed class TestFlakyHandler : IActionHandler
 {
     public const string TypeId = "test.flaky";
@@ -20,3 +22,5 @@ sealed class TestFlakyHandler : IActionHandler
     public Task<ActionExecutionResult> RestoreAsync(ActionDefinition action, JsonObject restoreState, ActionExecutionContext context,
         CancellationToken cancellationToken) => Task.FromResult(ActionExecutionResult.Skipped());
 }
+
+
