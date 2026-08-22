@@ -3,13 +3,18 @@ namespace SwitchBoard.RuntimeTests.TestInfrastructure;
 public static class TestHelpers
 {
     public static async Task WaitUntilAsync(Func<bool> predicate, TimeSpan? timeout = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, Func<string>? timeoutDetails = null)
     {
         var deadline = DateTime.UtcNow + (timeout ?? TimeSpan.FromSeconds(2));
         while (!predicate())
         {
             if (DateTime.UtcNow >= deadline)
-                throw new TimeoutException("The asynchronous test condition was not reached.");
+            {
+                var details = timeoutDetails?.Invoke();
+                throw new TimeoutException(string.IsNullOrWhiteSpace(details)
+                    ? "The asynchronous test condition was not reached."
+                    : $"The asynchronous test condition was not reached. {details}");
+            }
             await Task.Delay(20, cancellationToken);
         }
     }

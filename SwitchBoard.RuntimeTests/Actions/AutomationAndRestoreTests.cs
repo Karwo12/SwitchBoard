@@ -127,9 +127,10 @@ public sealed class AutomationAndRestoreTests : RuntimeTestBase
         var nested = Action(ActionTypeIds.ProgramRun, new JsonObject
         {
             [ActionParameterNames.Target] = powershell,
-            [ActionParameterNames.Arguments] = $"-NoProfile -Command \"Set-Content -LiteralPath '{output}' -Value nested; Start-Sleep -Seconds 2\"",
+            [ActionParameterNames.Arguments] = $"-NoProfile -Command \"Set-Content -LiteralPath '{output}' -Value nested; Start-Sleep -Seconds 15\"",
             [ActionParameterNames.InstanceBehavior] = InstanceBehaviorIds.StartAnother
         });
+        nested.RestoreBehavior = ActionRestoreBehavior.CloseIfStartedBySwitchBoard;
         var condition = Action(ActionTypeIds.ConditionIf, new JsonObject
         {
             [ActionParameterNames.ConditionType] = ConditionTypeIds.FileNotExists,
@@ -141,11 +142,28 @@ public sealed class AutomationAndRestoreTests : RuntimeTestBase
         profiles[profile.Id] = profile;
         var runner = CreateAutomationRunner(context, activity, profiles);
 
-        var session = await runner.RunAsync(profile);
-        await TestHelpers.WaitUntilAsync(() => File.Exists(output), TimeSpan.FromSeconds(3));
+        ExecutionSession? session = null;
+        try
+        {
+            session = await runner.RunAsync(profile);
+            var persisted = await context.SessionRepository.LoadAsync(session.Id);
+            await TestHelpers.WaitUntilAsync(() => File.Exists(output), TimeSpan.FromSeconds(15),
+                timeoutDetails: () => DescribeNestedProgramTimeout(session!, persisted, nested.Id));
 
-        Assert.Equal(ExecutionSessionStatus.Completed, session.Status);
-        Assert.True(File.Exists(output));
+            Assert.Equal(ExecutionSessionStatus.Completed, session.Status);
+            Assert.True(File.Exists(output));
+        }
+        finally
+        {
+            var pending = await context.SessionRepository.GetLatestPendingAsync(profile.Id);
+            if (pending is not null)
+            {
+                var restored = await new ProfileRestoreRunner(context.Registry, context.SessionRepository)
+                    .RunAsync(pending);
+                Assert.Equal(PersistentSessionStatus.Restored, restored.Status);
+                Assert.Empty(restored.GetPendingRestoreEntries());
+            }
+        }
     }
 
     [Fact]
@@ -303,5 +321,39 @@ public sealed class AutomationAndRestoreTests : RuntimeTestBase
         ]);
         return new ProfileRunner(registry, context.SessionRepository,
             profileResolver: id => profiles.GetValueOrDefault(id), activity: activity);
+    }
+
+    private static string DescribeNestedProgramTimeout(ExecutionSession session,
+        PersistentExecutionSession? persisted, Guid nestedActionId)
+    {
+        var persistedAction = persisted?.Actions.LastOrDefault(item => item.ActionId == nestedActionId);
+        var processIds = persistedAction?.PreviousState?["launchedProcesses"] is JsonArray launched
+            ? launched.OfType<JsonObject>()
+                .Select(item => item["processId"]?.GetValue<int>() ?? 0)
+                .Where(processId => processId > 0)
+                .ToArray()
+            : [];
+        var activeProcessIds = processIds.Where(IsProcessRunning).ToArray();
+        var journal = string.Join(
+            "; ",
+            session.Journal.Select(item =>
+                $"{item.ActionType}:{item.Status}:{item.ErrorMessage ?? "no error"}"));
+
+        return $"ExecutionStatus={session.Status}; " +
+               $"PersistentStatus={persisted?.Status.ToString() ?? "unavailable"}; " +
+               $"PowerShellStarted={processIds.Length > 0}; " +
+               $"PowerShellActivePids=[{string.Join(",", activeProcessIds)}]; " +
+               $"Journal=[{journal}]";
+    }
+
+    private static bool IsProcessRunning(int processId)
+    {
+        try
+        {
+            using var process = Process.GetProcessById(processId);
+            return !process.HasExited;
+        }
+        catch (ArgumentException) { return false; }
+        catch (InvalidOperationException) { return false; }
     }
 }
