@@ -100,12 +100,17 @@ public sealed class ScriptAndWaitActionTests : RuntimeTestBase
             { [ActionParameterNames.ProcessName] = "sbwaitstartprobe" }),
             new(Guid.NewGuid(), Guid.NewGuid()), cts.Token);
         await Task.Delay(250, cts.Token);
-        using var probe = StartProbe(probePath);
-
-        var result = await waitTask;
-
-        Assert.True(result.IsSuccessful, "wait.processStart should observe the process asynchronously.");
-        Kill(probe);
+        var probe = StartProbe(probePath);
+        try
+        {
+            var result = await waitTask;
+            Assert.True(result.IsSuccessful, "wait.processStart should observe the process asynchronously.");
+        }
+        finally
+        {
+            Kill(probe);
+            probe?.Dispose();
+        }
     }
 
     [Fact]
@@ -116,18 +121,26 @@ public sealed class ScriptAndWaitActionTests : RuntimeTestBase
         using var context = new RuntimeTestContext();
         var probePath = CreateProbe(context.Root, "sbwaitexitprobe");
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
-        using var probe = StartProbe(probePath);
+        var probe = StartProbe(probePath);
         Assert.NotNull(probe);
-        var waitTask = new WaitProcessActionHandler(ActionTypeIds.WaitProcessExit).ExecuteAsync(
-            Action(ActionTypeIds.WaitProcessExit, new JsonObject
-            { [ActionParameterNames.ProcessName] = "sbwaitexitprobe" }),
-            new(Guid.NewGuid(), Guid.NewGuid()), cts.Token);
-        await Task.Delay(250, cts.Token);
-        probe!.Kill(entireProcessTree: true);
+        try
+        {
+            var waitTask = new WaitProcessActionHandler(ActionTypeIds.WaitProcessExit).ExecuteAsync(
+                Action(ActionTypeIds.WaitProcessExit, new JsonObject
+                { [ActionParameterNames.ProcessName] = "sbwaitexitprobe" }),
+                new(Guid.NewGuid(), Guid.NewGuid()), cts.Token);
+            await Task.Delay(250, cts.Token);
+            probe!.Kill(entireProcessTree: true);
 
-        var result = await waitTask;
+            var result = await waitTask;
 
-        Assert.True(result.IsSuccessful, "wait.processExit should observe the exact process-name disappearance.");
+            Assert.True(result.IsSuccessful, "wait.processExit should observe the exact process-name disappearance.");
+        }
+        finally
+        {
+            Kill(probe);
+            probe.Dispose();
+        }
     }
 
     [Fact]
@@ -228,36 +241,43 @@ public sealed class ScriptAndWaitActionTests : RuntimeTestBase
     {
         using var context = new RuntimeTestContext();
         var path = CreateProbe(context.Root, "sbaffinity");
-        using var process = StartProbe(path);
+        var process = StartProbe(path);
         Assert.NotNull(process);
-        var cpus = Enumerable.Range(0, Math.Min(Environment.ProcessorCount, IntPtr.Size * 8))
-            .Where(cpu => cpu != 0 || Environment.ProcessorCount == 1).ToArray();
-        var action = Action(ActionTypeIds.ProcessConfigure, new JsonObject
+        try
         {
-            [ActionParameterNames.ProcessName] = "sbaffinity",
-            [ActionParameterNames.ExecutablePath] = path,
-            [ActionParameterNames.ChangeAffinity] = true,
-            [ActionParameterNames.ChangePriority] = true,
-            [ActionParameterNames.ProcessPriority] = ProcessPriorityIds.BelowNormal,
-            [ActionParameterNames.CpuIndices] = new JsonArray(cpus.Select(cpu => (JsonNode?)JsonValue.Create(cpu)).ToArray())
-        });
-        action.RuntimeProcessIdHint = process!.Id;
-        var handler = new ProcessConfigureActionHandler();
-        var executionContext = new ActionExecutionContext(Guid.NewGuid(), Guid.NewGuid());
-        var oldState = await handler.CaptureStateAsync(action, executionContext, CancellationToken.None);
-        var result = await handler.ExecuteAsync(action, executionContext, CancellationToken.None);
-        process.Refresh();
-        var expectedMask = unchecked((long)ProcessConfigureActionHandler.ReadAffinityMask(
-            action.Parameters[ActionParameterNames.CpuIndices] as JsonArray));
+            var cpus = Enumerable.Range(0, Math.Min(Environment.ProcessorCount, IntPtr.Size * 8))
+                .Where(cpu => cpu != 0 || Environment.ProcessorCount == 1).ToArray();
+            var action = Action(ActionTypeIds.ProcessConfigure, new JsonObject
+            {
+                [ActionParameterNames.ProcessName] = "sbaffinity",
+                [ActionParameterNames.ExecutablePath] = path,
+                [ActionParameterNames.ChangeAffinity] = true,
+                [ActionParameterNames.ChangePriority] = true,
+                [ActionParameterNames.ProcessPriority] = ProcessPriorityIds.BelowNormal,
+                [ActionParameterNames.CpuIndices] = new JsonArray(cpus.Select(cpu => (JsonNode?)JsonValue.Create(cpu)).ToArray())
+            });
+            action.RuntimeProcessIdHint = process!.Id;
+            var handler = new ProcessConfigureActionHandler();
+            var executionContext = new ActionExecutionContext(Guid.NewGuid(), Guid.NewGuid());
+            var oldState = await handler.CaptureStateAsync(action, executionContext, CancellationToken.None);
+            var result = await handler.ExecuteAsync(action, executionContext, CancellationToken.None);
+            process.Refresh();
+            var expectedMask = unchecked((long)ProcessConfigureActionHandler.ReadAffinityMask(
+                action.Parameters[ActionParameterNames.CpuIndices] as JsonArray));
 
-        Assert.True(result.IsSuccessful && process.ProcessorAffinity.ToInt64() == expectedMask &&
-                    process.PriorityClass == ProcessPriorityClass.BelowNormal,
-            "process.configure should apply affinity and priority.");
-        Assert.NotNull(oldState);
-        await handler.RestoreAsync(action, oldState!, executionContext, CancellationToken.None);
-        process.Refresh();
-        Assert.Equal(oldState!["affinityMask"]!.GetValue<long>(), process.ProcessorAffinity.ToInt64());
-        Kill(process);
+            Assert.True(result.IsSuccessful && process.ProcessorAffinity.ToInt64() == expectedMask &&
+                        process.PriorityClass == ProcessPriorityClass.BelowNormal,
+                "process.configure should apply affinity and priority.");
+            Assert.NotNull(oldState);
+            await handler.RestoreAsync(action, oldState!, executionContext, CancellationToken.None);
+            process.Refresh();
+            Assert.Equal(oldState!["affinityMask"]!.GetValue<long>(), process.ProcessorAffinity.ToInt64());
+        }
+        finally
+        {
+            Kill(process);
+            process.Dispose();
+        }
     }
 
     [Fact]
@@ -267,24 +287,31 @@ public sealed class ScriptAndWaitActionTests : RuntimeTestBase
     {
         using var context = new RuntimeTestContext();
         var path = CreateProbe(context.Root, "sbmemory");
-        using var process = StartProbe(path);
+        var process = StartProbe(path);
         Assert.NotNull(process);
-        var settings = new ProcessSettingsService();
-        var parameters = new JsonObject
+        try
         {
-            [ActionParameterNames.ChangePriority] = false,
-            [ActionParameterNames.ProcessPriority] = ProcessPriorityIds.NoChange,
-            [ActionParameterNames.ProcessMemoryPriority] = ProcessMemoryPriorityIds.Low
-        };
-        var before = settings.Capture(process!, parameters);
-        settings.Apply(process, parameters);
-        var changed = settings.Capture(process, parameters);
-        settings.Restore(process, before);
-        var restored = settings.Capture(process, parameters);
+            var settings = new ProcessSettingsService();
+            var parameters = new JsonObject
+            {
+                [ActionParameterNames.ChangePriority] = false,
+                [ActionParameterNames.ProcessPriority] = ProcessPriorityIds.NoChange,
+                [ActionParameterNames.ProcessMemoryPriority] = ProcessMemoryPriorityIds.Low
+            };
+            var before = settings.Capture(process!, parameters);
+            settings.Apply(process, parameters);
+            var changed = settings.Capture(process, parameters);
+            settings.Restore(process, before);
+            var restored = settings.Capture(process, parameters);
 
-        Assert.Equal(2, changed["memoryPriority"]?.GetValue<int>());
-        Assert.Equal(before["memoryPriority"]?.GetValue<int>(), restored["memoryPriority"]?.GetValue<int>());
-        Kill(process);
+            Assert.Equal(2, changed["memoryPriority"]?.GetValue<int>());
+            Assert.Equal(before["memoryPriority"]?.GetValue<int>(), restored["memoryPriority"]?.GetValue<int>());
+        }
+        finally
+        {
+            Kill(process);
+            process.Dispose();
+        }
     }
 
     private static string CreateProbe(string root, string name)

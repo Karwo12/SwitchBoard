@@ -483,3 +483,5 @@ $RECYCLE.BIN/
 
 # Local temporary build/test output
 build-temp-tests/
+TestResults/
+*.trx

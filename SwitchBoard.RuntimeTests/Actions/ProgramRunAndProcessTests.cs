@@ -10,22 +10,30 @@ public sealed class ProgramRunAndProcessTests : RuntimeTestBase
     [Trait("Platform", "Windows")]
     public async Task ProcessSetState_StoppedProcess_IsSkippedOnSecondExecution()
     {
-        using var notepad = Process.Start(new ProcessStartInfo("notepad.exe") { UseShellExecute = true });
+        var notepad = Process.Start(new ProcessStartInfo("notepad.exe") { UseShellExecute = true });
         Assert.NotNull(notepad);
-        await Task.Delay(500);
-
-        var action = Action(ActionTypeIds.ProcessSetState, new JsonObject
+        try
         {
-            [ActionParameterNames.ProcessName] = "notepad",
-            [ActionParameterNames.DesiredState] = ProcessDesiredStateIds.Stopped
-        });
-        var handler = new ProcessSetStateActionHandler();
-        var first = await handler.ExecuteAsync(action, new(Guid.NewGuid(), Guid.NewGuid()), CancellationToken.None);
-        await Task.Delay(750);
-        var second = await handler.ExecuteAsync(action, new(Guid.NewGuid(), Guid.NewGuid()), CancellationToken.None);
+            await Task.Delay(500);
 
-        Assert.True(first.IsSuccessful && !first.IsSkipped, "The first process.setState execution should stop Notepad.");
-        Assert.True(second.IsSuccessful && second.IsSkipped, "The second process.setState execution should skip the absent process.");
+            var action = Action(ActionTypeIds.ProcessSetState, new JsonObject
+            {
+                [ActionParameterNames.ProcessName] = "notepad",
+                [ActionParameterNames.DesiredState] = ProcessDesiredStateIds.Stopped
+            });
+            var handler = new ProcessSetStateActionHandler();
+            var first = await handler.ExecuteAsync(action, new(Guid.NewGuid(), Guid.NewGuid()), CancellationToken.None);
+            await Task.Delay(750);
+            var second = await handler.ExecuteAsync(action, new(Guid.NewGuid(), Guid.NewGuid()), CancellationToken.None);
+
+            Assert.True(first.IsSuccessful && !first.IsSkipped, "The first process.setState execution should stop Notepad.");
+            Assert.True(second.IsSuccessful && second.IsSkipped, "The second process.setState execution should skip the absent process.");
+        }
+        finally
+        {
+            KillProcess(notepad!.Id);
+            notepad.Dispose();
+        }
     }
 
     [Fact]
@@ -33,20 +41,28 @@ public sealed class ProgramRunAndProcessTests : RuntimeTestBase
     [Trait("Platform", "Windows")]
     public async Task ProcessConfigure_StopOperation_StopsProcess()
     {
-        using var notepad = Process.Start(new ProcessStartInfo("notepad.exe") { UseShellExecute = true });
+        var notepad = Process.Start(new ProcessStartInfo("notepad.exe") { UseShellExecute = true });
         Assert.NotNull(notepad);
-        await Task.Delay(500);
-
-        var action = Action(ActionTypeIds.ProcessConfigure, new JsonObject
+        try
         {
-            [ActionParameterNames.ProcessName] = "notepad",
-            [ActionParameterNames.ProcessOperation] = ProcessOperationIds.Stop
-        });
-        var result = await new ProcessConfigureActionHandler().ExecuteAsync(
-            action, new(Guid.NewGuid(), Guid.NewGuid()), CancellationToken.None);
+            await Task.Delay(500);
 
-        Assert.True(result.IsSuccessful && !result.IsSkipped,
-            "process.configure stop operation should reuse the process stop handler.");
+            var action = Action(ActionTypeIds.ProcessConfigure, new JsonObject
+            {
+                [ActionParameterNames.ProcessName] = "notepad",
+                [ActionParameterNames.ProcessOperation] = ProcessOperationIds.Stop
+            });
+            var result = await new ProcessConfigureActionHandler().ExecuteAsync(
+                action, new(Guid.NewGuid(), Guid.NewGuid()), CancellationToken.None);
+
+            Assert.True(result.IsSuccessful && !result.IsSkipped,
+                "process.configure stop operation should reuse the process stop handler.");
+        }
+        finally
+        {
+            KillProcess(notepad!.Id);
+            notepad.Dispose();
+        }
     }
 
     [Fact]
@@ -55,18 +71,26 @@ public sealed class ProgramRunAndProcessTests : RuntimeTestBase
     public async Task ProgramRun_ExistingProcess_IsSkippedWhenConfigured()
     {
         var powershellPath = GetPowerShellPath();
-        using var preexisting = StartPowerShellSleep(powershellPath, 30);
+        var preexisting = StartPowerShellSleep(powershellPath, 30);
         Assert.NotNull(preexisting);
-        await Task.Delay(350);
+        try
+        {
+            await Task.Delay(350);
 
-        var result = await new ProgramRunActionHandler().ExecuteAsync(
-            Action(ActionTypeIds.ProgramRun, new JsonObject
-            {
-                [ActionParameterNames.Target] = powershellPath,
-                [ActionParameterNames.StartOnlyIfNotAlreadyRunning] = true
-            }), new(Guid.NewGuid(), Guid.NewGuid()), CancellationToken.None);
+            var result = await new ProgramRunActionHandler().ExecuteAsync(
+                Action(ActionTypeIds.ProgramRun, new JsonObject
+                {
+                    [ActionParameterNames.Target] = powershellPath,
+                    [ActionParameterNames.StartOnlyIfNotAlreadyRunning] = true
+                }), new(Guid.NewGuid(), Guid.NewGuid()), CancellationToken.None);
 
-        Assert.True(result.IsSkipped, "program.run should skip an already-running target when configured to do so.");
+            Assert.True(result.IsSkipped, "program.run should skip an already-running target when configured to do so.");
+        }
+        finally
+        {
+            KillProcess(preexisting!.Id);
+            preexisting.Dispose();
+        }
     }
 
     [Fact]
@@ -76,37 +100,47 @@ public sealed class ProgramRunAndProcessTests : RuntimeTestBase
     {
         using var context = new RuntimeTestContext();
         var powershellPath = GetPowerShellPath();
-        using var preexisting = StartPowerShellSleep(powershellPath, 30);
+        var preexisting = StartPowerShellSleep(powershellPath, 30);
         Assert.NotNull(preexisting);
-        await Task.Delay(350);
-
-        var action = Action(ActionTypeIds.ProgramRun, new JsonObject
+        var launchedPid = 0;
+        try
         {
-            [ActionParameterNames.Target] = powershellPath,
-            [ActionParameterNames.Arguments] = "-NoProfile -Command \"Start-Sleep -Seconds 30\"",
-            [ActionParameterNames.StartOnlyIfNotAlreadyRunning] = false
-        });
-        action.RestoreBehavior = ActionRestoreBehavior.CloseIfStartedBySwitchBoard;
-        var profile = new ProfileDefinition
+            await Task.Delay(350);
+
+            var action = Action(ActionTypeIds.ProgramRun, new JsonObject
+            {
+                [ActionParameterNames.Target] = powershellPath,
+                [ActionParameterNames.Arguments] = "-NoProfile -Command \"Start-Sleep -Seconds 30\"",
+                [ActionParameterNames.StartOnlyIfNotAlreadyRunning] = false
+            });
+            action.RestoreBehavior = ActionRestoreBehavior.CloseIfStartedBySwitchBoard;
+            var profile = new ProfileDefinition
+            {
+                CategoryId = Guid.NewGuid(), Name = "Program restore test", Actions = [action]
+            };
+
+            var session = await context.Runner.RunAsync(profile);
+            var pending = await context.SessionRepository.GetLatestPendingAsync(profile.Id);
+            launchedPid = pending?.Actions[0].PreviousState?["processId"]?.GetValue<int>() ?? 0;
+            Assert.True(session.Status == ExecutionSessionStatus.Completed && launchedPid > 0 &&
+                        launchedPid != preexisting.Id && !preexisting.HasExited,
+                "program.run should persist only the process instance started by SwitchBoard.");
+
+            Assert.NotNull(pending);
+            var reloaded = await context.SessionRepository.LoadAsync(pending!.SessionId);
+            Assert.Equal(1, reloaded?.PendingRestoreCount);
+            await new ProfileRestoreRunner(context.Registry, context.SessionRepository).RunAsync(reloaded!);
+            await Task.Delay(250);
+
+            Assert.False(IsProcessAlive(launchedPid), "Restore should close the exact launched PID.");
+            Assert.False(preexisting.HasExited, "Restore must preserve the pre-existing process.");
+        }
+        finally
         {
-            CategoryId = Guid.NewGuid(), Name = "Program restore test", Actions = [action]
-        };
-
-        var session = await context.Runner.RunAsync(profile);
-        var pending = await context.SessionRepository.GetLatestPendingAsync(profile.Id);
-        var launchedPid = pending?.Actions[0].PreviousState?["processId"]?.GetValue<int>() ?? 0;
-        Assert.True(session.Status == ExecutionSessionStatus.Completed && launchedPid > 0 &&
-                    launchedPid != preexisting.Id && !preexisting.HasExited,
-            "program.run should persist only the process instance started by SwitchBoard.");
-
-        Assert.NotNull(pending);
-        var reloaded = await context.SessionRepository.LoadAsync(pending!.SessionId);
-        Assert.Equal(1, reloaded?.PendingRestoreCount);
-        await new ProfileRestoreRunner(context.Registry, context.SessionRepository).RunAsync(reloaded!);
-        await Task.Delay(250);
-
-        Assert.False(IsProcessAlive(launchedPid), "Restore should close the exact launched PID.");
-        Assert.False(preexisting.HasExited, "Restore must preserve the pre-existing process.");
+            KillProcess(launchedPid);
+            KillProcess(preexisting.Id);
+            preexisting.Dispose();
+        }
     }
 
     [Fact]
@@ -138,10 +172,7 @@ public sealed class ProgramRunAndProcessTests : RuntimeTestBase
 
             Assert.True(result.IsSuccessful, "program.run should apply automatic post-launch priority and affinity.");
         }
-        finally
-        {
-            KillProcessesByName(Path.GetFileNameWithoutExtension(targetPath));
-        }
+        finally { KillProcessesForExecutable(targetPath); }
     }
 
     [EnvironmentFact("Edge")]
@@ -174,6 +205,7 @@ public sealed class ProgramRunAndProcessTests : RuntimeTestBase
             CategoryId = Guid.NewGuid(), Name = "Microsoft Edge restore test", Actions = [action]
         };
 
+        var ownedProcessIds = new HashSet<int>();
         try
         {
             var session = await context.Runner.RunAsync(profile);
@@ -193,6 +225,7 @@ public sealed class ProgramRunAndProcessTests : RuntimeTestBase
             foreach (var process in after) process.Dispose();
             var trackedIds = tracked!.OfType<JsonObject>()
                 .Select(item => item["processId"]?.GetValue<int>() ?? 0).Where(id => id > 0).ToHashSet();
+            ownedProcessIds.UnionWith(trackedIds);
             var persistedBaselineIds = (state?["preExistingProcesses"] as JsonArray)?.OfType<JsonObject>()
                 .Select(item => item["processId"]?.GetValue<int>() ?? 0).Where(id => id > 0).ToHashSet() ?? [];
 
@@ -203,7 +236,9 @@ public sealed class ProgramRunAndProcessTests : RuntimeTestBase
         }
         finally
         {
-            KillProcessesByName("msedge");
+            if (ownedProcessIds.Count == 0)
+                ownedProcessIds.UnionWith(GetProcessIdsByName("msedge").Where(id => !baselineIds.Contains(id)));
+            KillProcessIds(ownedProcessIds);
         }
     }
 
@@ -234,25 +269,33 @@ Set-Content -LiteralPath $PidPath -Value $child.Id
             CategoryId = Guid.NewGuid(), Name = "Program process tree restore test", Actions = [action]
         };
 
-        var session = await context.Runner.RunAsync(profile);
-        var pending = await context.SessionRepository.GetLatestPendingAsync(profile.Id);
-        await Task.Delay(1500);
-        var state = pending?.Actions[0].PreviousState;
-        var rootPid = state?["processId"]?.GetValue<int>() ?? 0;
-        var childPid = File.Exists(childPidPath) && int.TryParse(await File.ReadAllTextAsync(childPidPath), out var parsed)
-            ? parsed : 0;
-        var tracked = state?["launchedProcesses"] as JsonArray;
-        Assert.True(session.Status == ExecutionSessionStatus.Completed && rootPid > 0 && childPid > 0 &&
-                    tracked?.OfType<JsonObject>().Any(item => item["processId"]?.GetValue<int>() == childPid) == true,
-            "program.run should persist launcher and descendant identities.");
-        Assert.False(IsProcessAlive(rootPid), "The test launcher should exit before Restore.");
+        var rootPid = 0;
+        var childPid = 0;
+        try
+        {
+            var session = await context.Runner.RunAsync(profile);
+            var pending = await context.SessionRepository.GetLatestPendingAsync(profile.Id);
+            await Task.Delay(1500);
+            var state = pending?.Actions[0].PreviousState;
+            rootPid = state?["processId"]?.GetValue<int>() ?? 0;
+            childPid = File.Exists(childPidPath) && int.TryParse(await File.ReadAllTextAsync(childPidPath), out var parsed)
+                ? parsed : 0;
+            var tracked = state?["launchedProcesses"] as JsonArray;
+            Assert.True(session.Status == ExecutionSessionStatus.Completed && rootPid > 0 && childPid > 0 &&
+                        tracked?.OfType<JsonObject>().Any(item => item["processId"]?.GetValue<int>() == childPid) == true,
+                "program.run should persist launcher and descendant identities.");
+            Assert.False(IsProcessAlive(rootPid), "The test launcher should exit before Restore.");
 
-        if (pending is not null)
-            await new ProfileRestoreRunner(context.Registry, context.SessionRepository).RunAsync(pending);
-        await Task.Delay(300);
-        Assert.False(IsProcessAlive(childPid), "Restore should close a saved descendant after its launcher exits.");
-        KillProcess(rootPid);
-        KillProcess(childPid);
+            if (pending is not null)
+                await new ProfileRestoreRunner(context.Registry, context.SessionRepository).RunAsync(pending);
+            await Task.Delay(300);
+            Assert.False(IsProcessAlive(childPid), "Restore should close a saved descendant after its launcher exits.");
+        }
+        finally
+        {
+            KillProcess(rootPid);
+            KillProcess(childPid);
+        }
     }
 
     [Fact]
@@ -262,31 +305,39 @@ Set-Content -LiteralPath $PidPath -Value $child.Id
     {
         using var context = new RuntimeTestContext();
         var powershellPath = GetPowerShellPath();
-        using var powershell = StartPowerShellSleep(powershellPath, 30);
+        var powershell = StartPowerShellSleep(powershellPath, 30);
         Assert.NotNull(powershell);
-        await Task.Delay(350);
-
-        var action = Action(ActionTypeIds.ProcessSetState, new JsonObject
+        try
         {
-            [ActionParameterNames.ProcessName] = "powershell",
-            [ActionParameterNames.ExecutablePath] = powershellPath,
-            [ActionParameterNames.DesiredState] = ProcessDesiredStateIds.Stopped
-        });
-        action.RuntimeProcessIdHint = powershell!.Id;
-        var profile = new ProfileDefinition
+            await Task.Delay(350);
+
+            var action = Action(ActionTypeIds.ProcessSetState, new JsonObject
+            {
+                [ActionParameterNames.ProcessName] = "powershell",
+                [ActionParameterNames.ExecutablePath] = powershellPath,
+                [ActionParameterNames.DesiredState] = ProcessDesiredStateIds.Stopped
+            });
+            action.RuntimeProcessIdHint = powershell!.Id;
+            var profile = new ProfileDefinition
+            {
+                CategoryId = Guid.NewGuid(), Name = "PowerShell process runtime test",
+                Actions = [action, Action(ActionTypeIds.Delay, new JsonObject { [ActionParameterNames.DelaySeconds] = 0 })]
+            };
+            profile.Actions[0].SortOrder = 0;
+            profile.Actions[1].SortOrder = 1;
+
+            var session = await context.Runner.RunAsync(profile);
+
+            Assert.True(session.Status == ExecutionSessionStatus.Completed &&
+                        session.Journal[0].Status == ActionJournalStatus.Success &&
+                        session.Journal[1].Status == ActionJournalStatus.Success && powershell.HasExited,
+                "process.setState should remain successful and allow the following action to run.");
+        }
+        finally
         {
-            CategoryId = Guid.NewGuid(), Name = "PowerShell process runtime test",
-            Actions = [action, Action(ActionTypeIds.Delay, new JsonObject { [ActionParameterNames.DelaySeconds] = 0 })]
-        };
-        profile.Actions[0].SortOrder = 0;
-        profile.Actions[1].SortOrder = 1;
-
-        var session = await context.Runner.RunAsync(profile);
-
-        Assert.True(session.Status == ExecutionSessionStatus.Completed &&
-                    session.Journal[0].Status == ActionJournalStatus.Success &&
-                    session.Journal[1].Status == ActionJournalStatus.Success && powershell.HasExited,
-            "process.setState should remain successful and allow the following action to run.");
+            KillProcess(powershell!.Id);
+            powershell.Dispose();
+        }
     }
 
     [Fact]
@@ -332,39 +383,49 @@ Set-Content -LiteralPath $PidPath -Value $child.Id
     {
         using var context = new RuntimeTestContext();
         var notepadPath = Path.Combine(Environment.SystemDirectory, "notepad.exe");
-        using var notepad = Process.Start(new ProcessStartInfo(notepadPath) { UseShellExecute = true });
+        var preExistingNotepadIds = GetProcessIdsByName("notepad");
+        var notepad = Process.Start(new ProcessStartInfo(notepadPath) { UseShellExecute = true });
         Assert.NotNull(notepad);
-        await Task.Delay(500);
-        try { notepadPath = notepad!.MainModule?.FileName ?? notepadPath; } catch { }
-
-        var action = Action(ActionTypeIds.ProcessSetState, new JsonObject
+        try
         {
-            [ActionParameterNames.ProcessName] = "notepad",
-            [ActionParameterNames.ExecutablePath] = notepadPath,
-            [ActionParameterNames.DesiredState] = ProcessDesiredStateIds.Stopped
-        });
-        action.RuntimeProcessIdHint = notepad.Id;
-        action.RestoreBehavior = ActionRestoreBehavior.RestartIfWasRunning;
-        var profile = new ProfileDefinition
-        {
-            CategoryId = Guid.NewGuid(), Name = "Process restart test", Actions = [action]
-        };
+            await Task.Delay(500);
+            try { notepadPath = notepad!.MainModule?.FileName ?? notepadPath; } catch { }
 
-        await context.Runner.RunAsync(profile);
-        var pending = await context.SessionRepository.GetLatestPendingAsync(profile.Id);
-        Assert.True(notepad.HasExited && pending?.PendingRestoreCount == 1,
-            "process.setState should capture the executable before stopping it.");
-        if (pending is not null)
-            await new ProfileRestoreRunner(context.Registry, context.SessionRepository).RunAsync(pending);
-        await Task.Delay(500);
-        var restarted = Process.GetProcessesByName("notepad");
-        try { Assert.NotEmpty(restarted); }
+            var action = Action(ActionTypeIds.ProcessSetState, new JsonObject
+            {
+                [ActionParameterNames.ProcessName] = "notepad",
+                [ActionParameterNames.ExecutablePath] = notepadPath,
+                [ActionParameterNames.DesiredState] = ProcessDesiredStateIds.Stopped
+            });
+            action.RuntimeProcessIdHint = notepad.Id;
+            action.RestoreBehavior = ActionRestoreBehavior.RestartIfWasRunning;
+            var profile = new ProfileDefinition
+            {
+                CategoryId = Guid.NewGuid(), Name = "Process restart test", Actions = [action]
+            };
+
+            await context.Runner.RunAsync(profile);
+            var pending = await context.SessionRepository.GetLatestPendingAsync(profile.Id);
+            Assert.True(notepad.HasExited && pending?.PendingRestoreCount == 1,
+                "process.setState should capture the executable before stopping it.");
+            if (pending is not null)
+                await new ProfileRestoreRunner(context.Registry, context.SessionRepository).RunAsync(pending);
+            await Task.Delay(500);
+            var restarted = GetProcessesByNameAndPath("notepad", notepadPath)
+                .Where(process => !preExistingNotepadIds.Contains(process.Id)).ToList();
+            try { Assert.NotEmpty(restarted); }
+            finally
+            {
+                foreach (var process in restarted)
+                {
+                    try { if (!process.HasExited) process.Kill(entireProcessTree: true); } catch { } finally { process.Dispose(); }
+                }
+            }
+        }
         finally
         {
-            foreach (var process in restarted)
-            {
-                try { if (!process.HasExited) process.Kill(); } catch { } finally { process.Dispose(); }
-            }
+            KillProcess(notepad!.Id);
+            notepad.Dispose();
         }
     }
 
@@ -392,18 +453,62 @@ Set-Content -LiteralPath $PidPath -Value $child.Id
         try
         {
             using var process = Process.GetProcessById(processId);
+            if (process.Id == Environment.ProcessId || IsTestInfrastructureProcess(process.ProcessName)) return;
             if (!process.HasExited) process.Kill(entireProcessTree: true);
         }
         catch (Exception exception) when (exception is ArgumentException or InvalidOperationException) { }
     }
 
-    private static void KillProcessesByName(string processName)
+    private static bool IsTestInfrastructureProcess(string processName) =>
+        processName.Equals("testhost", StringComparison.OrdinalIgnoreCase) ||
+        processName.Equals("dotnet", StringComparison.OrdinalIgnoreCase) ||
+        processName.Equals("vstest.console", StringComparison.OrdinalIgnoreCase);
+
+    private static void KillProcessesForExecutable(string executablePath)
     {
-        foreach (var process in Process.GetProcessesByName(processName))
+        foreach (var process in GetProcessesByNameAndPath(Path.GetFileNameWithoutExtension(executablePath), executablePath))
         {
             try { if (!process.HasExited) process.Kill(entireProcessTree: true); }
             catch (Exception exception) when (exception is InvalidOperationException or Win32Exception) { }
             finally { process.Dispose(); }
         }
+    }
+
+    private static HashSet<int> GetProcessIdsByName(string processName)
+    {
+        var ids = new HashSet<int>();
+        foreach (var process in Process.GetProcessesByName(processName))
+        {
+            try { ids.Add(process.Id); }
+            finally { process.Dispose(); }
+        }
+        return ids;
+    }
+
+    private static List<Process> GetProcessesByNameAndPath(string processName, string executablePath)
+    {
+        var result = new List<Process>();
+        foreach (var process in Process.GetProcessesByName(processName))
+        {
+            try
+            {
+                if (string.Equals(Path.GetFullPath(process.MainModule?.FileName ?? string.Empty),
+                    Path.GetFullPath(executablePath), StringComparison.OrdinalIgnoreCase))
+                    result.Add(process);
+                else
+                    process.Dispose();
+            }
+            catch (Exception exception) when (exception is Win32Exception or InvalidOperationException or
+                                               NotSupportedException or ArgumentException)
+            {
+                process.Dispose();
+            }
+        }
+        return result;
+    }
+
+    private static void KillProcessIds(IEnumerable<int> processIds)
+    {
+        foreach (var processId in processIds.Distinct()) KillProcess(processId);
     }
 }

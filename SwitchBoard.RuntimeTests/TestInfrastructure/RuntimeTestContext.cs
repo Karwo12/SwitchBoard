@@ -55,6 +55,4 @@ public abstract class RuntimeTestBase
     protected static ActionDefinition Action(string type, JsonObject parameters,
         ActionFailurePolicy failurePolicy = ActionFailurePolicy.Continue) =>
         RuntimeTestContext.Action(type, parameters, failurePolicy);
-
-    protected static void AssertCondition(bool condition, string scenario) => Assert.True(condition, scenario);
 }

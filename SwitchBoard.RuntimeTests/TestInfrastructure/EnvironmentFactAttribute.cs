@@ -1,11 +1,83 @@
+using Xunit.Abstractions;
+using Xunit.Sdk;
+
 namespace SwitchBoard.RuntimeTests.TestInfrastructure;
 
+[XunitTestCaseDiscoverer(
+    "SwitchBoard.RuntimeTests.TestInfrastructure.EnvironmentFactDiscoverer",
+    "SwitchBoard.RuntimeTests")]
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = false)]
-public sealed class EnvironmentFactAttribute : FactAttribute
+public sealed class EnvironmentFactAttribute(string requirement) : FactAttribute
 {
-    public EnvironmentFactAttribute(string requirement)
+    public string Requirement { get; } = requirement;
+}
+
+public sealed class EnvironmentFactDiscoverer(IMessageSink diagnosticMessageSink) : IXunitTestCaseDiscoverer
+{
+    public IEnumerable<IXunitTestCase> Discover(ITestFrameworkDiscoveryOptions discoveryOptions,
+        ITestMethod testMethod, IAttributeInfo factAttribute)
     {
-        Skip = EnvironmentRequirements.GetSkipReason(requirement);
+        var requirement = factAttribute.GetConstructorArguments().Single()?.ToString()
+            ?? throw new InvalidOperationException("EnvironmentFact requires a requirement name.");
+        yield return new EnvironmentTestCase(diagnosticMessageSink, testMethod, requirement);
+    }
+}
+
+public sealed class EnvironmentTestCase : XunitTestCase
+{
+#pragma warning disable CS0618 // xUnit v2 requires the parameterless constructor for deserialization.
+    public EnvironmentTestCase()
+    {
+    }
+
+    public EnvironmentTestCase(IMessageSink diagnosticMessageSink, ITestMethod testMethod, string requirement)
+        : base(diagnosticMessageSink, TestMethodDisplay.ClassAndMethod, TestMethodDisplayOptions.None, testMethod, [])
+    {
+        Requirement = requirement;
+    }
+#pragma warning restore CS0618
+
+    public string Requirement { get; private set; } = string.Empty;
+
+    public override Task<RunSummary> RunAsync(IMessageSink diagnosticMessageSink, IMessageBus messageBus,
+        object[] constructorArguments, ExceptionAggregator aggregator, CancellationTokenSource cancellationTokenSource) =>
+        new EnvironmentTestCaseRunner(this, DisplayName, SkipReason, constructorArguments, TestMethodArguments,
+            messageBus, aggregator, cancellationTokenSource).RunAsync();
+
+    public override void Serialize(IXunitSerializationInfo data)
+    {
+        base.Serialize(data);
+        data.AddValue(nameof(Requirement), Requirement);
+    }
+
+    public override void Deserialize(IXunitSerializationInfo data)
+    {
+        base.Deserialize(data);
+        Requirement = data.GetValue<string>(nameof(Requirement));
+    }
+}
+
+internal sealed class EnvironmentTestCaseRunner(
+    EnvironmentTestCase testCase,
+    string displayName,
+    string? skipReason,
+    object[] constructorArguments,
+    object[] testMethodArguments,
+    IMessageBus messageBus,
+    ExceptionAggregator aggregator,
+    CancellationTokenSource cancellationTokenSource)
+    : XunitTestCaseRunner(testCase, displayName, skipReason, constructorArguments, testMethodArguments,
+        messageBus, aggregator, cancellationTokenSource)
+{
+    protected override Task<RunSummary> RunTestAsync()
+    {
+        var reason = EnvironmentRequirements.GetSkipReason(testCase.Requirement);
+        if (reason is null)
+            return base.RunTestAsync();
+
+        var test = CreateTest(testCase, DisplayName);
+        MessageBus.QueueMessage(new TestSkipped(test, reason));
+        return Task.FromResult(new RunSummary { Total = 1, Skipped = 1 });
     }
 }
 
