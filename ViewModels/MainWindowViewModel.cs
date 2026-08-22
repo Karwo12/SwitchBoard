@@ -17,6 +17,7 @@ using SwitchBoard.Themes;
 using SwitchBoard.Services.Windows;
 using SwitchBoard.Services.Activity;
 using SwitchBoard.Services.Monitoring;
+using SwitchBoard.ViewModels.Actions;
 using System.Windows;
 using System.Windows.Data;
 using System.Windows.Threading;
@@ -84,6 +85,7 @@ public sealed class MainWindowViewModel : ObservableObject
     private double _activityPanelHeightRatio;
     private readonly StatusMonitoringService? _statusMonitoring;
     private readonly ThemeExchangeService? _themeExchangeService;
+    private readonly ActionPickerCatalog _actionPickerCatalog;
     private readonly ProfileExchangeService _profileExchangeService = new();
     private bool _isStatusRefreshing;
     private string _statusRefreshText = string.Empty;
@@ -126,6 +128,7 @@ public sealed class MainWindowViewModel : ObservableObject
         _activityService = activityService;
         _statusMonitoring = statusMonitoring;
         _themeExchangeService = themeExchangeService;
+        _actionPickerCatalog = new ActionPickerCatalog(localizationService);
         _activityPanelHeightRatio = Math.Clamp(userSettings.ActivityPanelHeightRatio, 0.2, 0.8);
         _isActivityExpanded = userSettings.IsActivityExpanded;
         _activityTabIndex = Math.Clamp(userSettings.LastActivityTabIndex, 0, 2);
@@ -143,36 +146,7 @@ public sealed class MainWindowViewModel : ObservableObject
             .ToList();
 
         Profiles = [];
-        AvailableActionTypes =
-        [
-            new(ActionTypeIds.ProgramRun, "Action.RunProgram", localizationService, "ActionPicker.Category.Programs", "program", "programy"),
-            new(ActionTypeIds.ServiceSetState, "Action.WindowsServiceState", localizationService, "ActionPicker.Category.SystemDevices", "service", "usługa", "usluga"),
-            new(ActionTypeIds.ProcessConfigure, "Action.ProcessSettings", localizationService, "ActionPicker.Category.Programs", "process", "proces"),
-            new(ActionTypeIds.WaitProcessStart, "Action.WaitProcess", localizationService, "ActionPicker.Category.WaitingTiming", "process", "proces"),
-            new(ActionTypeIds.WaitProcessExit, "Action.WaitProcessExit", localizationService, "ActionPicker.Category.WaitingTiming", "process", "proces"),
-            new(ActionTypeIds.WaitWindow, "Action.WaitWindow", localizationService, "ActionPicker.Category.WaitingTiming", "window", "okno"),
-            new(ActionTypeIds.PowerSetPlan, "Action.PowerPlan", localizationService, "ActionPicker.Category.SystemDevices", "power", "zasilanie"),
-            new(ActionTypeIds.DisplayConfigure, "Action.DisplaySettings", localizationService, "ActionPicker.Category.SystemDevices", "display", "ekran"),
-            new(ActionTypeIds.DeviceSetState, "Action.DeviceState", localizationService, "ActionPicker.Category.SystemDevices", "device", "urządzenie", "urzadzenie"),
-            new(ActionTypeIds.AudioConfigure, "Action.AudioSettings", localizationService, "ActionPicker.Category.SystemDevices", "audio", "dźwięk", "dzwiek"),
-            new(ActionTypeIds.Delay, "Action.Delay", localizationService, "ActionPicker.Category.WaitingTiming", "delay", "opóźnienie", "opoznienie"),
-            new(ActionTypeIds.ScriptRun, "Action.RunScript", localizationService, "ActionPicker.Category.Automation", "script", "skrypt"),
-            new(ActionTypeIds.NotificationShow, "Action.Notification", localizationService, "ActionPicker.Category.Automation", "notification", "powiadomienie"),
-            new(ActionTypeIds.ProfileRun, "Action.RunProfile", localizationService, "ActionPicker.Category.Automation", "profile", "profil"),
-            new(ActionTypeIds.ConditionIf, "Action.If", localizationService, "ActionPicker.Category.Automation", "if", "warunek")
-        ];
-        foreach (var option in AvailableActionTypes)
-        {
-            option.SetCategoryResourceKey(option.TypeId switch
-            {
-                ActionTypeIds.ProgramRun or ActionTypeIds.ProcessConfigure => "ActionPicker.Category.Programs",
-                ActionTypeIds.ServiceSetState or ActionTypeIds.PowerSetPlan or ActionTypeIds.DisplayConfigure or
-                    ActionTypeIds.DeviceSetState or ActionTypeIds.AudioConfigure => "ActionPicker.Category.SystemDevices",
-                ActionTypeIds.WaitProcessStart or ActionTypeIds.WaitProcessExit or ActionTypeIds.WaitWindow or ActionTypeIds.Delay =>
-                    "ActionPicker.Category.WaitingTiming",
-                _ => "ActionPicker.Category.Automation"
-            });
-        }
+        AvailableActionTypes = _actionPickerCatalog.CreateOptions();
         FilteredActionTypes = new ObservableCollection<ActionTypeOption>(AvailableActionTypes);
         ActionPickerView = CollectionViewSource.GetDefaultView(FilteredActionTypes);
         ActionPickerView.GroupDescriptions.Add(new PropertyGroupDescription(nameof(ActionTypeOption.Category)));
@@ -1086,7 +1060,7 @@ public sealed class MainWindowViewModel : ObservableObject
             SortOrder = SelectedProfile.Actions.Count,
             IsEnabled = true,
             FailurePolicy = ActionFailurePolicy.Continue,
-            Parameters = CreateDefaultActionParameters(SelectedActionType.TypeId)
+            Parameters = _actionPickerCatalog.CreateDefaultParameters(SelectedActionType.TypeId, nested: false)
         }, _localizationService);
         Subscribe(action);
         foreach (var existingAction in SelectedProfile.Actions)
@@ -1103,7 +1077,7 @@ public sealed class MainWindowViewModel : ObservableObject
 
     private void FilterActionTypes()
     {
-        var matches = AvailableActionTypes.Where(option => option.Matches(ActionPickerSearch)).ToList();
+        var matches = _actionPickerCatalog.Filter(AvailableActionTypes, ActionPickerSearch);
         FilteredActionTypes.Clear();
         foreach (var option in matches) FilteredActionTypes.Add(option);
     }
@@ -1131,7 +1105,7 @@ public sealed class MainWindowViewModel : ObservableObject
         {
             RecordStructuralUndo("add-nested-action");
             var nested = nestedParent.AddNestedAction(option.TypeId,
-                CreateDefaultActionParameters(option.TypeId), _nestedActionThenBranch);
+                _actionPickerCatalog.CreateDefaultParameters(option.TypeId, nested: true), _nestedActionThenBranch);
             _nestedActionTarget = null;
             if (nested is not null)
             {
@@ -1548,41 +1522,9 @@ public sealed class MainWindowViewModel : ObservableObject
         ProfileReferencesAreValid(SelectedProfile.Id) &&
         !IsProfileRunning && !IsRestoreRunning && !IsSaving && !_profileRunner.IsRunning;
 
-    private bool ProfileReferencesAreValid(Guid rootProfileId)
-    {
-        var profiles = _allProfiles.ToDictionary(item => item.Id, item => item.ToModel());
-        var visiting = new HashSet<Guid>();
-        var visited = new HashSet<Guid>();
-        return Visit(rootProfileId);
+    private bool ProfileReferencesAreValid(Guid rootProfileId) =>
+        ProfileReferenceValidator.AreValid(_allProfiles.Select(item => item.ToModel()), rootProfileId);
 
-        bool Visit(Guid id)
-        {
-            if (!profiles.TryGetValue(id, out var profile)) return false;
-            if (visited.Contains(id)) return true;
-            if (!visiting.Add(id)) return false;
-            foreach (var target in profile.Actions.SelectMany(EnumerateProfileTargets))
-                if (!Visit(target)) return false;
-            visiting.Remove(id);
-            visited.Add(id);
-            return true;
-        }
-    }
-
-    private static IEnumerable<Guid> EnumerateProfileTargets(ActionDefinition action)
-    {
-        if (action.Type == ActionTypeIds.ProfileRun &&
-            Guid.TryParse(action.Parameters[ActionParameterNames.ProfileId]?.GetValue<string>(), out var id)) yield return id;
-        if (action.Type != ActionTypeIds.ConditionIf) yield break;
-        foreach (var name in new[] { ActionParameterNames.ThenActions, ActionParameterNames.ElseActions })
-            if (action.Parameters[name] is JsonArray array)
-                foreach (var node in array)
-                {
-                    ActionDefinition? nested = null;
-                    try { nested = node?.Deserialize<ActionDefinition>(); } catch (JsonException) { }
-                    if (nested is null) continue;
-                    foreach (var target in EnumerateProfileTargets(nested)) yield return target;
-                }
-    }
 
     private async Task RunProfileAsync()
     {
@@ -2742,73 +2684,6 @@ public sealed class MainWindowViewModel : ObservableObject
         MoveActionDownCommand.NotifyCanExecuteChanged();
     }
 
-    private static JsonObject CreateDefaultActionParameters(string actionType) => actionType switch
-    {
-        ActionTypeIds.ProgramRun => new JsonObject
-        {
-            [ActionParameterNames.StartOnlyIfNotAlreadyRunning] = true,
-            [ActionParameterNames.ChangeAffinity] = false,
-            [ActionParameterNames.ChangePriority] = false,
-            [ActionParameterNames.ProcessPriority] = ProcessPriorityIds.NoChange,
-            [ActionParameterNames.ProcessMemoryPriority] = ProcessMemoryPriorityIds.NoChange,
-            [ActionParameterNames.ProcessPerformanceMode] = ProcessPerformanceModeIds.NoChange,
-            [ActionParameterNames.WaitForProcessStart] = true,
-            [ActionParameterNames.ProcessStartWaitSeconds] = 10,
-            [ActionParameterNames.ProcessTargetMode] = ProcessTargetModeIds.Automatic
-        },
-        ActionTypeIds.ProcessSetState => new JsonObject
-        {
-            [ActionParameterNames.DesiredState] = ProcessDesiredStateIds.Stopped
-        },
-        ActionTypeIds.ServiceSetState => new JsonObject
-        {
-            [ActionParameterNames.DesiredState] = ServiceDesiredStateIds.Unchanged,
-            [ActionParameterNames.ServiceStartupType] = ServiceStartupTypeIds.Unchanged
-        },
-        ActionTypeIds.ScriptRun => new JsonObject
-        {
-            [ActionParameterNames.ScriptType] = ScriptTypeIds.AutoDetect,
-            [ActionParameterNames.WaitForExit] = true,
-            [ActionParameterNames.RunAsAdministrator] = false
-        },
-        ActionTypeIds.Delay => new JsonObject
-        {
-            [ActionParameterNames.DelaySeconds] = 0
-        },
-        ActionTypeIds.ProcessConfigure => new JsonObject
-        {
-            [ActionParameterNames.ProcessOperation] = ProcessOperationIds.Configure,
-            [ActionParameterNames.ChangeAffinity] = false,
-            [ActionParameterNames.ChangePriority] = false,
-            [ActionParameterNames.ProcessPriority] = ProcessPriorityIds.NoChange,
-            [ActionParameterNames.ProcessMemoryPriority] = ProcessMemoryPriorityIds.NoChange,
-            [ActionParameterNames.ProcessPerformanceMode] = ProcessPerformanceModeIds.NoChange
-        },
-        ActionTypeIds.WaitWindow => new JsonObject
-        {
-            [ActionParameterNames.WindowMatchMode] = WindowMatchModeIds.Any
-        },
-        ActionTypeIds.AudioConfigure => new JsonObject
-        {
-            [ActionParameterNames.SetDefaultMultimedia] = true,
-            [ActionParameterNames.SetDefaultCommunications] = false
-        },
-        ActionTypeIds.DeviceSetState => new JsonObject
-        {
-            [ActionParameterNames.DesiredState] = DeviceStateIds.Unchanged
-        },
-        ActionTypeIds.ConditionIf => new JsonObject
-        {
-            [ActionParameterNames.ConditionType] = ConditionTypeIds.ProcessRunning,
-            [ActionParameterNames.ThenActions] = new JsonArray(),
-            [ActionParameterNames.ElseActions] = new JsonArray()
-        },
-        ActionTypeIds.NotificationShow => new JsonObject
-        {
-            [ActionParameterNames.NotificationLevel] = NotificationLevelIds.Info
-        },
-        _ => []
-    };
     private static string CreateUniqueName(string baseName, IEnumerable<string> existingNames)
     {
         var names = existingNames.ToHashSet(StringComparer.OrdinalIgnoreCase);
