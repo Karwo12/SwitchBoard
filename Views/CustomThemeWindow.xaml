@@ -51,6 +51,16 @@
                                    Text="{DynamicResource CustomTheme.AutomaticForegroundHint}" TextWrapping="Wrap" />
 
                         <TextBlock Margin="0,10,0,5" Style="{StaticResource EditorEyebrow}"
+                                   Text="{DynamicResource CustomTheme.HoverIntensity}" />
+                        <DockPanel>
+                            <TextBlock DockPanel.Dock="Right" Margin="10,0,0,0"
+                                       Text="{Binding HoverIntensityPercent, StringFormat={}{0:0}%}" />
+                            <Slider Minimum="0" Maximum="100" Value="{Binding HoverIntensityPercent, UpdateSourceTrigger=PropertyChanged}" />
+                        </DockPanel>
+                        <TextBlock Margin="0,5,0,2" Style="{StaticResource EditorCaption}"
+                                   Text="{DynamicResource CustomTheme.HoverIntensityHint}" TextWrapping="Wrap" />
+
+                        <TextBlock Margin="0,10,0,5" Style="{StaticResource EditorEyebrow}"
                                    Text="{DynamicResource CustomTheme.SurfaceOpacity}" />
                         <DockPanel>
                             <TextBlock DockPanel.Dock="Right" Margin="10,0,0,0"
@@ -104,5 +114,12 @@
             <Button Grid.Column="2" Click="Cancel_OnClick" Content="{DynamicResource Common.Cancel}" />
             <Button Grid.Column="4" Click="Save_OnClick" Style="{StaticResource EditorPrimaryButton}" Content="{Binding PrimaryActionText}" />
         </Grid>
+
+        <Popup x:Name="ColorPickerPopup"
+               AllowsTransparency="True"
+               Placement="Left"
+               PopupAnimation="Fade"
+               StaysOpen="False"
+               Closed="ColorPickerPopup_OnClosed" />
     </Grid>
 </Window>

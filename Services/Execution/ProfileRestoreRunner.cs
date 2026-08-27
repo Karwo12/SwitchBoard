@@ -52,7 +52,7 @@ public sealed class ProfileRestoreRunner(IActionRegistry actionRegistry, IExecut
                     {
                         Id = item.ActionId, Type = item.ActionType, Name = item.ActionName, SortOrder = item.SortOrder,
                         Timeout = item.Timeout, Parameters = item.Parameters.DeepClone().AsObject(),
-                        RestoreBehavior = ActionRestoreBehavior.RestorePreviousState
+                        RestoreBehavior = item.RestoreBehavior
                     };
                     var startedAt = Stopwatch.GetTimestamp();
                     var result = await handler.RestoreAsync(action, item.PreviousState,

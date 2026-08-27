@@ -133,7 +133,9 @@ public sealed class DisplayConfigureActionHandler(
         ActionExecutionContext context,
         CancellationToken cancellationToken)
     {
-        var state = FromJson(restoreState);
+        var state = action.RestoreBehavior == ActionRestoreBehavior.RestoreCustomState
+            ? await ResolveCustomRestoreStateAsync(action, cancellationToken)
+            : FromJson(restoreState);
         if (state is null) return ActionExecutionResult.Failure("The saved display state is invalid.", false);
         var current = await displayManager.GetCurrentStateAsync(state.DeviceId, state.DeviceName, cancellationToken);
         if (Matches(current, state)) return ActionExecutionResult.Success("The saved display state was already active.");
@@ -184,6 +186,51 @@ public sealed class DisplayConfigureActionHandler(
             else await displayManager.RestoreAsync(state, CancellationToken.None);
         }
         catch { }
+    }
+
+    private async Task<DisplayModeState> ResolveCustomRestoreStateAsync(
+        ActionDefinition action, CancellationToken cancellationToken)
+    {
+        var deviceName = ActionParameterReader.ReadString(
+            action.Parameters, ActionParameterNames.RestoreDisplayDeviceName).Trim();
+        var deviceId = ActionParameterReader.ReadString(
+            action.Parameters, ActionParameterNames.RestoreDisplayDeviceId).Trim();
+        var width = ActionParameterReader.ReadInt32(
+            action.Parameters, ActionParameterNames.RestoreDisplayWidth, 0);
+        var height = ActionParameterReader.ReadInt32(
+            action.Parameters, ActionParameterNames.RestoreDisplayHeight, 0);
+        var refreshRate = ActionParameterReader.ReadInt32(
+            action.Parameters, ActionParameterNames.RestoreDisplayRefreshRate, 0);
+
+        if (string.IsNullOrWhiteSpace(deviceName) && string.IsNullOrWhiteSpace(deviceId) ||
+            width <= 0 || height <= 0 || refreshRate <= 0)
+            throw new InvalidOperationException("The selected display restore configuration is incomplete.");
+
+        var displays = await displayManager.GetDisplaysAsync(cancellationToken);
+        // Prefer the stable monitor identifier. The device name is only a
+        // fallback for data that was saved without an identifier.
+        var display = !string.IsNullOrWhiteSpace(deviceId)
+            ? displays.FirstOrDefault(candidate => string.Equals(candidate.DeviceId, deviceId,
+                StringComparison.OrdinalIgnoreCase))
+            : displays.FirstOrDefault(candidate => string.Equals(candidate.DeviceName, deviceName,
+                StringComparison.OrdinalIgnoreCase));
+        if (display is null)
+            throw new InvalidOperationException("The selected display is no longer connected.");
+
+        if (!display.Modes.Any(mode => mode.Width == width && mode.Height == height &&
+                                      mode.RefreshRate == refreshRate))
+            throw new InvalidOperationException("The selected display mode is no longer supported by this monitor.");
+
+        var current = await displayManager.GetCurrentStateAsync(display.DeviceId, display.DeviceName, cancellationToken);
+        return current with
+        {
+            DeviceName = display.DeviceName,
+            DeviceId = display.DeviceId,
+            DisplayName = display.DisplayName,
+            Width = width,
+            Height = height,
+            RefreshRate = refreshRate
+        };
     }
 
     private static bool Matches(DisplayModeState actual, DisplayModeState expected) =>

@@ -196,11 +196,35 @@ internal static class ActionValidationService
 
     private sealed class DisplayActionValidator : LocalizedValidator
     {
-        public override string? Validate(ActionItemViewModel action) =>
-            string.IsNullOrWhiteSpace(action.DisplayDeviceName) || action.DisplayWidth <= 0 ||
-            action.DisplayHeight <= 0 || action.DisplayRefreshRate <= 0
-                ? Text(action, "Validation.Display")
-                : null;
+        public override string? Validate(ActionItemViewModel action)
+        {
+            if (string.IsNullOrWhiteSpace(action.DisplayDeviceName) || action.DisplayWidth <= 0 ||
+                action.DisplayHeight <= 0 || action.DisplayRefreshRate <= 0)
+                return Text(action, "Validation.Display");
+
+            if (action.IsCustomDisplayRestoreEnabled && !HasValidCustomRestore(action))
+                return Text(action, "Validation.CustomDisplayRestore");
+            return null;
+        }
+
+        private static bool HasValidCustomRestore(ActionItemViewModel action)
+        {
+            if (string.IsNullOrWhiteSpace(action.RestoreDisplayDeviceName) &&
+                string.IsNullOrWhiteSpace(action.RestoreDisplayDeviceId) ||
+                action.RestoreDisplayWidth <= 0 || action.RestoreDisplayHeight <= 0 ||
+                action.RestoreDisplayRefreshRate <= 0)
+                return false;
+
+            // Discovery is asynchronous. Until it has returned, runtime restore
+            // performs the authoritative existence check. Once populated, keep
+            // a disconnected monitor or unsupported mode invalid in the editor.
+            if (!action.RestoreDisplaysLoaded) return true;
+            var display = action.SelectedRestoreDisplay;
+            return display is not null && display.Modes.Any(mode =>
+                mode.Width == action.RestoreDisplayWidth &&
+                mode.Height == action.RestoreDisplayHeight &&
+                mode.RefreshRate == action.RestoreDisplayRefreshRate);
+        }
     }
 
     private sealed class ScriptActionValidator : LocalizedValidator

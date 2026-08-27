@@ -29,6 +29,12 @@ public static class ActionParameterNames
     public const string DisplayHeight = "displayHeight";
     public const string DisplayRefreshRate = "displayRefreshRate";
     public const string SkipDisplayConfirmation = "skipDisplayConfirmation";
+    public const string RestoreDisplayDeviceName = "restoreDisplayDeviceName";
+    public const string RestoreDisplayDeviceId = "restoreDisplayDeviceId";
+    public const string RestoreDisplayName = "restoreDisplayName";
+    public const string RestoreDisplayWidth = "restoreDisplayWidth";
+    public const string RestoreDisplayHeight = "restoreDisplayHeight";
+    public const string RestoreDisplayRefreshRate = "restoreDisplayRefreshRate";
     public const string RestoreScriptPath = "restoreScriptPath";
     public const string RestoreScriptArguments = "restoreScriptArguments";
     public const string RestoreScriptWorkingDirectory = "restoreScriptWorkingDirectory";

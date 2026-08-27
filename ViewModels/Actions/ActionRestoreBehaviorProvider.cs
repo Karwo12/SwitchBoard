@@ -24,7 +24,8 @@ internal static class ActionRestoreBehaviorProvider
         ActionTypeIds.PowerSetPlan =>
             Build(localization, ("none", "RestoreBehavior.None"), ("previous", "RestoreBehavior.PreviousPlan")),
         ActionTypeIds.DisplayConfigure =>
-            Build(localization, ("none", "RestoreBehavior.None"), ("previous", "RestoreBehavior.PreviousDisplay")),
+            Build(localization, ("none", "RestoreBehavior.None"), ("previous", "RestoreBehavior.PreviousDisplay"),
+                ("custom", "RestoreBehavior.Custom")),
         ActionTypeIds.ScriptRun =>
             Build(localization, ("none", "RestoreBehavior.None"), ("closeStarted", "RestoreBehavior.CloseStarted"),
                 ("restoreScript", "RestoreBehavior.RestoreScript")),

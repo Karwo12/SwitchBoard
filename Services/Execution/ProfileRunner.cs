@@ -502,7 +502,8 @@ public sealed class ProfileRunner
         Guid? parentActionId, string? branch, int depth, long sequence) => new()
     {
         ActionId = action.Id, ActionType = action.Type, ActionName = action.Name, SortOrder = action.SortOrder,
-        Timeout = action.Timeout, Parameters = action.Parameters.DeepClone().AsObject(), ProfileId = profileId,
+        Timeout = action.Timeout, RestoreBehavior = action.RestoreBehavior,
+        Parameters = action.Parameters.DeepClone().AsObject(), ProfileId = profileId,
         RequestedState = action.Parameters[ActionParameterNames.DesiredState]?.GetValue<string>(),
         RequestedConfiguration = BuildRequestedState(action),
         ParentActionId = parentActionId, Branch = branch, NestingDepth = depth, ExecutionSequence = sequence

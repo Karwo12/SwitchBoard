@@ -113,7 +113,7 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource HoverBrush}" />
+                                <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource InteractiveHoverBrush}" />
                                 <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
                             </Trigger>
                             <Trigger Property="IsChecked" Value="True">
@@ -144,7 +144,7 @@
             <Setter Property="FontWeight" Value="SemiBold" />
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="{DynamicResource HoverBrush}" />
+                    <Setter Property="Background" Value="{DynamicResource InteractiveHoverBrush}" />
                     <Setter Property="BorderBrush" Value="{DynamicResource BorderHighlightBrush}" />
                     <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
                 </Trigger>
@@ -233,6 +233,10 @@
                                     CornerRadius="8"
                                     IsHitTestVisible="False"
                                     Opacity="0.22" />
+                            <Border x:Name="HoverSurface"
+                                    Background="Transparent"
+                                    CornerRadius="8"
+                                    IsHitTestVisible="False" />
                             <ContentPresenter Content="{TemplateBinding Content}"
                                               ContentTemplate="{TemplateBinding ContentTemplate}"
                                               Margin="{TemplateBinding Padding}"
@@ -240,14 +244,13 @@
                                               VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
                         </Grid>
                         <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Surface" Property="Background" Value="{DynamicResource HoverBrush}" />
-                                <Setter TargetName="Surface" Property="Opacity" Value="1" />
-                            </Trigger>
                             <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
                                 <Setter TargetName="Surface" Property="Background" Value="{DynamicResource SelectedBrush}" />
                                 <Setter TargetName="Surface" Property="Opacity" Value="1" />
                             </DataTrigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="HoverSurface" Property="Background" Value="{DynamicResource InteractiveHoverBrush}" />
+                            </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
@@ -274,17 +277,23 @@
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
                                 CornerRadius="6">
-                            <ContentPresenter Margin="{TemplateBinding Padding}"
-                                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
-                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+                            <Grid>
+                                <Border x:Name="HoverSurface"
+                                        Background="Transparent"
+                                        CornerRadius="6"
+                                        IsHitTestVisible="False" />
+                                <ContentPresenter Margin="{TemplateBinding Padding}"
+                                                  HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                  VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+                            </Grid>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource HoverBrush}" />
+                                <Setter TargetName="HoverSurface" Property="Background" Value="{DynamicResource InteractiveHoverBrush}" />
                                 <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource PressedBrush}" />
+                                <Setter TargetName="HoverSurface" Property="Background" Value="{DynamicResource PressedBrush}" />
                             </Trigger>
                             <Trigger Property="IsKeyboardFocused" Value="True">
                                 <Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource FocusBrush}" />
@@ -303,18 +312,62 @@
             <Style.Triggers><DataTrigger Binding="{Binding ActivityTabIndex}" Value="2"><Setter Property="Background" Value="{DynamicResource SelectedBrush}" /><Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" /></DataTrigger></Style.Triggers>
         </Style>
 
-        <Style x:Key="ActivityRowSurfaceStyle" TargetType="Border">
-            <Setter Property="Background" Value="{DynamicResource CardSurfaceBrush}" />
-            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
-            <Setter Property="BorderThickness" Value="1" />
+        <Style x:Key="ActivityRowSurfaceStyle" TargetType="{x:Type controls:CardSurfaceControl}" BasedOn="{StaticResource CardSurfaceStyle}">
             <Setter Property="CornerRadius" Value="7" />
             <Setter Property="MinHeight" Value="42" />
             <Setter Property="Padding" Value="10,8" />
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="{DynamicResource HoverBrush}" />
+                    <Setter Property="HoverSurfaceBrush" Value="{DynamicResource InteractiveHoverBrush}" />
                 </Trigger>
             </Style.Triggers>
+        </Style>
+
+        <Style x:Key="ActivityHistoryRowSurfaceStyle" TargetType="{x:Type controls:CardSurfaceControl}" BasedOn="{StaticResource CardSurfaceStyle}">
+            <Setter Property="CornerRadius" Value="7" />
+            <Setter Property="MinHeight" Value="42" />
+            <Setter Property="Padding" Value="10,8" />
+        </Style>
+
+        <Style x:Key="ActivityHistoryHeaderButtonStyle" TargetType="Button">
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Focusable" Value="True" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="VerticalContentAlignment" Value="Stretch" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Chrome"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="6">
+                            <Grid>
+                                <Border x:Name="HoverSurface"
+                                        Background="Transparent"
+                                        CornerRadius="6"
+                                        IsHitTestVisible="False" />
+                                <ContentPresenter Margin="{TemplateBinding Padding}"
+                                                  HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                  VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="HoverSurface" Property="Background" Value="{DynamicResource InteractiveHoverBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="HoverSurface" Property="Background" Value="{DynamicResource PressedBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
 
         <Style x:Key="ProfileResultStatusDotStyle" TargetType="Ellipse">
@@ -1445,7 +1498,7 @@
                         </Style></ScrollViewer.Style>
                         <ItemsControl ItemsSource="{Binding SystemChangeEntries}" HorizontalContentAlignment="Stretch">
                             <ItemsControl.ItemTemplate><DataTemplate>
-                                <Border Style="{StaticResource ActivityRowSurfaceStyle}" Margin="0,0,0,5">
+                                <controls:CardSurfaceControl Style="{StaticResource ActivityRowSurfaceStyle}" Margin="0,0,0,5">
                                     <Grid HorizontalAlignment="Stretch" MouseLeftButtonDown="SystemChangeEntry_OnMouseDoubleClick">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="58" /><ColumnDefinition Width="170" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                                         <TextBlock Style="{StaticResource CaptionText}" Text="{Binding Timestamp, StringFormat={}{0:HH:mm:ss}}" />
@@ -1472,7 +1525,7 @@
                                             </Style></TextBlock.Style>
                                         </TextBlock>
                                     </Grid>
-                                </Border>
+                                </controls:CardSurfaceControl>
                             </DataTemplate></ItemsControl.ItemTemplate>
                         </ItemsControl>
                     </ScrollViewer>
@@ -1486,72 +1539,102 @@
                         </Style></ScrollViewer.Style>
                         <ItemsControl ItemsSource="{Binding HistoryEntries}" HorizontalContentAlignment="Stretch">
                             <ItemsControl.ItemTemplate><DataTemplate>
-                                <Border Style="{StaticResource ActivityRowSurfaceStyle}" Margin="0,0,0,5">
+                                <controls:CardSurfaceControl Style="{StaticResource ActivityHistoryRowSurfaceStyle}" Margin="0,0,0,5">
                                     <Grid HorizontalAlignment="Stretch">
                                         <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="30" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-                                        <Button Click="HistoryEntryExpand_OnClick" Grid.RowSpan="2" Width="24" Height="24" Padding="0" Background="Transparent" BorderThickness="0" Cursor="Hand">
-                                            <TextBlock FontSize="16" Foreground="{DynamicResource TextSecondaryBrush}">
-                                                <TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Text" Value="›" /><Style.Triggers><DataTrigger Binding="{Binding IsExpanded}" Value="True"><Setter Property="Text" Value="⌄" /></DataTrigger></Style.Triggers></Style></TextBlock.Style>
-                                            </TextBlock>
+                                        <Button Grid.Row="0" Grid.ColumnSpan="4"
+                                                AutomationProperties.Name="{Binding ProfileName}"
+                                                AutomationProperties.ItemStatus="{Binding IsExpanded}"
+                                                Command="{Binding ToggleExpandedCommand}"
+                                                Style="{StaticResource ActivityHistoryHeaderButtonStyle}"
+                                                ToolTip="{Binding ProfileName}">
+                                            <Grid>
+                                                <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                                                <Grid.ColumnDefinitions><ColumnDefinition Width="30" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                                <Path Grid.RowSpan="2" Grid.Column="0"
+                                                      Width="10" Height="10" Margin="0,1,0,0"
+                                                      HorizontalAlignment="Center" VerticalAlignment="Top"
+                                                      Data="M2,1 L7,5 L2,9"
+                                                      Fill="Transparent"
+                                                      Stroke="{DynamicResource TextSecondaryBrush}"
+                                                      StrokeStartLineCap="Round"
+                                                      StrokeEndLineCap="Round"
+                                                      StrokeLineJoin="Round"
+                                                      StrokeThickness="1.3">
+                                                    <Path.Style>
+                                                        <Style TargetType="Path">
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsExpanded}" Value="True">
+                                                                    <Setter Property="RenderTransform">
+                                                                        <Setter.Value><RotateTransform Angle="90" CenterX="4.5" CenterY="5" /></Setter.Value>
+                                                                    </Setter>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Path.Style>
+                                                </Path>
+                                                <TextBlock Grid.Column="1" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}"
+                                                           Text="{Binding ProfileName}" TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Grid.Column="2" Margin="12,0,16,0" Style="{StaticResource CaptionText}"
+                                                           Text="{Binding Timestamp, StringFormat={}{0:dd.MM.yyyy HH:mm:ss}}" />
+                                                <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <Ellipse Margin="0,0,6,0" VerticalAlignment="Center" Style="{StaticResource ProfileResultStatusDotStyle}" />
+                                                    <TextBlock FontWeight="SemiBold" Text="{Binding StatusText}">
+                                                        <TextBlock.Style><Style TargetType="TextBlock">
+                                                            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding Result}" Value="Success"><Setter Property="Foreground" Value="{DynamicResource SuccessBrush}" /></DataTrigger>
+                                                                <DataTrigger Binding="{Binding Result}" Value="Warning"><Setter Property="Foreground" Value="{DynamicResource WarningBrush}" /></DataTrigger>
+                                                                <DataTrigger Binding="{Binding Result}" Value="Cancelled"><Setter Property="Foreground" Value="{DynamicResource WarningBrush}" /></DataTrigger>
+                                                                <DataTrigger Binding="{Binding Result}" Value="Error"><Setter Property="Foreground" Value="{DynamicResource DangerBrush}" /></DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style></TextBlock.Style>
+                                                    </TextBlock>
+                                                </StackPanel>
+                                                <StackPanel Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="3" Margin="0,5,0,0">
+                                                    <TextBlock Style="{StaticResource CaptionText}" Text="{Binding ActionSummaryText}" />
+                                                    <TextBlock Margin="0,2,0,0" Foreground="{DynamicResource DangerBrush}" Text="{Binding ProgressText}" />
+                                                    <TextBlock Margin="0,2,0,0" Foreground="{DynamicResource AccentBrush}" Text="{Binding RestoreText}" />
+                                                </StackPanel>
+                                            </Grid>
                                         </Button>
-                                        <TextBlock Grid.Column="1" FontWeight="SemiBold" Text="{Binding ProfileName}" TextTrimming="CharacterEllipsis" ToolTip="{Binding ProfileName}" />
-                                        <TextBlock Grid.Column="2" Margin="12,0,16,0" Style="{StaticResource CaptionText}" Text="{Binding Timestamp, StringFormat={}{0:dd.MM.yyyy HH:mm:ss}}" />
-                                        <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
-                                            <Ellipse Margin="0,0,6,0" VerticalAlignment="Center" Style="{StaticResource ProfileResultStatusDotStyle}" />
-                                            <TextBlock FontWeight="SemiBold" Text="{Binding StatusText}">
-                                                <TextBlock.Style><Style TargetType="TextBlock">
-                                                    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding Result}" Value="Success"><Setter Property="Foreground" Value="{DynamicResource SuccessBrush}" /></DataTrigger>
-                                                        <DataTrigger Binding="{Binding Result}" Value="Warning"><Setter Property="Foreground" Value="{DynamicResource WarningBrush}" /></DataTrigger>
-                                                        <DataTrigger Binding="{Binding Result}" Value="Cancelled"><Setter Property="Foreground" Value="{DynamicResource WarningBrush}" /></DataTrigger>
-                                                        <DataTrigger Binding="{Binding Result}" Value="Error"><Setter Property="Foreground" Value="{DynamicResource DangerBrush}" /></DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style></TextBlock.Style>
-                                            </TextBlock>
-                                        </StackPanel>
-                                        <StackPanel Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="3" Margin="0,5,0,0">
-                                            <TextBlock Style="{StaticResource CaptionText}" Text="{Binding ActionSummaryText}" />
-                                            <TextBlock Margin="0,2,0,0" Foreground="{DynamicResource DangerBrush}" Text="{Binding ProgressText}" />
-                                            <TextBlock Margin="0,2,0,0" Foreground="{DynamicResource AccentBrush}" Text="{Binding RestoreText}" />
-                                            <StackPanel Margin="0,8,0,0">
-                                                <StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed" /><Style.Triggers><DataTrigger Binding="{Binding IsExpanded}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers></Style></StackPanel.Style>
-                                                <ItemsControl ItemsSource="{Binding Actions}" HorizontalContentAlignment="Stretch">
-                                                    <ItemsControl.ItemTemplate><DataTemplate>
-                                                        <Grid Margin="0,2" Cursor="Hand" MouseLeftButtonDown="HistoryAction_OnMouseLeftButtonDown">
-                                                            <Grid.ColumnDefinitions><ColumnDefinition Width="170" /><ColumnDefinition Width="64" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-                                                            <TextBlock FontWeight="SemiBold" Text="{Binding Name}" TextDecorations="Underline" Cursor="Hand" TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}">
+                                        <StackPanel Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="3" Margin="0,8,0,0">
+                                            <StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed" /><Style.Triggers><DataTrigger Binding="{Binding IsExpanded}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers></Style></StackPanel.Style>
+                                            <ItemsControl ItemsSource="{Binding Actions}" HorizontalContentAlignment="Stretch">
+                                                <ItemsControl.ItemTemplate><DataTemplate>
+                                                    <Grid Margin="0,2" Cursor="Hand" MouseLeftButtonDown="HistoryAction_OnMouseLeftButtonDown">
+                                                        <Grid.ColumnDefinitions><ColumnDefinition Width="170" /><ColumnDefinition Width="64" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                                        <TextBlock FontWeight="SemiBold" Text="{Binding Name}" TextDecorations="Underline" Cursor="Hand" TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}">
+                                                            <TextBlock.Style><Style TargetType="TextBlock">
+                                                                <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+                                                                <Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Foreground" Value="{DynamicResource AccentBrush}" /><Setter Property="Opacity" Value="0.86" /></Trigger></Style.Triggers>
+                                                            </Style></TextBlock.Style>
+                                                        </TextBlock>
+                                                        <TextBlock Grid.Column="1" HorizontalAlignment="Left" Style="{StaticResource CaptionText}" Text="{Binding DurationText}" ToolTip="{Binding DurationText}" />
+                                                        <TextBlock Grid.Column="2" Margin="12,0,12,0" Style="{StaticResource CaptionText}" Text="{Binding Description}" TextWrapping="Wrap" ToolTip="{Binding Description}" />
+                                                        <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
+                                                            <Ellipse Margin="0,0,6,0" VerticalAlignment="Center" Style="{StaticResource ActionResultStatusDotStyle}" />
+                                                            <TextBlock FontWeight="SemiBold" Text="{Binding StatusText}">
                                                                 <TextBlock.Style><Style TargetType="TextBlock">
-                                                                    <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
-                                                                    <Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Foreground" Value="{DynamicResource AccentBrush}" /><Setter Property="Opacity" Value="0.86" /></Trigger></Style.Triggers>
+                                                                    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding Result}" Value="success"><Setter Property="Foreground" Value="{DynamicResource SuccessBrush}" /></DataTrigger>
+                                                                        <DataTrigger Binding="{Binding Result}" Value="skipped"><Setter Property="Foreground" Value="{DynamicResource WarningBrush}" /></DataTrigger>
+                                                                        <DataTrigger Binding="{Binding Result}" Value="cancelled"><Setter Property="Foreground" Value="{DynamicResource WarningBrush}" /></DataTrigger>
+                                                                        <DataTrigger Binding="{Binding Level}" Value="Warning"><Setter Property="Foreground" Value="{DynamicResource WarningBrush}" /></DataTrigger>
+                                                                        <DataTrigger Binding="{Binding Level}" Value="Error"><Setter Property="Foreground" Value="{DynamicResource DangerBrush}" /></DataTrigger>
+                                                                        <DataTrigger Binding="{Binding Result}" Value="failed"><Setter Property="Foreground" Value="{DynamicResource DangerBrush}" /></DataTrigger>
+                                                                    </Style.Triggers>
                                                                 </Style></TextBlock.Style>
                                                             </TextBlock>
-                                                            <TextBlock Grid.Column="1" HorizontalAlignment="Left" Style="{StaticResource CaptionText}" Text="{Binding DurationText}" ToolTip="{Binding DurationText}" />
-                                                            <TextBlock Grid.Column="2" Margin="12,0,12,0" Style="{StaticResource CaptionText}" Text="{Binding Description}" TextWrapping="Wrap" ToolTip="{Binding Description}" />
-                                                            <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
-                                                                <Ellipse Margin="0,0,6,0" VerticalAlignment="Center" Style="{StaticResource ActionResultStatusDotStyle}" />
-                                                                <TextBlock FontWeight="SemiBold" Text="{Binding StatusText}">
-                                                                    <TextBlock.Style><Style TargetType="TextBlock">
-                                                                        <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
-                                                                        <Style.Triggers>
-                                                                            <DataTrigger Binding="{Binding Result}" Value="success"><Setter Property="Foreground" Value="{DynamicResource SuccessBrush}" /></DataTrigger>
-                                                                            <DataTrigger Binding="{Binding Result}" Value="skipped"><Setter Property="Foreground" Value="{DynamicResource WarningBrush}" /></DataTrigger>
-                                                                            <DataTrigger Binding="{Binding Result}" Value="cancelled"><Setter Property="Foreground" Value="{DynamicResource WarningBrush}" /></DataTrigger>
-                                                                            <DataTrigger Binding="{Binding Level}" Value="Warning"><Setter Property="Foreground" Value="{DynamicResource WarningBrush}" /></DataTrigger>
-                                                                            <DataTrigger Binding="{Binding Level}" Value="Error"><Setter Property="Foreground" Value="{DynamicResource DangerBrush}" /></DataTrigger>
-                                                                            <DataTrigger Binding="{Binding Result}" Value="failed"><Setter Property="Foreground" Value="{DynamicResource DangerBrush}" /></DataTrigger>
-                                                                        </Style.Triggers>
-                                                                    </Style></TextBlock.Style>
-                                                                </TextBlock>
-                                                            </StackPanel>
-                                                        </Grid>
-                                                    </DataTemplate></ItemsControl.ItemTemplate>
-                                                </ItemsControl>
-                                            </StackPanel>
+                                                        </StackPanel>
+                                                    </Grid>
+                                                </DataTemplate></ItemsControl.ItemTemplate>
+                                            </ItemsControl>
                                         </StackPanel>
                                     </Grid>
-                                </Border>
+                                </controls:CardSurfaceControl>
                             </DataTemplate></ItemsControl.ItemTemplate>
                         </ItemsControl>
                     </ScrollViewer>
@@ -1717,7 +1800,7 @@
                             <StackPanel x:Name="ProfileSettingsPanel"
                                         Visibility="Visible">
                                 <TextBlock Style="{StaticResource SectionTitle}" Text="{DynamicResource Settings.Profile}" />
-                                <Border Style="{StaticResource SettingsSectionCard}"
+                                <controls:CardSurfaceControl Style="{StaticResource SettingsSectionCard}"
                                         Visibility="{Binding SelectedProfile, Converter={StaticResource NotNullToVisibilityConverter}}">
                                     <StackPanel>
                                         <TextBlock Style="{StaticResource EyebrowText}" Text="{DynamicResource Settings.ProfileBehavior}" />
@@ -1761,13 +1844,13 @@
                                             </StackPanel>
                                         </Grid>
                                     </StackPanel>
-                                </Border>
+                                </controls:CardSurfaceControl>
                             </StackPanel>
 
                             <StackPanel x:Name="GeneralSettingsPanel"
                                         Visibility="Collapsed">
                                 <TextBlock Style="{StaticResource SectionTitle}" Text="{DynamicResource Settings.General}" />
-                                <Border Style="{StaticResource SettingsSectionCard}">
+                                <controls:CardSurfaceControl Style="{StaticResource SettingsSectionCard}">
                                     <StackPanel>
                                         <TextBlock Style="{StaticResource EyebrowText}" Text="{DynamicResource Settings.Language}" />
                                         <ComboBox Margin="0,7,0,0"
@@ -1791,16 +1874,16 @@
                                         <Button Margin="0,7,0,0" HorizontalAlignment="Left" Command="{Binding OpenLatestReleaseCommand}"
                                                 Content="{DynamicResource Settings.OpenRelease}" />
                                     </StackPanel>
-                                </Border>
-                                <Border Style="{StaticResource SettingsSectionCard}">
+                                </controls:CardSurfaceControl>
+                                <controls:CardSurfaceControl Style="{StaticResource SettingsSectionCard}">
                                     <StackPanel>
                                         <CheckBox IsChecked="{Binding RememberLastView, Mode=TwoWay}"
                                                   Content="{DynamicResource Settings.RememberLastView}" />
                                         <CheckBox Margin="0,12,0,0" IsChecked="{Binding WarnBeforeClosingWithUnsavedChanges, Mode=TwoWay}"
                                                   Content="{DynamicResource Settings.WarnUnsaved}" />
                                     </StackPanel>
-                                </Border>
-                                <Border Style="{StaticResource SettingsSectionCard}">
+                                </controls:CardSurfaceControl>
+                                <controls:CardSurfaceControl Style="{StaticResource SettingsSectionCard}">
                                     <StackPanel>
                                         <TextBlock Style="{StaticResource EyebrowText}" Text="{DynamicResource Settings.About}" />
                                         <TextBlock Margin="0,5,0,0" Text="SwitchBoard" FontWeight="SemiBold" />
@@ -1810,13 +1893,13 @@
                                         <Button Margin="0,10,0,0" HorizontalAlignment="Left" Command="{Binding CheckUpdatesCommand}"
                                                 Content="{DynamicResource Settings.CheckUpdates}" />
                                     </StackPanel>
-                                </Border>
+                                </controls:CardSurfaceControl>
                             </StackPanel>
 
                             <StackPanel x:Name="InterfaceSettingsPanel"
                                         Visibility="Collapsed">
                                 <TextBlock Style="{StaticResource SectionTitle}" Text="{DynamicResource Settings.Interface}" />
-                                <Border Style="{StaticResource SettingsSectionCard}">
+                                <controls:CardSurfaceControl Style="{StaticResource SettingsSectionCard}">
                                     <StackPanel>
                                         <CheckBox IsChecked="{Binding ShowCurrentActionState, Mode=TwoWay}"
                                                   Content="{DynamicResource Settings.ShowCurrentActionState}" />
@@ -1832,13 +1915,13 @@
                                         <TextBlock Margin="0,4,0,0" Style="{StaticResource CaptionText}"
                                                    Text="{DynamicResource Settings.ShowCardDetailsHint}" TextWrapping="Wrap" />
                                     </StackPanel>
-                                </Border>
+                                </controls:CardSurfaceControl>
                             </StackPanel>
 
                             <StackPanel x:Name="ThemeSettingsPanel"
                                         Visibility="Collapsed">
                                 <TextBlock Style="{StaticResource SectionTitle}" Text="{DynamicResource Settings.Themes}" />
-                                <Border Style="{StaticResource SettingsSectionCard}">
+                                <controls:CardSurfaceControl Style="{StaticResource SettingsSectionCard}">
                                     <StackPanel>
                                 <TextBlock Style="{StaticResource EyebrowText}"
                                            Text="{DynamicResource Settings.Appearance}" />
@@ -1928,12 +2011,12 @@
                                 <Button Margin="0,8,0,0" HorizontalAlignment="Left" Command="{Binding OpenThemeFolderCommand}"
                                         Content="{DynamicResource Settings.OpenThemeFolder}" />
                                     </StackPanel>
-                                </Border>
+                                </controls:CardSurfaceControl>
                             </StackPanel>
 
                             <StackPanel x:Name="DataSettingsPanel" Visibility="Collapsed">
                                 <TextBlock Style="{StaticResource SectionTitle}" Text="{DynamicResource Settings.Data}" />
-                                <Border Style="{StaticResource SettingsSectionCard}">
+                                <controls:CardSurfaceControl Style="{StaticResource SettingsSectionCard}">
                                     <StackPanel>
                                         <TextBlock Style="{StaticResource EyebrowText}" Text="{DynamicResource Settings.Backup}" />
                                         <TextBlock Margin="0,5,0,0" Style="{StaticResource CaptionText}"
@@ -1947,27 +2030,27 @@
                                         <TextBlock Margin="0,12,0,0" Style="{StaticResource CaptionText}"
                                                    Text="{DynamicResource Settings.BackupThemeAssetHint}" TextWrapping="Wrap" />
                                     </StackPanel>
-                                </Border>
-                                <Border Style="{StaticResource SettingsSectionCard}">
+                                </controls:CardSurfaceControl>
+                                <controls:CardSurfaceControl Style="{StaticResource SettingsSectionCard}">
                                     <StackPanel>
                                         <TextBlock Style="{StaticResource EyebrowText}" Text="{DynamicResource Settings.AutomaticBackup}" />
                                         <CheckBox Margin="0,8,0,0" IsChecked="{Binding AutomaticBackupEnabled, Mode=TwoWay}" Content="{DynamicResource Settings.EnableAutomaticBackup}" />
                                         <TextBlock Margin="0,10,0,0" Style="{StaticResource CaptionText}" Text="{DynamicResource Settings.BackupRetention}" />
                                         <TextBox Width="90" Margin="0,4,0,0" HorizontalAlignment="Left" Text="{Binding AutomaticBackupCount, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                                     </StackPanel>
-                                </Border>
-                                <Border Style="{StaticResource SettingsSectionCard}">
+                                </controls:CardSurfaceControl>
+                                <controls:CardSurfaceControl Style="{StaticResource SettingsSectionCard}">
                                     <StackPanel>
                                         <TextBlock Style="{StaticResource EyebrowText}" Text="{DynamicResource Settings.Reset}" />
                                         <Button Margin="0,8,0,0" HorizontalAlignment="Left" Command="{Binding ResetSettingsCommand}" Content="{DynamicResource Settings.ResetSettings}" />
                                         <Button Margin="0,8,0,0" HorizontalAlignment="Left" Command="{Binding ResetAllDataCommand}" Content="{DynamicResource Settings.ResetAll}" />
                                     </StackPanel>
-                                </Border>
+                                </controls:CardSurfaceControl>
                             </StackPanel>
 
                             <StackPanel x:Name="DiagnosticsSettingsPanel" Visibility="Collapsed">
                                 <TextBlock Style="{StaticResource SectionTitle}" Text="{DynamicResource Settings.Diagnostics}" />
-                                <Border Style="{StaticResource SettingsSectionCard}">
+                                <controls:CardSurfaceControl Style="{StaticResource SettingsSectionCard}">
                                     <StackPanel>
                                         <TextBlock Style="{StaticResource EyebrowText}" Text="{DynamicResource Settings.Version}" />
                                         <TextBlock Margin="0,4,0,0" Text="{Binding ApplicationVersion}" />
@@ -1986,7 +2069,7 @@
                                             <Button Margin="8,0,0,0" Command="{Binding ExportHistoryCommand}" Content="{DynamicResource Settings.ExportHistory}" />
                                         </StackPanel>
                                     </StackPanel>
-                                </Border>
+                                </controls:CardSurfaceControl>
                             </StackPanel>
                         </Grid>
                     </ScrollViewer>

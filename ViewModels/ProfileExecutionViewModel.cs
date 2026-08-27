@@ -34,6 +34,7 @@ public sealed class ProfileExecutionViewModel : ObservableObject
             : summary.HasRestoreFailure
                 ? localization.GetString("Activity.HistoryRestoreFailed")
                 : string.Empty;
+        ToggleExpandedCommand = new RelayCommand(() => IsExpanded = !IsExpanded);
     }
 
     public Guid SessionId { get; }
@@ -48,6 +49,7 @@ public sealed class ProfileExecutionViewModel : ObservableObject
     public string RestoreText { get; }
     public IReadOnlyList<ProfileExecutionActionViewModel> Actions { get; }
     public bool HasActions => Actions.Count > 0;
+    public RelayCommand ToggleExpandedCommand { get; }
 
     public bool IsExpanded
     {

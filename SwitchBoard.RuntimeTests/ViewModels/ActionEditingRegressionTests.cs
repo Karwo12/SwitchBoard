@@ -132,6 +132,81 @@ public sealed class ActionEditingRegressionTests : RuntimeTestBase
 
     [Fact]
     [Trait("Category", "Unit")]
+    public void DisplayCustomRestore_UsesDiscoveredModesAndRoundTrips()
+    {
+        var candidate = new DisplayCandidate("DISPLAY1", "MONITOR-ID", "ASUS PG27AQDP", 1,
+            1920, 1080, 60, true,
+            [
+                new DisplayModeCandidate(1920, 1080, 60, 32),
+                new DisplayModeCandidate(1920, 1080, 120, 32),
+                new DisplayModeCandidate(2560, 1440, 165, 32),
+                new DisplayModeCandidate(2560, 1440, 200, 32)
+            ]);
+        var editor = new ActionItemViewModel(Action(ActionTypeIds.DisplayConfigure, new JsonObject
+        {
+            [ActionParameterNames.DisplayDeviceName] = "DISPLAY1",
+            [ActionParameterNames.DisplayDeviceId] = "MONITOR-ID",
+            [ActionParameterNames.DisplayWidth] = 1920,
+            [ActionParameterNames.DisplayHeight] = 1080,
+            [ActionParameterNames.DisplayRefreshRate] = 60,
+            [ActionParameterNames.RestoreDisplayDeviceName] = "DISPLAY1",
+            [ActionParameterNames.RestoreDisplayDeviceId] = "MONITOR-ID",
+            [ActionParameterNames.RestoreDisplayName] = "ASUS PG27AQDP",
+            [ActionParameterNames.RestoreDisplayWidth] = 2560,
+            [ActionParameterNames.RestoreDisplayHeight] = 1440,
+            [ActionParameterNames.RestoreDisplayRefreshRate] = 165
+        }), new TestLocalizationService());
+        editor.RestoreBehaviorId = "custom";
+
+        editor.ApplyAvailableRestoreDisplays([candidate]);
+
+        Assert.Same(candidate, editor.SelectedRestoreDisplay);
+        Assert.Equal(new[] { 165, 200 }, editor.AvailableRestoreDisplayRefreshRates);
+        Assert.True(editor.IsValid);
+        editor.SelectedRestoreDisplayResolution = editor.AvailableRestoreDisplayResolutions.Single(item =>
+            item.Width == 1920 && item.Height == 1080);
+        Assert.Equal(new[] { 60, 120 }, editor.AvailableRestoreDisplayRefreshRates);
+        editor.RestoreDisplayRefreshRate = 200;
+        Assert.Equal(60, editor.RestoreDisplayRefreshRate);
+
+        var serialized = editor.ToModel();
+        Assert.Equal(ActionRestoreBehavior.RestoreCustomState, serialized.RestoreBehavior);
+        Assert.Equal(1920, serialized.Parameters[ActionParameterNames.RestoreDisplayWidth]?.GetValue<int>());
+        var roundTrip = new ActionItemViewModel(serialized, new TestLocalizationService());
+        Assert.Equal("custom", roundTrip.RestoreBehaviorId);
+        Assert.Equal(60, roundTrip.RestoreDisplayRefreshRate);
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public void DisplayCustomRestore_DoesNotSelectAReplacementForMissingMonitorOrMode()
+    {
+        var editor = new ActionItemViewModel(Action(ActionTypeIds.DisplayConfigure, new JsonObject
+        {
+            [ActionParameterNames.DisplayDeviceName] = "DISPLAY1",
+            [ActionParameterNames.DisplayDeviceId] = "MONITOR-ID",
+            [ActionParameterNames.DisplayWidth] = 1920,
+            [ActionParameterNames.DisplayHeight] = 1080,
+            [ActionParameterNames.DisplayRefreshRate] = 60,
+            [ActionParameterNames.RestoreDisplayDeviceName] = "DISPLAY1",
+            [ActionParameterNames.RestoreDisplayDeviceId] = "MONITOR-ID",
+            [ActionParameterNames.RestoreDisplayWidth] = 3440,
+            [ActionParameterNames.RestoreDisplayHeight] = 1440,
+            [ActionParameterNames.RestoreDisplayRefreshRate] = 165
+        }), new TestLocalizationService());
+        editor.RestoreBehaviorId = "custom";
+
+        editor.ApplyAvailableRestoreDisplays([
+            new DisplayCandidate("DISPLAY2", "OTHER-MONITOR", "Other monitor", 2,
+                1920, 1080, 60, false, [new DisplayModeCandidate(1920, 1080, 60, 32)])
+        ]);
+
+        Assert.Null(editor.SelectedRestoreDisplay);
+        Assert.False(editor.IsValid);
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
     public void ProgramTargetType_UsesSafeLegacyInferenceAndSerializesExplicitly()
     {
         var legacyExe = new ActionItemViewModel(Action(ActionTypeIds.ProgramRun, new JsonObject

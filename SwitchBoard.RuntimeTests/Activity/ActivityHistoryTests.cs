@@ -145,6 +145,21 @@ public sealed class ActivityHistoryTests
 
     [Fact]
     [Trait("Category", "Unit")]
+    public void ProfileExecutionView_ToggleExpandedCommandChangesExpansionState()
+    {
+        var summary = new ProfileExecutionSummary(Guid.NewGuid(), null, "Profile",
+            DateTimeOffset.UtcNow, null, ProfileExecutionResult.Success, [], false, false);
+        var viewModel = new ProfileExecutionViewModel(summary, new TestLocalizationService());
+
+        Assert.False(viewModel.IsExpanded);
+        viewModel.ToggleExpandedCommand.Execute(null);
+        Assert.True(viewModel.IsExpanded);
+        viewModel.ToggleExpandedCommand.Execute(null);
+        Assert.False(viewModel.IsExpanded);
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
     public void ActivityService_SystemChangesExcludeOrdinaryProfileEvents()
     {
         var service = new ActivityService();

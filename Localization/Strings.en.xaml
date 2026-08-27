@@ -149,6 +149,8 @@
     <system:String x:Key="RestoreBehavior.RestartProcess">Restart if it was running before</system:String>
     <system:String x:Key="RestoreBehavior.PreviousPlan">Restore previous plan</system:String>
     <system:String x:Key="RestoreBehavior.PreviousDisplay">Restore previous display settings</system:String>
+    <system:String x:Key="RestoreBehavior.Custom">Set selected display settings</system:String>
+    <system:String x:Key="RestoreDisplay.Display">Display</system:String>
     <system:String x:Key="RestoreBehavior.RestoreScript">Run restore script</system:String>
     <system:String x:Key="RestoreScript.Help">Scripts do not have automatic state to restore. You can optionally select a separate script that reverses the changes.</system:String>
     <system:String x:Key="RestoreScript.Path">Restore script path</system:String>
@@ -159,6 +161,7 @@
     <system:String x:Key="Validation.ServiceName">Select a Windows service before running this profile.</system:String>
     <system:String x:Key="Validation.PowerPlan">Select a valid power plan before running this profile.</system:String>
     <system:String x:Key="Validation.Display">Select a monitor, resolution, and refresh rate.</system:String>
+    <system:String x:Key="Validation.CustomDisplayRestore">Select an existing display, resolution, and refresh rate for restore.</system:String>
     <system:String x:Key="Validation.ScriptPath">Select a script before running this profile.</system:String>
     <system:String x:Key="Validation.ProgramRestorePath">Close-on-restore requires a full path to an EXE file.</system:String>
     <system:String x:Key="Validation.ProgramRestartPath">Restarting a program requires a full path to an EXE file.</system:String>
@@ -385,6 +388,8 @@
     <system:String x:Key="CustomTheme.Color.MenuBackground">Menu background</system:String>
     <system:String x:Key="CustomTheme.Color.MenuHover">Menu hover</system:String>
     <system:String x:Key="CustomTheme.AutomaticForegroundHint">Button and menu text colors are selected automatically to preserve readable contrast.</system:String>
+    <system:String x:Key="CustomTheme.HoverIntensity">Interactive hover intensity</system:String>
+    <system:String x:Key="CustomTheme.HoverIntensityHint">0% is nearly invisible. 100% is a clear hover while remaining weaker than a selected item.</system:String>
     <system:String x:Key="CustomTheme.SurfaceOpacity">Panel opacity</system:String>
     <system:String x:Key="CustomTheme.SurfaceOpacityHint">100% means opaque panels. This also sets the four main blocks, which you can fine-tune separately below. It does not change the background image, text, icons, or borders.</system:String>
     <system:String x:Key="CustomTheme.CategoriesOpacity">Categories block</system:String>

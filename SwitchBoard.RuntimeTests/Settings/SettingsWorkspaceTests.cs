@@ -230,8 +230,10 @@ public sealed class SettingsWorkspaceTests
     {
         var mainXaml = File.ReadAllText(FindSourceFile("Views", "MainWindow.xaml"));
         var baseStyles = File.ReadAllText(FindSourceFile("Themes", "BaseStyles.xaml"));
+        var themeWindowXaml = File.ReadAllText(FindSourceFile("Views", "CustomThemeWindow.xaml"));
         var actionXaml = File.ReadAllText(FindSourceFile("Controls", "ActionEditorControl.xaml"));
         var nestedActionXaml = File.ReadAllText(FindSourceFile("Controls", "NestedActionEditorControl.xaml"));
+        var cardControl = File.ReadAllText(FindSourceFile("Controls", "CardSurfaceControl.cs"));
 
         Assert.Contains("x:Name=\"SettingsWorkspace\"", mainXaml, StringComparison.Ordinal);
         var shellStart = mainXaml.IndexOf("<Grid x:Name=\"SettingsWorkspace\"", StringComparison.Ordinal);
@@ -252,7 +254,33 @@ public sealed class SettingsWorkspaceTests
         Assert.Contains("x:Key=\"SettingsContentContainer\"", baseStyles, StringComparison.Ordinal);
         Assert.Contains("<Setter Property=\"MaxWidth\" Value=\"760\" />", baseStyles, StringComparison.Ordinal);
         Assert.Contains("<Setter Property=\"HorizontalAlignment\" Value=\"Stretch\" />", baseStyles, StringComparison.Ordinal);
+        Assert.Contains("x:Key=\"CardSurfaceStyle\"", baseStyles, StringComparison.Ordinal);
+        var cardStyleStart = baseStyles.IndexOf("x:Key=\"CardSurfaceStyle\"", StringComparison.Ordinal);
+        var settingsCardStart = baseStyles.IndexOf("x:Key=\"SettingsSectionCard\"", cardStyleStart, StringComparison.Ordinal);
+        var actionCardStart = baseStyles.IndexOf("x:Key=\"ActionCardSurfaceStyle\"", settingsCardStart, StringComparison.Ordinal);
+        Assert.True(cardStyleStart >= 0 && settingsCardStart > cardStyleStart && actionCardStart > settingsCardStart);
+        var cardStyle = baseStyles[cardStyleStart..settingsCardStart];
+        Assert.Contains("Background\" Value=\"{DynamicResource CardSurfaceBrush}\"", cardStyle, StringComparison.Ordinal);
+        Assert.Contains("<Setter Property=\"SurfaceOpacity\" Value=\"0.24\" />", cardStyle, StringComparison.Ordinal);
+        Assert.Contains("<Setter Property=\"HoverSurfaceBrush\" Value=\"Transparent\" />", cardStyle, StringComparison.Ordinal);
+        Assert.Contains("TemplateBinding HoverSurfaceBrush", cardStyle, StringComparison.Ordinal);
+        Assert.Contains("InteractiveHoverBrush", baseStyles, StringComparison.Ordinal);
+        Assert.Contains("HoverIntensityPercent", themeWindowXaml, StringComparison.Ordinal);
+        Assert.Contains("CustomTheme.HoverIntensity", themeWindowXaml, StringComparison.Ordinal);
+        Assert.Contains("Minimum=\"0\" Maximum=\"100\"", themeWindowXaml, StringComparison.Ordinal);
+        var settingsCardStyle = baseStyles[settingsCardStart..actionCardStart];
+        Assert.Contains("BasedOn=\"{StaticResource CardSurfaceStyle}\"", settingsCardStyle, StringComparison.Ordinal);
+        Assert.Contains("x:Key=\"SettingsSectionCard\" TargetType=\"{x:Type controls:CardSurfaceControl}\"", settingsCardStyle, StringComparison.Ordinal);
+        Assert.Contains("x:Key=\"ActionCardSurfaceStyle\" TargetType=\"{x:Type controls:CardSurfaceControl}\" BasedOn=\"{StaticResource CardSurfaceStyle}\"", baseStyles, StringComparison.Ordinal);
         Assert.Contains("x:Key=\"SettingsSectionCard\"", baseStyles, StringComparison.Ordinal);
+        Assert.Contains("SurfaceOpacity", cardControl, StringComparison.Ordinal);
+        var activityStyleStart = mainXaml.IndexOf("x:Key=\"ActivityRowSurfaceStyle\"", StringComparison.Ordinal);
+        var activityStyleEnd = mainXaml.IndexOf("x:Key=\"ProfileResultStatusDotStyle\"", activityStyleStart, StringComparison.Ordinal);
+        Assert.True(activityStyleStart >= 0 && activityStyleEnd > activityStyleStart);
+        var activityStyle = mainXaml[activityStyleStart..activityStyleEnd];
+        Assert.Contains("BasedOn=\"{StaticResource CardSurfaceStyle}\"", activityStyle, StringComparison.Ordinal);
+        Assert.Contains("<Setter Property=\"HoverSurfaceBrush\" Value=\"{DynamicResource InteractiveHoverBrush}\" />", activityStyle, StringComparison.Ordinal);
+        Assert.DoesNotContain("<Setter Property=\"SurfaceOpacity\" Value=\"1\" />", activityStyle, StringComparison.Ordinal);
         var profilePanelStart = mainXaml.IndexOf("x:Name=\"ProfileNavigationContent\"", StringComparison.Ordinal);
         Assert.True(profilePanelStart >= 0 && profilePanelStart < shellStart);
         Assert.Contains("Padding=\"0,0,6,0\"", mainXaml[profilePanelStart..shellStart], StringComparison.Ordinal);

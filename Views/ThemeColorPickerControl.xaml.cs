@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using SwitchBoard.Localization;
@@ -6,14 +7,14 @@ using SwitchBoard.ViewModels;
 
 namespace SwitchBoard.Views;
 
-public partial class ThemeColorPickerWindow : Window
+public partial class ThemeColorPickerControl : UserControl
 {
     private readonly ILocalizationService _localization;
     private readonly Action<Color>? _previewChanged;
-    private readonly Color _initialColor;
+    private Color _initialColor;
     private bool _updating;
 
-    public ThemeColorPickerWindow(Color initial, ILocalizationService localization, Action<Color>? previewChanged = null)
+    public ThemeColorPickerControl(Color initial, ILocalizationService localization, Action<Color>? previewChanged = null)
     {
         InitializeComponent();
         _localization = localization;
@@ -23,6 +24,14 @@ public partial class ThemeColorPickerWindow : Window
     }
 
     public Color SelectedColor { get; private set; }
+    public event EventHandler? Confirmed;
+    public event EventHandler? Canceled;
+
+    public void BeginEdit(Color initial)
+    {
+        _initialColor = initial;
+        SetColor(initial);
+    }
 
     private void Channel_OnValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
@@ -80,10 +89,14 @@ public partial class ThemeColorPickerWindow : Window
         ApplyHex();
         e.Handled = true;
     }
-    private void Save_OnClick(object sender, RoutedEventArgs e) { if (ApplyHex()) DialogResult = true; }
+    private void Save_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (ApplyHex()) Confirmed?.Invoke(this, EventArgs.Empty);
+    }
+
     private void Cancel_OnClick(object sender, RoutedEventArgs e)
     {
         _previewChanged?.Invoke(_initialColor);
-        Close();
+        Canceled?.Invoke(this, EventArgs.Empty);
     }
 }

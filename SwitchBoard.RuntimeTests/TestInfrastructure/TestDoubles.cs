@@ -178,8 +178,9 @@ sealed class TestServiceManager(string initialState, bool changeSucceeds,
 sealed class TestDisplayManager(DisplayModeState initialState) : IDisplayManager
 {
     public DisplayModeState State { get; private set; } = initialState;
+    public IReadOnlyList<SwitchBoard.Services.Discovery.DisplayCandidate> Displays { get; set; } = [];
     public Task<IReadOnlyList<SwitchBoard.Services.Discovery.DisplayCandidate>> GetDisplaysAsync(CancellationToken cancellationToken = default) =>
-        Task.FromResult<IReadOnlyList<SwitchBoard.Services.Discovery.DisplayCandidate>>([]);
+        Task.FromResult(Displays);
     public Task<DisplayModeState> GetCurrentStateAsync(string deviceId, string deviceName, CancellationToken cancellationToken = default) =>
         Task.FromResult(State);
     public Task ApplyTemporaryAsync(DisplayModeState state, CancellationToken cancellationToken = default) { State = state; return Task.CompletedTask; }

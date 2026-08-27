@@ -17,6 +17,9 @@ public partial class CustomThemeWindow : Window
     private readonly AppDataPaths _paths;
     private readonly ILocalizationService _localization;
     private readonly List<string> _createdAssets = [];
+    private readonly ThemeColorPickerControl _colorPicker;
+    private CustomThemeColorItemViewModel? _editingColor;
+    private string? _editingColorInitialText;
     private bool _saved;
 
     public CustomThemeWindow(CustomThemeEditRequest request, AppDataPaths paths, ILocalizationService localization)
@@ -32,6 +35,12 @@ public partial class CustomThemeWindow : Window
         }
         ViewModel = new CustomThemeEditorViewModel(request with { Colors = prepared }, localization);
         DataContext = ViewModel;
+
+        _colorPicker = new ThemeColorPickerControl(Colors.Transparent, localization,
+            color => { if (_editingColor is not null) _editingColor.Color = color.ToString(); });
+        _colorPicker.Confirmed += ColorPicker_OnConfirmed;
+        _colorPicker.Canceled += ColorPicker_OnCanceled;
+        ColorPickerPopup.Child = _colorPicker;
     }
 
     public CustomThemeEditorViewModel ViewModel { get; }
@@ -39,15 +48,34 @@ public partial class CustomThemeWindow : Window
 
     private void ColorButton_OnClick(object sender, RoutedEventArgs e)
     {
-        if (sender is not Button { DataContext: CustomThemeColorItemViewModel item }) return;
+        if (sender is not Button button || button.DataContext is not CustomThemeColorItemViewModel item) return;
+        if (ReferenceEquals(_editingColor, item) && ColorPickerPopup.IsOpen) return;
+
+        // Keep one popup instance alive when moving directly to another color.
+        // The previous draft is discarded before the new field is attached to it.
+        CloseColorPicker(restore: true, closePopup: false);
         var initial = CustomThemeColorItemViewModel.TryColor(item.Color, out var color) ? color : Colors.White;
-        var initialText = item.Color;
-        var picker = new ThemeColorPickerWindow(initial, _localization,
-            selected => item.Color = selected.ToString()) { Owner = this };
-        if (picker.ShowDialog() == true)
-            item.Color = picker.SelectedColor.ToString();
-        else
-            item.Color = initialText;
+        _editingColor = item;
+        _editingColorInitialText = item.Color;
+        _colorPicker.BeginEdit(initial);
+        ColorPickerPopup.PlacementTarget = button;
+        ColorPickerPopup.IsOpen = true;
+        e.Handled = true;
+    }
+
+    private void ColorPicker_OnConfirmed(object? sender, EventArgs e) => CloseColorPicker(restore: false);
+    private void ColorPicker_OnCanceled(object? sender, EventArgs e) => CloseColorPicker(restore: true);
+
+    private void ColorPickerPopup_OnClosed(object? sender, EventArgs e) => CloseColorPicker(restore: true);
+
+    private void CloseColorPicker(bool restore, bool closePopup = true)
+    {
+        if (restore && _editingColor is not null && _editingColorInitialText is not null)
+            _editingColor.Color = _editingColorInitialText;
+
+        _editingColor = null;
+        _editingColorInitialText = null;
+        if (closePopup && ColorPickerPopup.IsOpen) ColorPickerPopup.IsOpen = false;
     }
 
     private void ChooseImage_OnClick(object sender, RoutedEventArgs e)
@@ -98,11 +126,22 @@ public partial class CustomThemeWindow : Window
         ViewModel.Warning = string.Empty;
     }
 
-    private void Reset_OnClick(object sender, RoutedEventArgs e) => ViewModel.Reset();
-    private void Cancel_OnClick(object sender, RoutedEventArgs e) => Close();
+    private void Reset_OnClick(object sender, RoutedEventArgs e)
+    {
+        CloseColorPicker(restore: true);
+        ViewModel.Reset();
+    }
+
+    private void Cancel_OnClick(object sender, RoutedEventArgs e)
+    {
+        CloseColorPicker(restore: true);
+        Close();
+    }
 
     private void Save_OnClick(object sender, RoutedEventArgs e)
     {
+        // Clicking Save outside the popup must not accept an unconfirmed picker edit.
+        CloseColorPicker(restore: true);
         if (ViewModel.Colors.Any(item => !item.IsValid))
         {
             ViewModel.Warning = _localization.GetString("CustomTheme.InvalidColor");
@@ -122,6 +161,8 @@ public partial class CustomThemeWindow : Window
 
     protected override void OnClosing(CancelEventArgs e)
     {
+        CloseColorPicker(restore: true);
+        ColorPickerPopup.Child = null;
         CleanupAssets();
         base.OnClosing(e);
     }

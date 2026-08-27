@@ -61,6 +61,15 @@ public sealed class ActionItemViewModel : ObservableObject
     private int _displayRefreshRate;
     private bool _skipDisplayConfirmation;
     private DisplayResolutionOptionViewModel? _selectedDisplayResolution;
+    private string _restoreDisplayDeviceName;
+    private string _restoreDisplayDeviceId;
+    private string _restoreDisplayMonitorName;
+    private int _restoreDisplayWidth;
+    private int _restoreDisplayHeight;
+    private int _restoreDisplayRefreshRate;
+    private DisplayCandidate? _selectedRestoreDisplay;
+    private DisplayResolutionOptionViewModel? _selectedRestoreDisplayResolution;
+    private bool _restoreDisplaysLoaded;
     private bool _retryOnFailure;
     private int _maximumAttempts;
     private int _retryDelaySeconds;
@@ -121,6 +130,7 @@ public sealed class ActionItemViewModel : ObservableObject
         _restoreBehaviorId = action.RestoreBehavior switch
         {
             ActionRestoreBehavior.RestorePreviousState => "previous",
+            ActionRestoreBehavior.RestoreCustomState => "custom",
             ActionRestoreBehavior.CloseIfStartedBySwitchBoard => "closeStarted",
             ActionRestoreBehavior.RestartIfWasRunning => "restart",
             ActionRestoreBehavior.RunRestoreScript => "restoreScript",
@@ -176,6 +186,12 @@ public sealed class ActionItemViewModel : ObservableObject
         _displayHeight = ReadInt32(ActionParameterNames.DisplayHeight, 0);
         _displayRefreshRate = ReadInt32(ActionParameterNames.DisplayRefreshRate, 0);
         _skipDisplayConfirmation = ReadBoolean(ActionParameterNames.SkipDisplayConfirmation, false);
+        _restoreDisplayDeviceName = ReadString(ActionParameterNames.RestoreDisplayDeviceName);
+        _restoreDisplayDeviceId = ReadString(ActionParameterNames.RestoreDisplayDeviceId);
+        _restoreDisplayMonitorName = ReadString(ActionParameterNames.RestoreDisplayName);
+        _restoreDisplayWidth = ReadInt32(ActionParameterNames.RestoreDisplayWidth, 0);
+        _restoreDisplayHeight = ReadInt32(ActionParameterNames.RestoreDisplayHeight, 0);
+        _restoreDisplayRefreshRate = ReadInt32(ActionParameterNames.RestoreDisplayRefreshRate, 0);
         _retryOnFailure = action.RetryOnFailure;
         _maximumAttempts = Math.Clamp(action.MaximumAttempts, 1, 10);
         _retryDelaySeconds = Math.Clamp((int)Math.Round(action.RetryDelay.TotalSeconds), 0, 3600);
@@ -244,6 +260,9 @@ public sealed class ActionItemViewModel : ObservableObject
 
         AvailableDisplayResolutions = [];
         AvailableDisplayRefreshRates = [];
+        AvailableRestoreDisplays = [];
+        AvailableRestoreDisplayResolutions = [];
+        AvailableRestoreDisplayRefreshRates = [];
         if (_displayWidth > 0 && _displayHeight > 0)
         {
             var persistedMode = new DisplayModeCandidate(
@@ -393,6 +412,7 @@ public sealed class ActionItemViewModel : ObservableObject
     internal bool HasNestingDepthViolation => _hasNestingDepthViolation;
     internal int DisplayWidth => _displayWidth;
     internal int DisplayHeight => _displayHeight;
+    internal bool RestoreDisplaysLoaded => _restoreDisplaysLoaded;
     public bool CanAddNestedActions => _nestingDepth + 1 < ProfileRunner.MaximumNestingDepth &&
         Type == ActionTypeIds.ConditionIf;
     public RelayCommand AddThenNotificationCommand { get; }
@@ -461,6 +481,7 @@ public sealed class ActionItemViewModel : ObservableObject
         {
             if (!SetProperty(ref _restoreBehaviorId, value)) return;
             OnPropertyChanged(nameof(IsRestoreScriptEnabled));
+            OnPropertyChanged(nameof(IsCustomDisplayRestoreEnabled));
             OnPropertyChanged(nameof(IsRestartWindowBehaviorEnabled));
             OnPropertyChanged(nameof(Summary));
             NotifyValidation();
@@ -476,6 +497,8 @@ public sealed class ActionItemViewModel : ObservableObject
         _ => false
     };
     public bool IsRestoreScriptEnabled => Type == ActionTypeIds.ScriptRun && RestoreBehaviorId == "restoreScript";
+    public bool IsCustomDisplayRestoreEnabled => Type == ActionTypeIds.DisplayConfigure &&
+        string.Equals(RestoreBehaviorId, "custom", StringComparison.OrdinalIgnoreCase);
     public string Arguments { get => _arguments; set => SetProperty(ref _arguments, value); }
     public string TargetType
     {
@@ -770,6 +793,9 @@ public sealed class ActionItemViewModel : ObservableObject
     public string DisplayMonitorName { get => _displayMonitorName; set => SetWithSummary(ref _displayMonitorName, value); }
     public ObservableCollection<DisplayResolutionOptionViewModel> AvailableDisplayResolutions { get; }
     public ObservableCollection<int> AvailableDisplayRefreshRates { get; }
+    public ObservableCollection<DisplayCandidate> AvailableRestoreDisplays { get; }
+    public ObservableCollection<DisplayResolutionOptionViewModel> AvailableRestoreDisplayResolutions { get; }
+    public ObservableCollection<int> AvailableRestoreDisplayRefreshRates { get; }
 
     public DisplayResolutionOptionViewModel? SelectedDisplayResolution
     {
@@ -812,6 +838,80 @@ public sealed class ActionItemViewModel : ObservableObject
     {
         get => DisplayRefreshRate;
         set => DisplayRefreshRate = value;
+    }
+
+    public string RestoreDisplayDeviceName
+    {
+        get => _restoreDisplayDeviceName;
+        set => SetValidationProperty(ref _restoreDisplayDeviceName, value);
+    }
+
+    public string RestoreDisplayDeviceId
+    {
+        get => _restoreDisplayDeviceId;
+        set => SetValidationProperty(ref _restoreDisplayDeviceId, value);
+    }
+
+    public string RestoreDisplayMonitorName
+    {
+        get => _restoreDisplayMonitorName;
+        set => SetValidationProperty(ref _restoreDisplayMonitorName, value);
+    }
+
+    public int RestoreDisplayWidth
+    {
+        get => _restoreDisplayWidth;
+        set
+        {
+            if (SetProperty(ref _restoreDisplayWidth, value)) NotifyValidation();
+        }
+    }
+
+    public int RestoreDisplayHeight
+    {
+        get => _restoreDisplayHeight;
+        set
+        {
+            if (SetProperty(ref _restoreDisplayHeight, value)) NotifyValidation();
+        }
+    }
+
+    public int RestoreDisplayRefreshRate
+    {
+        get => _restoreDisplayRefreshRate;
+        set
+        {
+            if (AvailableRestoreDisplayRefreshRates.Count > 0 &&
+                !AvailableRestoreDisplayRefreshRates.Contains(value)) return;
+            if (SetProperty(ref _restoreDisplayRefreshRate, value)) NotifyValidation();
+        }
+    }
+
+    public DisplayCandidate? SelectedRestoreDisplay
+    {
+        get => _selectedRestoreDisplay;
+        set
+        {
+            if (ReferenceEquals(_selectedRestoreDisplay, value)) return;
+            _selectedRestoreDisplay = value;
+            OnPropertyChanged();
+            ConfigureRestoreDisplay(value, preserveInvalidSelection: false, notifySelectionChanges: true);
+        }
+    }
+
+    public DisplayResolutionOptionViewModel? SelectedRestoreDisplayResolution
+    {
+        get => _selectedRestoreDisplayResolution;
+        set
+        {
+            if (!SetProperty(ref _selectedRestoreDisplayResolution, value)) return;
+            if (value is not null)
+            {
+                RestoreDisplayWidth = value.Width;
+                RestoreDisplayHeight = value.Height;
+            }
+            UpdateRestoreDisplayRefreshRates(value, preserveInvalidSelection: false);
+        }
     }
     public bool SkipDisplayConfirmation
     {
@@ -916,13 +1016,8 @@ public sealed class ActionItemViewModel : ObservableObject
         var desiredHeight = _displayHeight > 0 ? _displayHeight : candidate.CurrentHeight;
         var desiredRate = _displayRefreshRate > 0 ? _displayRefreshRate : candidate.CurrentRefreshRate;
         AvailableDisplayResolutions.Clear();
-        foreach (var group in candidate.Modes.GroupBy(mode => (mode.Width, mode.Height)))
-        {
-            AvailableDisplayResolutions.Add(new DisplayResolutionOptionViewModel(
-                group.Key.Width,
-                group.Key.Height,
-                group.OrderBy(mode => mode.RefreshRate).ToList()));
-        }
+        foreach (var resolutionOption in BuildResolutionOptions(candidate))
+            AvailableDisplayResolutions.Add(resolutionOption);
 
         var resolution = AvailableDisplayResolutions.FirstOrDefault(option =>
                              option.Width == desiredWidth && option.Height == desiredHeight)
@@ -964,6 +1059,119 @@ public sealed class ActionItemViewModel : ObservableObject
             UpdateGeneratedDisplayActionName(candidate.DisplayName, previousMonitorName, notifyChanges: false);
         }
     }
+
+    /// <summary>
+    /// Supplies the same discovered monitor list used by the display action
+    /// picker to the custom restore editor. A persisted monitor or mode is
+    /// selected only when it still exists; no fallback is chosen while loading.
+    /// </summary>
+    public void ApplyAvailableRestoreDisplays(IReadOnlyList<DisplayCandidate> displays, bool notifyChanges = true)
+    {
+        _restoreDisplaysLoaded = true;
+        AvailableRestoreDisplays.Clear();
+        foreach (var display in displays) AvailableRestoreDisplays.Add(display);
+
+        var selected = !string.IsNullOrWhiteSpace(RestoreDisplayDeviceId)
+            ? displays.FirstOrDefault(display => string.Equals(display.DeviceId, RestoreDisplayDeviceId,
+                StringComparison.OrdinalIgnoreCase))
+            : displays.FirstOrDefault(display => string.Equals(display.DeviceName, RestoreDisplayDeviceName,
+                StringComparison.OrdinalIgnoreCase));
+
+        _selectedRestoreDisplay = selected;
+        if (notifyChanges) OnPropertyChanged(nameof(SelectedRestoreDisplay));
+        ConfigureRestoreDisplay(selected, preserveInvalidSelection: true, notifySelectionChanges: notifyChanges);
+    }
+
+    private void ConfigureRestoreDisplay(DisplayCandidate? display, bool preserveInvalidSelection,
+        bool notifySelectionChanges)
+    {
+        AvailableRestoreDisplayResolutions.Clear();
+        AvailableRestoreDisplayRefreshRates.Clear();
+        _selectedRestoreDisplayResolution = null;
+        if (notifySelectionChanges) OnPropertyChanged(nameof(SelectedRestoreDisplayResolution));
+
+        if (display is null)
+        {
+            NotifyValidation();
+            return;
+        }
+
+        foreach (var resolutionOption in BuildResolutionOptions(display))
+            AvailableRestoreDisplayResolutions.Add(resolutionOption);
+
+        var persistedWidth = _restoreDisplayWidth;
+        var persistedHeight = _restoreDisplayHeight;
+        var persistedRate = _restoreDisplayRefreshRate;
+        var resolution = AvailableRestoreDisplayResolutions.FirstOrDefault(option =>
+            option.Width == persistedWidth && option.Height == persistedHeight);
+
+        if (resolution is null && !preserveInvalidSelection)
+        {
+            resolution = AvailableRestoreDisplayResolutions.FirstOrDefault(option =>
+                option.Width == display.CurrentWidth && option.Height == display.CurrentHeight)
+                ?? AvailableRestoreDisplayResolutions.FirstOrDefault();
+        }
+
+        if (resolution is not null)
+        {
+            _selectedRestoreDisplayResolution = resolution;
+            if (notifySelectionChanges) OnPropertyChanged(nameof(SelectedRestoreDisplayResolution));
+            UpdateRestoreDisplayRefreshRates(resolution, preserveInvalidSelection);
+        }
+
+        if (!preserveInvalidSelection)
+        {
+            RestoreDisplayDeviceName = display.DeviceName;
+            RestoreDisplayDeviceId = display.DeviceId;
+            RestoreDisplayMonitorName = display.DisplayName;
+            if (resolution is not null)
+            {
+                RestoreDisplayWidth = resolution.Width;
+                RestoreDisplayHeight = resolution.Height;
+                var rate = AvailableRestoreDisplayRefreshRates.Contains(persistedRate)
+                    ? persistedRate
+                    : AvailableRestoreDisplayRefreshRates.Contains(display.CurrentRefreshRate)
+                        ? display.CurrentRefreshRate
+                        : AvailableRestoreDisplayRefreshRates.FirstOrDefault();
+                RestoreDisplayRefreshRate = rate;
+            }
+        }
+
+        NotifyValidation();
+    }
+
+    private void UpdateRestoreDisplayRefreshRates(DisplayResolutionOptionViewModel? resolution,
+        bool preserveInvalidSelection)
+    {
+        AvailableRestoreDisplayRefreshRates.Clear();
+        if (resolution is null)
+        {
+            NotifyValidation();
+            return;
+        }
+
+        foreach (var rate in resolution.Modes.Select(mode => mode.RefreshRate).Distinct().Order())
+            AvailableRestoreDisplayRefreshRates.Add(rate);
+
+        var persistedRate = _restoreDisplayRefreshRate;
+        if (AvailableRestoreDisplayRefreshRates.Contains(persistedRate)) return;
+        if (preserveInvalidSelection)
+        {
+            NotifyValidation();
+            return;
+        }
+
+        RestoreDisplayRefreshRate = AvailableRestoreDisplayRefreshRates.FirstOrDefault();
+    }
+
+    private static IReadOnlyList<DisplayResolutionOptionViewModel> BuildResolutionOptions(DisplayCandidate candidate) =>
+        candidate.Modes
+            .GroupBy(mode => (mode.Width, mode.Height))
+            .Select(group => new DisplayResolutionOptionViewModel(
+                group.Key.Width,
+                group.Key.Height,
+                group.OrderBy(mode => mode.RefreshRate).ToList()))
+            .ToList();
 
     private void UpdateGeneratedDisplayActionName(string displayName, string previousMonitorName, bool notifyChanges)
     {
@@ -1088,6 +1296,20 @@ public sealed class ActionItemViewModel : ObservableObject
                 parameters[ActionParameterNames.DisplayHeight] = _displayHeight;
                 parameters[ActionParameterNames.DisplayRefreshRate] = DisplayRefreshRate;
                 parameters[ActionParameterNames.SkipDisplayConfirmation] = SkipDisplayConfirmation;
+                if (IsCustomDisplayRestoreEnabled)
+                {
+                    SetString(parameters, ActionParameterNames.RestoreDisplayDeviceName, RestoreDisplayDeviceName);
+                    SetString(parameters, ActionParameterNames.RestoreDisplayDeviceId, RestoreDisplayDeviceId);
+                    SetString(parameters, ActionParameterNames.RestoreDisplayName, RestoreDisplayMonitorName);
+                    parameters[ActionParameterNames.RestoreDisplayWidth] = RestoreDisplayWidth;
+                    parameters[ActionParameterNames.RestoreDisplayHeight] = RestoreDisplayHeight;
+                    parameters[ActionParameterNames.RestoreDisplayRefreshRate] = RestoreDisplayRefreshRate;
+                }
+                else
+                {
+                    foreach (var property in CustomRestoreDisplayParameterNames)
+                        parameters.Remove(property);
+                }
                 break;
             case ActionTypeIds.Delay:
                 parameters[ActionParameterNames.DelaySeconds] = DelaySeconds;
@@ -1174,6 +1396,7 @@ public sealed class ActionItemViewModel : ObservableObject
             RestoreBehavior = isComment ? ActionRestoreBehavior.DoNotRestore : RestoreBehaviorId switch
             {
                 "previous" => ActionRestoreBehavior.RestorePreviousState,
+                "custom" => ActionRestoreBehavior.RestoreCustomState,
                 "closeStarted" => ActionRestoreBehavior.CloseIfStartedBySwitchBoard,
                 "restart" => ActionRestoreBehavior.RestartIfWasRunning,
                 "restoreScript" => ActionRestoreBehavior.RunRestoreScript,
@@ -1192,6 +1415,16 @@ public sealed class ActionItemViewModel : ObservableObject
         SetString(parameters, ActionParameterNames.Arguments, Arguments);
         SetString(parameters, ActionParameterNames.WorkingDirectory, WorkingDirectory);
     }
+
+    private static readonly string[] CustomRestoreDisplayParameterNames =
+    [
+        ActionParameterNames.RestoreDisplayDeviceName,
+        ActionParameterNames.RestoreDisplayDeviceId,
+        ActionParameterNames.RestoreDisplayName,
+        ActionParameterNames.RestoreDisplayWidth,
+        ActionParameterNames.RestoreDisplayHeight,
+        ActionParameterNames.RestoreDisplayRefreshRate
+    ];
 
     private void SetWithSummary(ref string field, string value, [System.Runtime.CompilerServices.CallerMemberName] string? propertyName = null)
     {

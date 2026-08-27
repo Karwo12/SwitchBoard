@@ -264,17 +264,17 @@
                         <ListBox.ItemTemplate>
                             <DataTemplate>
                                 <Grid>
-                                    <Border>
-                                        <Border.Style>
-                                            <Style TargetType="Border" BasedOn="{StaticResource ActionCardSurfaceStyle}">
+                                    <controls:CardSurfaceControl>
+                                        <controls:CardSurfaceControl.Style>
+                                            <Style TargetType="{x:Type controls:CardSurfaceControl}" BasedOn="{StaticResource ActionCardSurfaceStyle}">
                                                 <Style.Triggers>
                                                     <DataTrigger Binding="{Binding IsComment}" Value="True">
                                                         <Setter Property="Visibility" Value="Collapsed" />
                                                     </DataTrigger>
                                                 </Style.Triggers>
                                             </Style>
-                                        </Border.Style>
-                                    </Border>
+                                        </controls:CardSurfaceControl.Style>
+                                    </controls:CardSurfaceControl>
                                     <Border Padding="{DynamicResource ActionCardPadding}"
                                             Background="Transparent"
                                             BorderBrush="Transparent"
@@ -434,6 +434,7 @@
                                                 Background="{DynamicResource InputBackgroundBrush}"
                                                 BorderBrush="{DynamicResource BorderBrush}"
                                                 BorderThickness="1"
+                                                ClipToBounds="True"
                                                 CornerRadius="9">
                                             <Border.Style>
                                                 <Style TargetType="Border">
@@ -699,14 +700,50 @@
                                                          </StackPanel.Style>
                                                                   <TextBlock Style="{StaticResource ActionEditorSectionHeader}" Text="{DynamicResource Advanced.Restoring}" />
                                                           <Border Style="{StaticResource SettingsRowBorderStyle}">
-                                                             <Grid>
-                                                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="250"/></Grid.ColumnDefinitions>
-                                                                 <TextBlock VerticalAlignment="Center" Text="{DynamicResource ActionEditor.RestoreBehavior}" />
-                                                                 <ComboBox Grid.Column="1" ItemsSource="{Binding AvailableRestoreBehaviors}" DisplayMemberPath="DisplayName"
-                                                                           SelectedValuePath="Value" SelectedValue="{Binding RestoreBehaviorId, Mode=TwoWay}" />
-                                                             </Grid>
-                                                         </Border>
-                                                        <StackPanel Margin="0,11,0,0">
+                                                              <Grid>
+                                                                  <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="250"/></Grid.ColumnDefinitions>
+                                                                  <TextBlock VerticalAlignment="Center" Text="{DynamicResource ActionEditor.RestoreBehavior}" />
+                                                                  <ComboBox Grid.Column="1" ItemsSource="{Binding AvailableRestoreBehaviors}" DisplayMemberPath="DisplayName"
+                                                                            SelectedValuePath="Value" SelectedValue="{Binding RestoreBehaviorId, Mode=TwoWay}" />
+                                                              </Grid>
+                                                          </Border>
+                                                         <StackPanel Margin="0,11,0,0">
+                                                             <StackPanel.Style>
+                                                                 <Style TargetType="StackPanel">
+                                                                     <Setter Property="Visibility" Value="Collapsed" />
+                                                                     <Style.Triggers>
+                                                                         <DataTrigger Binding="{Binding IsCustomDisplayRestoreEnabled}" Value="True">
+                                                                             <Setter Property="Visibility" Value="Visible" />
+                                                                         </DataTrigger>
+                                                                     </Style.Triggers>
+                                                                 </Style>
+                                                             </StackPanel.Style>
+                                                             <Border Style="{StaticResource SettingsRowBorderStyle}">
+                                                                 <Grid>
+                                                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="250"/></Grid.ColumnDefinitions>
+                                                                     <TextBlock VerticalAlignment="Center" Text="{DynamicResource RestoreDisplay.Display}" />
+                                                                     <ComboBox Grid.Column="1" ItemsSource="{Binding AvailableRestoreDisplays}" DisplayMemberPath="DisplayName"
+                                                                               SelectedItem="{Binding SelectedRestoreDisplay, Mode=TwoWay}" />
+                                                                 </Grid>
+                                                             </Border>
+                                                             <Border Margin="0,4,0,0" Style="{StaticResource SettingsRowBorderStyle}">
+                                                                 <Grid>
+                                                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="250"/></Grid.ColumnDefinitions>
+                                                                     <TextBlock VerticalAlignment="Center" Text="{DynamicResource ActionEditor.Resolution}" />
+                                                                     <ComboBox Grid.Column="1" ItemsSource="{Binding AvailableRestoreDisplayResolutions}"
+                                                                               DisplayMemberPath="DisplayName" SelectedItem="{Binding SelectedRestoreDisplayResolution, Mode=TwoWay}" />
+                                                                 </Grid>
+                                                             </Border>
+                                                             <Border Margin="0,4,0,0" Style="{StaticResource SettingsRowBorderStyle}">
+                                                                 <Grid>
+                                                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="250"/></Grid.ColumnDefinitions>
+                                                                     <TextBlock VerticalAlignment="Center" Text="{DynamicResource ActionEditor.RefreshRate}" />
+                                                                     <ComboBox Grid.Column="1" ItemsSource="{Binding AvailableRestoreDisplayRefreshRates}"
+                                                                               SelectedItem="{Binding RestoreDisplayRefreshRate, Mode=TwoWay}" />
+                                                                 </Grid>
+                                                             </Border>
+                                                         </StackPanel>
+                                                         <StackPanel Margin="0,11,0,0">
                                                             <StackPanel.Style>
                                                                 <Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed" />
                                                                     <Style.Triggers><DataTrigger Binding="{Binding IsRestoreScriptEnabled}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers>

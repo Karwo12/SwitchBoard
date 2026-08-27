@@ -28,6 +28,7 @@ public sealed class ThemePersistenceTests : RuntimeTestBase
         theme.Colors.MenuBackground = "#FF334455";
         theme.Colors.MenuHoverBackground = "#FF445566";
         theme.Colors.SurfaceOpacity = 0.72;
+        theme.Colors.HoverIntensity = 43.5;
         theme.Colors.CategoriesPanelOpacity = 0.51;
         theme.Colors.ProfilesPanelOpacity = 0.63;
         theme.Colors.ProfileEditorPanelOpacity = 0.84;
@@ -54,6 +55,7 @@ public sealed class ThemePersistenceTests : RuntimeTestBase
         Assert.Equal("#FF334455", saved.Colors.MenuBackground);
         Assert.Equal("#FF445566", saved.Colors.MenuHoverBackground);
         Assert.Equal(0.72, saved.Colors.SurfaceOpacity, 3);
+        Assert.Equal(43.5, saved.Colors.HoverIntensity, 3);
         Assert.Equal(0.51, saved.Colors.CategoriesPanelOpacity, 3);
         Assert.Equal(0.63, saved.Colors.ProfilesPanelOpacity, 3);
         Assert.Equal(0.84, saved.Colors.ProfileEditorPanelOpacity, 3);
@@ -70,6 +72,11 @@ public sealed class ThemePersistenceTests : RuntimeTestBase
         Assert.Equal(legacy.SurfaceOpacity, legacy.ProfilesPanelOpacity);
         Assert.Equal(legacy.SurfaceOpacity, legacy.ProfileEditorPanelOpacity);
         Assert.Equal(legacy.SurfaceOpacity, legacy.ActivityPanelOpacity);
+
+        var olderJson = "{\"Background\":\"#FF102030\",\"Hover\":\"#3372A7FF\"}";
+        var olderTheme = System.Text.Json.JsonSerializer.Deserialize<CustomThemeSettings>(olderJson);
+        Assert.NotNull(olderTheme);
+        Assert.Equal(78, olderTheme!.HoverIntensity);
     }
 
     [Fact]
@@ -175,7 +182,8 @@ public sealed class ThemePersistenceTests : RuntimeTestBase
             VerifyAssetsAndOpacity(app, manager, paths);
             VerifyEditor(app, manager, paths);
             VerifyLiveResourceInheritance(manager);
-            VerifyThemePickerWindows(app, manager);
+            VerifyThemePickerControl(app, manager);
+            VerifyCardSurfaceControl(app, manager);
         });
     }
 
@@ -190,7 +198,7 @@ public sealed class ThemePersistenceTests : RuntimeTestBase
                 "PrimaryButtonDisabledForeground", "SecondaryButtonBackground", "SecondaryButtonForeground",
                 "SecondaryButtonDisabledBackground", "SecondaryButtonDisabledForeground", "MenuBackground",
                 "MenuForeground", "MenuHoverBackground", "MenuHoverForeground", "MenuDisabledForeground",
-                "SelectionForeground", "HoverForeground", "DisabledInputBackground", "DisabledInputForeground",
+                "SelectionForeground", "HoverForeground", "InteractiveHoverBrush", "DisabledInputBackground", "DisabledInputForeground",
                 "CategoriesSurfaceBrush", "ProfilesSurfaceBrush", "ProfileEditorSurfaceBrush", "ActivitySurfaceBrush",
                 "IconPrimary", "IconAccent", "IconMuted" };
             Assert.All(required, key => Assert.IsAssignableFrom<Brush>(app.TryFindResource(key)));
@@ -225,6 +233,9 @@ public sealed class ThemePersistenceTests : RuntimeTestBase
             manager.ApplyTheme($"contrast-{color[3..]}", custom);
             var background = ((SolidColorBrush)app.TryFindResource("AccentBrush")!).Color;
             var foreground = ((SolidColorBrush)app.TryFindResource("AccentForegroundBrush")!).Color;
+            var hover = Assert.IsType<SolidColorBrush>(app.TryFindResource("HoverBrush"));
+            var interactiveHover = Assert.IsType<SolidColorBrush>(app.TryFindResource("InteractiveHoverBrush"));
+            Assert.Equal((byte)Math.Round(hover.Color.A * 0.8 * custom.HoverIntensity / 100d), interactiveHover.Color.A);
             Assert.True(TestHelpers.SemanticContrastIsAccessible(app), $"Semantic contrast matrix: {color}");
             Assert.True(TestHelpers.ContrastRatio(background, foreground) >= 4.5, $"Accent contrast: {color}");
         }
@@ -312,6 +323,13 @@ public sealed class ThemePersistenceTests : RuntimeTestBase
         Assert.Equal("draft-live", manager.CurrentThemeId);
         Assert.Equal(Color.FromRgb(8, 14, 20), ((SolidColorBrush)app.TryFindResource("BackgroundBrush")!).Color);
 
+        var applyCountBeforeHoverChange = liveApplyCount;
+        editor.ViewModel.HoverIntensityPercent = 50;
+        Assert.Equal(50, editor.ViewModel.Settings.HoverIntensity);
+        Assert.True(liveApplyCount > applyCountBeforeHoverChange);
+        var interactiveHover = Assert.IsType<SolidColorBrush>(app.TryFindResource("InteractiveHoverBrush"));
+        Assert.Equal((byte)Math.Round(51 * 0.8 * 0.5), interactiveHover.Color.A);
+
         editor.ViewModel.SurfaceOpacityPercent = 68;
         editor.ViewModel.CategoriesPanelOpacityPercent = 31;
         editor.ViewModel.ActivityPanelOpacityPercent = 44;
@@ -327,6 +345,7 @@ public sealed class ThemePersistenceTests : RuntimeTestBase
         editor.ViewModel.Reset();
         Assert.Equal(name, editor.ViewModel.Name);
         Assert.Equal(extreme.Accent, editor.ViewModel.Settings.Accent);
+        Assert.Equal(78, editor.ViewModel.Settings.HoverIntensity);
         editor.Close();
     }
 
@@ -372,13 +391,21 @@ public sealed class ThemePersistenceTests : RuntimeTestBase
         host.Close();
     }
 
-    private static void VerifyThemePickerWindows(System.Windows.Application app, ThemeManager manager)
+    private static void VerifyThemePickerControl(System.Windows.Application app, ThemeManager manager)
     {
         var events = new List<Color>();
-        var picker = new SwitchBoard.Views.ThemeColorPickerWindow(Colors.White, new TestLocalizationService(),
+        var confirmed = 0;
+        var picker = new SwitchBoard.Views.ThemeColorPickerControl(Colors.White, new TestLocalizationService(),
             color => events.Add(color));
+        picker.Confirmed += (_, _) => confirmed++;
+        var pickerHost = new System.Windows.Window
+        {
+            ShowInTaskbar = false,
+            SizeToContent = System.Windows.SizeToContent.WidthAndHeight,
+            Content = picker
+        };
         var nameWindow = new SwitchBoard.Views.ThemeNameWindow("Theme", [], new TestLocalizationService());
-        picker.Show();
+        pickerHost.Show();
         nameWindow.Show();
         picker.UpdateLayout();
         nameWindow.UpdateLayout();
@@ -388,6 +415,12 @@ public sealed class ThemePersistenceTests : RuntimeTestBase
         AssertBrushColor(nameWindow.Foreground, ((SolidColorBrush)app.TryFindResource("TextPrimaryBrush")!).Color);
         ((System.Windows.Controls.Slider)picker.FindName("Red")).Value = 16;
         Assert.Equal(16, events.LastOrDefault().R);
+        picker.BeginEdit(Colors.White);
+        ((System.Windows.Controls.TextBox)picker.FindName("HexValue")).Text = "#80445566";
+        ((System.Windows.Controls.Button)picker.FindName("ConfirmButton")).RaiseEvent(
+            new System.Windows.RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+        Assert.Equal(1, confirmed);
+        Assert.Equal(Color.FromArgb(128, 68, 85, 102), events.LastOrDefault());
 
         var updated = CustomThemeSettings.CreateDefault();
         updated.Background = "#FF1E1234";
@@ -402,7 +435,49 @@ public sealed class ThemePersistenceTests : RuntimeTestBase
         ((System.Windows.Controls.Button)picker.FindName("CancelButton")).RaiseEvent(
             new System.Windows.RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
         Assert.Equal(Colors.White, events.LastOrDefault());
+        pickerHost.Close();
         nameWindow.Close();
+    }
+
+    private static void VerifyCardSurfaceControl(System.Windows.Application app, ThemeManager manager)
+    {
+        var card = new CardSurfaceControl
+        {
+            Style = Assert.IsType<System.Windows.Style>(app.TryFindResource("CardSurfaceStyle")),
+            Padding = new System.Windows.Thickness(12),
+            Content = new System.Windows.Controls.TextBlock { Text = "Card surface smoke test" }
+        };
+        var host = new System.Windows.Window
+        {
+            ShowActivated = false,
+            ShowInTaskbar = false,
+            Width = 240,
+            Height = 100,
+            Content = card
+        };
+
+        host.Show();
+        host.UpdateLayout();
+        card.ApplyTemplate();
+
+        var templateRoot = System.Windows.Media.VisualTreeHelper.GetChild(card, 0);
+        var backgroundLayer = Assert.IsType<System.Windows.Controls.Border>(
+            System.Windows.Media.VisualTreeHelper.GetChild(templateRoot, 0));
+        Assert.Equal(1, card.Opacity);
+        Assert.Equal(0.24, card.SurfaceOpacity, 3);
+        Assert.Equal(0.24, backgroundLayer.Opacity, 3);
+
+        var draft = CustomThemeSettings.CreateDefault();
+        draft.Background = "#FF101820";
+        draft.Panel = "#FF18232E";
+        draft.Card = "#FF1E6ED2";
+        draft.SurfaceOpacity = 1;
+        manager.ApplyTemporary("card-surface-smoke", draft);
+        host.UpdateLayout();
+
+        AssertBrushColor(((System.Windows.Controls.Border)backgroundLayer).Background, Color.FromRgb(30, 110, 210));
+        Assert.Equal(1, card.Opacity);
+        host.Close();
     }
 
     private static void AssertBrushColor(Brush? brush, Color expected) =>

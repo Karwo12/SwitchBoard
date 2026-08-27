@@ -37,6 +37,9 @@ public sealed class PersistentSessionAction
     public string? ActionName { get; set; }
     public int SortOrder { get; set; }
     public TimeSpan? Timeout { get; set; }
+    // Sessions written before custom restore support did not contain this
+    // property. Previous is the compatible default for their pending entries.
+    public ActionRestoreBehavior RestoreBehavior { get; set; } = ActionRestoreBehavior.RestorePreviousState;
     public JsonObject Parameters { get; set; } = [];
     public JsonObject? PreviousState { get; set; }
     public JsonObject? StateAfter { get; set; }

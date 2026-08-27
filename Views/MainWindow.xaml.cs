@@ -371,13 +371,6 @@ public partial class MainWindow : Window
         e.Handled = true;
     }
 
-    private void HistoryEntryExpand_OnClick(object sender, RoutedEventArgs e)
-    {
-        if (sender is FrameworkElement { DataContext: ProfileExecutionViewModel entry })
-            entry.IsExpanded = !entry.IsExpanded;
-        e.Handled = true;
-    }
-
     private void HistoryAction_OnMouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
         if (sender is not FrameworkElement { DataContext: ProfileExecutionActionViewModel entry } ||

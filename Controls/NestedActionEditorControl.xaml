@@ -6,17 +6,17 @@
              xmlns:editors="clr-namespace:SwitchBoard.Controls.ActionEditors"
              DataContext="{Binding Action, ElementName=Root}">
     <Grid Margin="{DynamicResource NestedActionMargin}">
-        <Border CornerRadius="7">
-            <Border.Style>
-                <Style TargetType="Border" BasedOn="{StaticResource ActionCardSurfaceStyle}">
+        <controls:CardSurfaceControl CornerRadius="7">
+            <controls:CardSurfaceControl.Style>
+                <Style TargetType="{x:Type controls:CardSurfaceControl}" BasedOn="{StaticResource ActionCardSurfaceStyle}">
                     <Style.Triggers>
                         <DataTrigger Binding="{Binding IsComment}" Value="True">
                             <Setter Property="Visibility" Value="Collapsed" />
                         </DataTrigger>
                     </Style.Triggers>
                 </Style>
-            </Border.Style>
-        </Border>
+            </controls:CardSurfaceControl.Style>
+        </controls:CardSurfaceControl>
         <Border Padding="{DynamicResource NestedActionPadding}" Background="Transparent" CornerRadius="7">
             <Border.Style>
                 <Style TargetType="Border">

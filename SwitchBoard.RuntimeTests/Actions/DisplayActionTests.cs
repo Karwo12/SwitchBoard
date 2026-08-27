@@ -135,6 +135,66 @@ public sealed class DisplayActionTests : RuntimeTestBase
         Assert.Equal(previous, manager.State);
     }
 
+    [Fact]
+    [Trait("Category", "Unit")]
+    public async Task DisplayConfigure_CustomRestore_AppliesTheSelectedModeInsteadOfTheCapturedMode()
+    {
+        var previous = SimulatedPrevious();
+        var manager = new TestDisplayManager(previous)
+        {
+            Displays =
+            [
+                new DisplayCandidate("DISPLAY-TEST", "MONITOR-TEST", "Test monitor", 1,
+                    previous.Width, previous.Height, previous.RefreshRate, true,
+                    [
+                        new DisplayModeCandidate(1920, 1080, 60, 32),
+                        new DisplayModeCandidate(2560, 1440, 144, 32),
+                        new DisplayModeCandidate(1280, 720, 120, 32)
+                    ])
+            ]
+        };
+        var action = SimulatedTarget();
+        action.RestoreBehavior = ActionRestoreBehavior.RestoreCustomState;
+        action.Parameters[ActionParameterNames.RestoreDisplayDeviceName] = "DISPLAY-TEST";
+        action.Parameters[ActionParameterNames.RestoreDisplayDeviceId] = "MONITOR-TEST";
+        action.Parameters[ActionParameterNames.RestoreDisplayName] = "Test monitor";
+        action.Parameters[ActionParameterNames.RestoreDisplayWidth] = 1280;
+        action.Parameters[ActionParameterNames.RestoreDisplayHeight] = 720;
+        action.Parameters[ActionParameterNames.RestoreDisplayRefreshRate] = 120;
+        var handler = new DisplayConfigureActionHandler(manager, new TestDisplayConfirmationService(true));
+        var captured = await handler.CaptureStateAsync(action, new(Guid.NewGuid(), Guid.NewGuid()), CancellationToken.None);
+
+        await handler.ExecuteAsync(action, new(Guid.NewGuid(), Guid.NewGuid()), CancellationToken.None);
+        var restored = await handler.RestoreAsync(action, captured!, new(Guid.NewGuid(), Guid.NewGuid()), CancellationToken.None);
+
+        Assert.True(restored.IsSuccessful);
+        Assert.Equal(1280, manager.State.Width);
+        Assert.Equal(720, manager.State.Height);
+        Assert.Equal(120, manager.State.RefreshRate);
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public async Task DisplayConfigure_CustomRestore_RejectsAnUnavailableMode()
+    {
+        var manager = new TestDisplayManager(SimulatedPrevious())
+        {
+            Displays =
+            [new DisplayCandidate("DISPLAY-TEST", "MONITOR-TEST", "Test monitor", 1,
+                1920, 1080, 60, true, [new DisplayModeCandidate(1920, 1080, 60, 32)])]
+        };
+        var action = SimulatedTarget();
+        action.RestoreBehavior = ActionRestoreBehavior.RestoreCustomState;
+        action.Parameters[ActionParameterNames.RestoreDisplayDeviceId] = "MONITOR-TEST";
+        action.Parameters[ActionParameterNames.RestoreDisplayWidth] = 2560;
+        action.Parameters[ActionParameterNames.RestoreDisplayHeight] = 1440;
+        action.Parameters[ActionParameterNames.RestoreDisplayRefreshRate] = 165;
+        var handler = new DisplayConfigureActionHandler(manager, new TestDisplayConfirmationService(true));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => handler.RestoreAsync(action, [],
+            new(Guid.NewGuid(), Guid.NewGuid()), CancellationToken.None));
+    }
+
     [Trait("Category", "Integration")]
     [Trait("Platform", "Windows")]
     [EnvironmentFact("DisplayApply")]

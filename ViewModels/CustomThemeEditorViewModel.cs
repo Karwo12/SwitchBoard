@@ -91,6 +91,18 @@ public sealed class CustomThemeEditorViewModel : ObservableObject
             ApplyDraft();
         }
     }
+    public double HoverIntensityPercent
+    {
+        get => _settings.HoverIntensity;
+        set
+        {
+            var intensity = Math.Clamp(value, 0, 100);
+            if (Math.Abs(_settings.HoverIntensity - intensity) < 0.001) return;
+            _settings.HoverIntensity = intensity;
+            OnPropertyChanged();
+            ApplyDraft();
+        }
+    }
     public double CategoriesPanelOpacityPercent
     {
         get => _settings.CategoriesPanelOpacity * 100;
@@ -147,6 +159,7 @@ public sealed class CustomThemeEditorViewModel : ObservableObject
         OnPropertyChanged(nameof(BackgroundFileName));
         OnPropertyChanged(nameof(HasBackground));
         OnPropertyChanged(nameof(SurfaceOpacityPercent));
+        OnPropertyChanged(nameof(HoverIntensityPercent));
         OnPropertyChanged(nameof(CategoriesPanelOpacityPercent));
         OnPropertyChanged(nameof(ProfilesPanelOpacityPercent));
         OnPropertyChanged(nameof(ProfileEditorPanelOpacityPercent));

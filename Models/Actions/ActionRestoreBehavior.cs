@@ -6,5 +6,6 @@ public enum ActionRestoreBehavior
     RestorePreviousState,
     CloseIfStartedBySwitchBoard,
     RestartIfWasRunning,
-    RunRestoreScript
+    RunRestoreScript,
+    RestoreCustomState
 }

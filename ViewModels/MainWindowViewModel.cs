@@ -1550,6 +1550,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
             OnPropertyChanged(nameof(AllProfiles));
             RefreshProfileGroups();
             SelectedProfile = profile;
+            _ = HydrateDisplayActionsAsync();
             MarkDirty(_localizationService.GetString("Status.ProfileImported"));
         }
         catch (Exception exception)
@@ -1605,6 +1606,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(AllProfiles));
         RefreshProfileGroups();
         SelectedProfile = viewModel;
+        _ = HydrateDisplayActionsAsync();
         MarkDirty(_localizationService.GetString("Status.ProfileDuplicated"));
     }
 
@@ -1651,6 +1653,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         action.IsExpanded = true;
         SelectedProfile.Actions.Add(action);
         SelectedAction = action;
+        _ = HydrateDisplayActionsAsync();
         NotifyActionCommandStates();
         MarkDirty(_localizationService.GetString("Status.ActionAdded"));
     }
@@ -1710,6 +1713,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         foreach (var existing in SelectedProfile.Actions) existing.IsExpanded = false;
         SelectedProfile.Actions.Insert(index + 1, copy);
         SelectedAction = copy;
+        _ = HydrateDisplayActionsAsync();
         MarkDirty(_localizationService.GetString("Status.ActionDuplicated"));
     }
 
@@ -2689,7 +2693,9 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
             if (preflight.RequiresAdministrator && !_dialogService.Confirm(
                     _localizationService.GetString("Dialog.AdminRequiredTitle"),
                     _localizationService.Format("Dialog.AdminRequiredMessage",
-                        string.Join(Environment.NewLine, preflight.AdministratorActions))))
+                        Environment.NewLine,
+                        string.Join(Environment.NewLine,
+                            preflight.AdministratorActions.Select(actionName => $"\u2022 {actionName}")))))
             {
                 StatusMessage = _localizationService.GetString("Status.RunAdminDeclined");
                 TraceRunStage("RUN_CANCELLED", profileViewModel, "Reason=AdministratorConfirmationDeclined");
@@ -3279,9 +3285,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
     private async Task HydrateDisplayActionsAsync()
     {
         var actions = _allProfiles.SelectMany(profile => profile.Actions)
-            .Where(action => action.Type == ActionTypeIds.DisplayConfigure &&
-                             (!string.IsNullOrWhiteSpace(action.DisplayDeviceId) ||
-                              !string.IsNullOrWhiteSpace(action.DisplayDeviceName)))
+            .Where(action => action.Type == ActionTypeIds.DisplayConfigure)
             .ToList();
         if (actions.Count == 0) return;
         try
@@ -3289,6 +3293,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
             var displays = await _displayManager.GetDisplaysAsync();
             foreach (var action in actions)
             {
+                action.ApplyAvailableRestoreDisplays(displays, notifyChanges: false);
                 var display = displays.FirstOrDefault(candidate =>
                                   !string.IsNullOrWhiteSpace(action.DisplayDeviceId) &&
                                   string.Equals(candidate.DeviceId, action.DisplayDeviceId, StringComparison.OrdinalIgnoreCase))
@@ -3679,20 +3684,12 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
 
     private void NormalizeThemeOrder()
     {
-        var validIds = ThemeOptions.Select(option => option.Id)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var order = new List<string>(ThemeOptions.Count);
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var id in _userSettings.ThemeOrder ?? [])
-        {
-            if (!string.IsNullOrWhiteSpace(id) && validIds.Contains(id) && seen.Add(id))
-                order.Add(id);
-        }
-        foreach (var option in ThemeOptions)
-        {
-            if (seen.Add(option.Id)) order.Add(option.Id);
-        }
-        _userSettings.ThemeOrder = order;
+        // ThemeOptions is the live, user-visible order. Reordering a theme moves
+        // this collection first; rebuilding from the previous settings order here
+        // would silently undo the move before it is persisted.
+        _userSettings.ThemeOrder = ThemeOptions
+            .Select(option => option.Id)
+            .ToList();
     }
 
     private CustomThemeDefinition? FindCustomTheme(string id) => _userSettings.CustomThemes.FirstOrDefault(theme =>
@@ -4173,6 +4170,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
             : FindCategory(restoredProfile.CategoryId);
         SelectedProfile = restoredProfile ?? Profiles.FirstOrDefault() ?? RootProfiles.FirstOrDefault();
         _suppressUndoTracking = false;
+        _ = HydrateDisplayActionsAsync();
         _undoBaseline = BuildCatalogSnapshot();
         HasUnsavedChanges = HasCatalogChanges();
         StatusMessage = _localizationService.GetString("Common.Undo");
@@ -4213,6 +4211,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
             : FindCategory(restoredProfile.CategoryId);
         SelectedProfile = restoredProfile ?? Profiles.FirstOrDefault() ?? RootProfiles.FirstOrDefault();
         _suppressUndoTracking = false;
+        _ = HydrateDisplayActionsAsync();
         _undoBaseline = BuildCatalogSnapshot();
         HasUnsavedChanges = HasCatalogChanges();
         StatusMessage = _localizationService.GetString(statusKey);

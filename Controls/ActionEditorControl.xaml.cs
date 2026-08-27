@@ -114,7 +114,15 @@ public partial class ActionEditorControl : UserControl
     private void ActionHeader_OnClick(object sender, RoutedEventArgs e)
     {
         if (sender is not Button header) return;
+        ClearActionEditorFocus();
         Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () => KeepHeaderVisible(header));
+    }
+
+    private void ClearActionEditorFocus()
+    {
+        // A collapsed editor can retain keyboard focus even after its layout slot is gone.
+        // Clear it so the focused ComboBox/TextBox chrome cannot remain visible on the card.
+        Keyboard.ClearFocus();
     }
 
     private void KeepHeaderVisible(FrameworkElement header)

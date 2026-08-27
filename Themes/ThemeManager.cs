@@ -8,6 +8,8 @@ namespace SwitchBoard.Themes;
 public sealed class ThemeManager(AppDataPaths paths) : IThemeManager
 {
     private const string ThemeMarker = "SwitchBoard.Theme.Dictionary";
+    private const double DefaultHoverIntensity = 78d;
+    private const double MaxInteractiveHoverScale = 0.8d;
     private readonly IReadOnlyList<ThemeDefinition> _availableThemes =
     [
         Create(ThemeIds.Graphite, "Theme.GraphiteGlass", "GraphiteTheme.xaml"),
@@ -82,6 +84,7 @@ public sealed class ThemeManager(AppDataPaths paths) : IThemeManager
             SecondaryText = Read("TextSecondaryBrush", "#FFB5BDCA"),
             Accent = Read("AccentBrush", "#FF72A7FF"),
             Hover = Read("HoverBrush", "#3372A7FF"),
+            HoverIntensity = DefaultHoverIntensity,
             Selection = Read("SelectedBrush", "#5572A7FF"),
             PrimaryButtonBackground = Read("PrimaryButtonBackground", "#FF72A7FF"),
             PrimaryButtonForeground = "auto",
@@ -175,12 +178,13 @@ public sealed class ThemeManager(AppDataPaths paths) : IThemeManager
             ["IconMuted"] = Brush(WithAlpha(secondaryText, 0.56)),
             ["ShadowColor"] = Color.FromArgb(190, 0, 0, 0)
         };
-        CompleteSemanticContrastContract(dictionary, background);
+        CompleteSemanticContrastContract(dictionary, background, settings.HoverIntensity);
         CompleteBackgroundContract(dictionary, settings);
         return dictionary;
     }
 
-    private static void CompleteSemanticContrastContract(ResourceDictionary dictionary, Color? surfaceBehind = null)
+    private static void CompleteSemanticContrastContract(ResourceDictionary dictionary, Color? surfaceBehind = null,
+        double hoverIntensity = DefaultHoverIntensity)
     {
         var applicationBackground = surfaceBehind ?? RepresentativeColor(
             dictionary["BackgroundBrush"] as Brush, Colors.Black);
@@ -214,6 +218,14 @@ public sealed class ThemeManager(AppDataPaths paths) : IThemeManager
         Set("PrimaryButtonDisabledBackground", "PrimaryButtonDisabledForeground");
         Set("HoverBrush", "HoverForeground");
         Set("SelectedBrush", "SelectionForeground");
+
+        // Interactive cards and rows use one shared hover. Keep the source brush
+        // (including gradients and hue), but map the normalized editor value to a
+        // capped alpha scale so 100% cannot turn into a Selected-like surface.
+        var hover = dictionary["HoverBrush"] as Brush ?? Brush(Color.FromArgb(0, 255, 255, 255));
+        var scale = MaxInteractiveHoverScale * Math.Clamp(hoverIntensity, 0, 100) / 100d;
+        dictionary["InteractiveHoverBrush"] = TransformBrush(hover,
+            color => WithAlpha(color, color.A / 255d * scale));
 
         var secondary = dictionary["ElevatedSurfaceBrush"] as Brush;
         secondary ??= Brush(applicationBackground);

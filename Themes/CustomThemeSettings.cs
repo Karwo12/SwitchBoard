@@ -25,6 +25,9 @@ public sealed class CustomThemeSettings
     public string MenuForeground { get; set; } = "auto";
     public string MenuHoverBackground { get; set; } = "auto";
     public double SurfaceOpacity { get; set; } = 1.0;
+    // The slider is normalized to 0-100. ThemeManager maps it to a capped
+    // alpha scale so the strongest hover remains weaker than selection.
+    public double HoverIntensity { get; set; } = 78.0;
     public double CategoriesPanelOpacity { get; set; } = 1.0;
     public double ProfilesPanelOpacity { get; set; } = 1.0;
     public double ProfileEditorPanelOpacity { get; set; } = 1.0;
@@ -62,6 +65,7 @@ public sealed class CustomThemeSettings
         if (string.IsNullOrWhiteSpace(MenuForeground)) MenuForeground = "auto";
         if (string.IsNullOrWhiteSpace(MenuHoverBackground)) MenuHoverBackground = "auto";
         SurfaceOpacity = Math.Clamp(SurfaceOpacity, 0, 1);
+        HoverIntensity = Math.Clamp(HoverIntensity, 0, 100);
         CategoriesPanelOpacity = Math.Clamp(CategoriesPanelOpacity, 0, 1);
         ProfilesPanelOpacity = Math.Clamp(ProfilesPanelOpacity, 0, 1);
         ProfileEditorPanelOpacity = Math.Clamp(ProfileEditorPanelOpacity, 0, 1);
@@ -100,6 +104,7 @@ public sealed class CustomThemeSettings
             MenuForeground = MenuForeground,
             MenuHoverBackground = MenuHoverBackground,
             SurfaceOpacity = SurfaceOpacity,
+            HoverIntensity = HoverIntensity,
             CategoriesPanelOpacity = CategoriesPanelOpacity,
             ProfilesPanelOpacity = ProfilesPanelOpacity,
             ProfileEditorPanelOpacity = ProfileEditorPanelOpacity,

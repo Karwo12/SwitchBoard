@@ -77,6 +77,47 @@ public sealed class ProfileRunRegressionTests
 
     [Fact]
     [Trait("Category", "Integration")]
+    public async Task AdministratorConfirmation_FormatsMessageAndStartsProfile()
+    {
+        using var context = new RuntimeTestContext();
+        var localization = new AdminPromptLocalizationService();
+        var dialogs = new TestDialogService { ConfirmResult = true };
+        var handler = new CountingHandler(ActionTypeIds.ServiceSetState);
+        var registry = new ActionRegistry([handler]);
+        var profile = new ProfileDefinition
+        {
+            Name = "Administrator profile",
+            Actions =
+            [
+                new ActionDefinition
+                {
+                    Name = "Windows service",
+                    Type = ActionTypeIds.ServiceSetState,
+                    Parameters = new JsonObject
+                    {
+                        [ActionParameterNames.ServiceName] = "ExampleService",
+                        [ActionParameterNames.DesiredState] = ServiceDesiredStateIds.Stopped,
+                        [ActionParameterNames.ServiceStartupType] = ServiceStartupTypeIds.Unchanged
+                    }
+                }
+            ]
+        };
+        using var viewModel = CreateMainViewModel([profile],
+            new ProfileRunner(registry, context.SessionRepository), registry, context,
+            localization: localization, dialogService: dialogs);
+
+        await viewModel.RunProfileFromTrayAsync(profile.Id);
+
+        var confirmation = Assert.Single(dialogs.Confirmations);
+        Assert.Equal("Administrator permissions may be required", confirmation.Title);
+        Assert.Equal("The following actions may require administrator permissions:" + Environment.NewLine +
+                     "\u2022 Windows service", confirmation.Message);
+        Assert.Equal(1, handler.ExecutionCount);
+        Assert.Equal(ExecutionSessionStatus.Completed, viewModel.LastExecutionSession!.Status);
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
     public async Task DuplicateProfileCommand_CreatesIndependentRunnableProfile()
     {
         using var context = new RuntimeTestContext();
@@ -524,13 +565,14 @@ public sealed class ProfileRunRegressionTests
     }
 
     private static MainWindowViewModel CreateMainViewModel(IReadOnlyList<ProfileDefinition> profiles,
-        ProfileRunner runner, IActionRegistry registry, RuntimeTestContext context, IAppLogger? logger = null)
+        ProfileRunner runner, IActionRegistry registry, RuntimeTestContext context, IAppLogger? logger = null,
+        ILocalizationService? localization = null, IUserDialogService? dialogService = null)
     {
         var category = new CategoryDefinition { Name = "Profiles" };
         foreach (var profile in profiles) profile.CategoryId = category.Id;
         var catalog = new SwitchBoardCatalog { Categories = [category], Profiles = profiles.ToList() };
-        return new MainWindowViewModel(new TestCatalogService(), new TestDialogService(), catalog,
-            new TestThemeManager(), new TestLocalizationService(), new TestSettingsRepository(),
+        return new MainWindowViewModel(new TestCatalogService(), dialogService ?? new TestDialogService(), catalog,
+            new TestThemeManager(), localization ?? new TestLocalizationService(), new TestSettingsRepository(),
             new UserSettings
             {
                 ThemeId = "graphite", LanguageId = "en", LastSelectedProfileId = profiles[0].Id
@@ -602,5 +644,20 @@ public sealed class ProfileRunRegressionTests
         public void Warning(string area, string message) => Messages.Add($"WARN {area}: {message}");
         public void Error(string area, Exception exception, string? message = null) =>
             Messages.Add($"ERROR {area}: {message} {exception.Message}");
+    }
+
+    private sealed class AdminPromptLocalizationService : ILocalizationService
+    {
+        public IReadOnlyList<LanguageDefinition> AvailableLanguages =>
+            [new("en", "English", new Uri("Localization/Strings.en.xaml", UriKind.Relative))];
+        public string CurrentLanguageId => "en";
+        public string DetectSystemLanguage() => "en";
+        public string ApplyLanguage(string? languageId) => languageId ?? "en";
+        public string GetString(string resourceKey) => resourceKey == "Dialog.AdminRequiredTitle"
+            ? "Administrator permissions may be required"
+            : resourceKey;
+        public string Format(string resourceKey, params object?[] arguments) => resourceKey == "Dialog.AdminRequiredMessage"
+            ? string.Format("The following actions may require administrator permissions:{0}{1}", arguments)
+            : $"{resourceKey}: {string.Join(", ", arguments)}";
     }
 }

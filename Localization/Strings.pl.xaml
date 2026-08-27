@@ -151,6 +151,8 @@
     <system:String x:Key="RestoreBehavior.RestartProcess">Uruchom ponownie, jeśli wcześniej działał</system:String>
     <system:String x:Key="RestoreBehavior.PreviousPlan">Przywróć poprzedni plan</system:String>
     <system:String x:Key="RestoreBehavior.PreviousDisplay">Przywróć poprzednie ustawienia ekranu</system:String>
+    <system:String x:Key="RestoreBehavior.Custom">Ustaw wybrane ustawienia ekranu</system:String>
+    <system:String x:Key="RestoreDisplay.Display">Ekran</system:String>
     <system:String x:Key="RestoreBehavior.RestoreScript">Uruchom skrypt przywracający</system:String>
     <system:String x:Key="RestoreScript.Help">Skrypty nie mają automatycznego stanu do przywrócenia. Możesz opcjonalnie wskazać osobny skrypt cofający zmiany.</system:String>
     <system:String x:Key="RestoreScript.Path">Ścieżka skryptu przywracającego</system:String>
@@ -161,6 +163,7 @@
     <system:String x:Key="Validation.ServiceName">Wybierz usługę Windows przed uruchomieniem tego profilu.</system:String>
     <system:String x:Key="Validation.PowerPlan">Wybierz poprawny plan zasilania przed uruchomieniem tego profilu.</system:String>
     <system:String x:Key="Validation.Display">Wybierz monitor, rozdzielczość i częstotliwość odświeżania.</system:String>
+    <system:String x:Key="Validation.CustomDisplayRestore">Wybierz istniejący ekran, rozdzielczość i częstotliwość odświeżania do przywrócenia.</system:String>
     <system:String x:Key="Validation.ScriptPath">Wybierz skrypt przed uruchomieniem tego profilu.</system:String>
     <system:String x:Key="Validation.ProgramRestorePath">Zamykanie przy Restore wymaga pełnej ścieżki do pliku EXE.</system:String>
     <system:String x:Key="Validation.ProgramRestartPath">Ponowne uruchomienie programu wymaga pełnej ścieżki do pliku EXE.</system:String>
@@ -387,6 +390,8 @@
     <system:String x:Key="CustomTheme.Color.MenuBackground">Tło menu</system:String>
     <system:String x:Key="CustomTheme.Color.MenuHover">Wskazanie w menu</system:String>
     <system:String x:Key="CustomTheme.AutomaticForegroundHint">Kolory tekstu przycisków i menu są dobierane automatycznie, aby zachować czytelny kontrast.</system:String>
+    <system:String x:Key="CustomTheme.HoverIntensity">Intensywność wskazania</system:String>
+    <system:String x:Key="CustomTheme.HoverIntensityHint">0% oznacza prawie niewidoczny efekt. 100% daje wyraźne wskazanie, ale nadal słabsze niż zaznaczenie.</system:String>
     <system:String x:Key="CustomTheme.SurfaceOpacity">Przezroczystość paneli</system:String>
     <system:String x:Key="CustomTheme.SurfaceOpacityHint">100% oznacza nieprzezroczyste panele. Suwak ustawia też cztery główne bloki, które możesz dostroić osobno poniżej. Nie zmienia tła obrazu, tekstu, ikon ani obramowań.</system:String>
     <system:String x:Key="CustomTheme.CategoriesOpacity">Blok kategorii</system:String>
