@@ -5,7 +5,9 @@ using SwitchBoard.Localization;
 using SwitchBoard.Services.Activity;
 using SwitchBoard.Services.Logging;
 using SwitchBoard.Services.Persistence;
+using SwitchBoard.Services.Profiles;
 using System.Diagnostics;
+using System.IO;
 
 namespace SwitchBoard.Services.Execution;
 
@@ -39,8 +41,14 @@ public sealed class ProfileRunner
         ExecutionOrigin origin = ExecutionOrigin.ProfileRun)
     {
         ArgumentNullException.ThrowIfNull(profile);
+        _logger?.Info("ProfileRun",
+            $"EXECUTOR_ENTER ProfileId={profile.Id} ProfileName={SanitizeLogValue(profile.Name)} Origin={origin}");
         if (Interlocked.CompareExchange(ref _isRunning, 1, 0) != 0)
+        {
+            _logger?.Warning("ProfileRun",
+                $"EXECUTOR_REJECTED ProfileId={profile.Id} Reason=ExecutionGateBusy");
             throw new InvalidOperationException("Another profile is already running.");
+        }
 
         var session = new ExecutionSession { ProfileId = profile.Id, Origin = origin, Status = ExecutionSessionStatus.Running };
         var persistent = new PersistentExecutionSession
@@ -55,7 +63,20 @@ public sealed class ProfileRunner
             profile.Actions.Count(action => action.IsEnabled && !IsOrganizationalAction(action)));
         try
         {
+            var validation = ProfileRuntimeValidator.Validate(profile);
+            foreach (var warning in validation.Warnings)
+                _logger?.Warning("ProfileRun", $"RUNTIME_VALIDATION_WARNING ProfileId={profile.Id} {SanitizeLogValue(warning)}");
+            if (!validation.IsValid)
+            {
+                var details = string.Join(" | ", validation.Errors);
+                _logger?.Warning("ProfileRun",
+                    $"EXECUTOR_REJECTED ProfileId={profile.Id} Reason=RuntimeValidation Details={SanitizeLogValue(details)}");
+                throw new InvalidDataException(details);
+            }
+            _logger?.Info("ProfileRun",
+                $"EXECUTOR_START ProfileId={profile.Id} Actions={validation.Actions.Count} EnabledActions={state.Total}");
             await _sessionRepository.SaveAsync(persistent, cancellationToken);
+            _logger?.Info("ProfileRun", $"SESSION_PREPARED ProfileId={profile.Id} SessionId={session.Id}");
             persistent.Status = PersistentSessionStatus.Executing;
             await _sessionRepository.SaveAsync(persistent, cancellationToken);
             var result = await ExecuteProfileAsync(profile, null, null, [], state, cancellationToken);
@@ -66,18 +87,25 @@ public sealed class ProfileRunner
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
+            _logger?.Info("ProfileRun", $"EXECUTION_CANCELLED ProfileId={profile.Id} SessionId={session.Id}");
             var running = persistent.Actions.LastOrDefault(item =>
                 item.ExecutionStatus == PersistentActionExecutionStatus.Running);
             if (running is not null) running.ExecutionStatus = PersistentActionExecutionStatus.Cancelled;
             return await FinishAsync(session, persistent, ExecutionSessionStatus.Cancelled, CancellationToken.None, state);
         }
-        catch
+        catch (Exception exception)
         {
+            _logger?.Error("ProfileRun", exception,
+                $"EXECUTOR_FAILED ProfileId={profile.Id} SessionId={session.Id}");
             persistent.Status = PersistentSessionStatus.Failed;
             await SaveStateAsync(state, CancellationToken.None);
             throw;
         }
-        finally { Volatile.Write(ref _isRunning, 0); }
+        finally
+        {
+            Volatile.Write(ref _isRunning, 0);
+            _logger?.Info("ProfileRun", $"EXECUTION_GATE_RELEASED ProfileId={profile.Id} SessionId={session.Id}");
+        }
     }
 
     private async Task<ActionExecutionResult> ExecuteProfileAsync(ProfileDefinition profile, Guid? parentActionId,
@@ -86,10 +114,15 @@ public sealed class ProfileRunner
         if (activeStack.Contains(profile.Id))
         {
             var cycle = string.Join(" -> ", activeStack.Append(profile.Id));
+            _logger?.Warning("ProfileRun", $"PROFILE_REJECTED ProfileId={profile.Id} Reason=Cycle Path={cycle}");
             return ActionExecutionResult.Failure($"Profile cycle detected: {cycle}", false);
         }
         if (activeStack.Count >= MaximumNestingDepth)
+        {
+            _logger?.Warning("ProfileRun",
+                $"PROFILE_REJECTED ProfileId={profile.Id} Reason=MaximumNestingDepth Depth={activeStack.Count}");
             return ActionExecutionResult.Failure($"Maximum automation nesting depth ({MaximumNestingDepth}) was exceeded.", false);
+        }
 
         _activity?.Record(new PersistentActivityRecord
         {
@@ -116,7 +149,12 @@ public sealed class ProfileRunner
         foreach (var action in sourceActions.OrderBy(action => action.SortOrder))
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (IsOrganizationalAction(action)) continue;
+            if (IsOrganizationalAction(action))
+            {
+                _logger?.Info("ProfileRun",
+                    $"ACTION_SKIPPED ActionId={action.Id} ProfileId={profileId} Reason=OrganizationalAction");
+                continue;
+            }
             actionIndex++;
             LogActionBefore(actionIndex, action, profileId);
             var saved = CreatePersistentAction(action, profileId, parentActionId, branch,
@@ -135,6 +173,8 @@ public sealed class ProfileRunner
 
             if (!action.IsEnabled)
             {
+                _logger?.Info("ProfileRun",
+                    $"ACTION_SKIPPED Index={actionIndex} ActionId={action.Id} ProfileId={profileId} Reason=Disabled");
                 journal.Status = ActionJournalStatus.Skipped;
                 journal.CompletedAt = DateTimeOffset.UtcNow;
                 saved.ExecutionStatus = PersistentActionExecutionStatus.Skipped;
@@ -144,6 +184,10 @@ public sealed class ProfileRunner
             }
 
             state.Current++;
+            if (state.Current == 1)
+                _logger?.Info("ProfileRun",
+                    $"ACTION_1_START Index={actionIndex} ActionTypeId={SanitizeLogValue(action.Type)} " +
+                    $"ActionId={action.Id} ProfileId={profileId} Name={SanitizeLogValue(ActionName(action))}");
             journal.Status = ActionJournalStatus.Running;
             state.Progress?.Report(new(state.Current, Math.Max(state.Total, state.Current), action, journal));
             _activity?.Add(ActivityLevel.Info,
@@ -160,7 +204,11 @@ public sealed class ProfileRunner
                 await SaveStateAsync(state, cancellationToken);
                 state.Progress?.Report(new(state.Current, Math.Max(state.Total, state.Current), action, journal));
                 if (action.FailurePolicy != ActionFailurePolicy.Continue)
+                {
+                    _logger?.Warning("ProfileRun",
+                        $"EXECUTION_STOP ActionId={action.Id} ProfileId={profileId} Reason=UnsupportedActionType");
                     return ActionExecutionResult.Failure(journal.ErrorMessage!, false);
+                }
                 continue;
             }
 
@@ -191,7 +239,11 @@ public sealed class ProfileRunner
                         captureFailure, saved, state, journal);
                     await SaveStateAsync(state, cancellationToken);
                     if (action.FailurePolicy != ActionFailurePolicy.Continue)
+                    {
+                        _logger?.Warning("ProfileRun",
+                            $"EXECUTION_STOP ActionId={action.Id} ProfileId={profileId} Reason=CaptureStateFailure");
                         return ActionExecutionResult.Failure(journal.ErrorMessage!, false);
+                    }
                     continue;
                 }
             }
@@ -241,7 +293,12 @@ public sealed class ProfileRunner
             if (!result.IsSuccessful) localFailures = true;
             await SaveStateAsync(state, cancellationToken);
             state.Progress?.Report(new(state.Current, Math.Max(state.Total, state.Current), action, journal));
-            if (!result.IsSuccessful && action.FailurePolicy != ActionFailurePolicy.Continue) return result;
+            if (!result.IsSuccessful && action.FailurePolicy != ActionFailurePolicy.Continue)
+            {
+                _logger?.Warning("ProfileRun",
+                    $"EXECUTION_STOP ActionId={action.Id} ProfileId={profileId} Reason=ActionFailurePolicyStop");
+                return result;
+            }
         }
         return propagateFailures && localFailures
             ? ActionExecutionResult.Failure("One or more nested actions failed.", false)

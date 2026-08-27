@@ -48,6 +48,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
     private readonly ISettingsRepository _settingsRepository;
     private readonly UserSettings _userSettings;
     private readonly ProfileRunner _profileRunner;
+    private readonly IAppLogger? _logger;
     private readonly ProfileRestoreRunner _profileRestoreRunner;
     private readonly IExecutionSessionRepository _sessionRepository;
     private readonly IProfileCompletionBehavior _profileCompletionBehavior;
@@ -73,6 +74,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
     private int _currentExecutionActionNumber;
     private int _totalExecutionActions;
     private Guid? _currentExecutionActionId;
+    private Guid? _currentExecutionProfileId;
     private string _currentExecutionActionName = string.Empty;
     private string _executionStatusResourceKey = "Execution.Status.Pending";
     private string _executionStatusText = string.Empty;
@@ -125,6 +127,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
     private string _preflightSummary = string.Empty;
     private string _updateStatusText = string.Empty;
     private Uri? _latestReleaseUri;
+    private string? _lastRunCanExecuteDiagnostic;
 
     public MainWindowViewModel(
         IProfileCatalogService catalogService,
@@ -145,7 +148,8 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         ThemeExchangeService? themeExchangeService = null,
         AppDataPaths? appDataPaths = null,
         IStartupRegistrationService? startupRegistrationService = null,
-        IUpdateService? updateService = null)
+        IUpdateService? updateService = null,
+        IAppLogger? logger = null)
     {
         _catalogService = catalogService;
         _dialogService = dialogService;
@@ -154,6 +158,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         _settingsRepository = settingsRepository;
         _userSettings = userSettings;
         _profileRunner = profileRunner;
+        _logger = logger;
         _profileRestoreRunner = profileRestoreRunner;
         _sessionRepository = sessionRepository;
         _profileCompletionBehavior = profileCompletionBehavior;
@@ -194,10 +199,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         ActionPickerView.GroupDescriptions.Add(new PropertyGroupDescription(nameof(ActionTypeOption.Category)));
         _selectedActionType = AvailableActionTypes[0];
 
-        ThemeOptions = new ObservableCollection<ThemeOptionViewModel>(
-            themeManager.AvailableThemes.Select(theme => new ThemeOptionViewModel(theme, localizationService)));
-        foreach (var customTheme in userSettings.CustomThemes)
-            ThemeOptions.Add(new ThemeOptionViewModel(customTheme, localizationService));
+        ThemeOptions = new ObservableCollection<ThemeOptionViewModel>(CreateOrderedThemeOptions());
         _selectedThemeOption = ThemeOptions.FirstOrDefault(option =>
             string.Equals(option.Id, themeManager.CurrentThemeId, StringComparison.OrdinalIgnoreCase)) ?? ThemeOptions[0];
         UpdateActiveThemeMarker();
@@ -743,14 +745,22 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
     {
         get
         {
-            if (SelectedProfile is null) return string.Empty;
-            var invalid = SelectedProfile.Actions.Count(action => action.IsEnabled && !action.IsComment && !action.IsValid);
-            if (invalid > 0) return _localizationService.Format("Validation.RunBlocked", invalid);
-            if (!ProfileReferencesAreValid(SelectedProfile.Id))
-                return _localizationService.GetString("Validation.ProfileReferenceCycle");
-            if (IsProfileRunning || IsRestoreRunning || IsSaving)
-                return _localizationService.GetString("Validation.RunBusy");
-            return string.Empty;
+            try
+            {
+                if (SelectedProfile is null) return string.Empty;
+                var invalid = SelectedProfile.Actions.Count(action => action.IsEnabled && !action.IsComment && !action.IsValid);
+                if (invalid > 0) return _localizationService.Format("Validation.RunBlocked", invalid);
+                if (!ProfileReferencesAreValid(SelectedProfile.Id))
+                    return _localizationService.GetString("Validation.ProfileReferenceCycle");
+                if (IsProfileRunning || IsRestoreRunning || IsSaving || _profileRunner.IsRunning)
+                    return _localizationService.GetString("Validation.RunBusy");
+                return string.Empty;
+            }
+            catch (Exception exception)
+            {
+                _logger?.Error("ProfileRun", exception, "CAN_EXECUTE_FALSE Reason=AvailabilityEvaluationFailed");
+                return _localizationService.Format("Validation.RunDataError", exception.Message);
+            }
         }
     }
     public bool HasRunValidationIssue => !string.IsNullOrWhiteSpace(RunAvailabilityMessage);
@@ -1705,23 +1715,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
 
     private static void ResetRuntimeAndAssignIds(ActionDefinition action)
     {
-        action.Id = Guid.NewGuid();
-        foreach (var property in new[] { ActionParameterNames.ThenActions, ActionParameterNames.ElseActions })
-        {
-            if (action.Parameters[property] is not JsonArray nested) continue;
-            foreach (var node in nested)
-            {
-                try
-                {
-                    if (node is null) continue;
-                    var child = node.Deserialize<ActionDefinition>();
-                    if (child is null) continue;
-                    ResetRuntimeAndAssignIds(child);
-                    node.ReplaceWith(JsonSerializer.SerializeToNode(child));
-                }
-                catch (JsonException) { }
-            }
-        }
+        ProfileIdentityNormalizer.AssignNewActionIds(action);
     }
 
     private bool CanTestAction(ActionItemViewModel? action) => action is not null && !action.IsComment &&
@@ -1866,15 +1860,23 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
 
     public async Task ApplyReorderAsync(ReorderDropRequest? request)
     {
-        if (request is null || HasCriticalOperation || !string.IsNullOrWhiteSpace(ProfileSearchText)) return;
+        if (request is null || HasCriticalOperation ||
+            request.Kind != ReorderItemKind.Theme && !string.IsNullOrWhiteSpace(ProfileSearchText)) return;
         var changed = request.Kind switch
         {
             ReorderItemKind.Category => ReorderCategory(request),
             ReorderItemKind.Profile => ReorderProfile(request),
             ReorderItemKind.Action => ReorderAction(request),
+            ReorderItemKind.Theme => ReorderTheme(request),
             _ => false
         };
         if (!changed) return;
+
+        if (request.Kind == ReorderItemKind.Theme)
+        {
+            await SaveThemeCollectionAsync("Status.ThemeOrderChanged");
+            return;
+        }
 
         NormalizeSortOrders();
         NotifyActionCommandStates();
@@ -2000,6 +2002,22 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         actions.Move(oldIndex, newIndex);
         SelectedAction = action;
         MarkDirty(_localizationService.GetString("Status.ActionOrderChanged"));
+        return true;
+    }
+
+    private bool ReorderTheme(ReorderDropRequest request)
+    {
+        if (request.Item is not ThemeOptionViewModel theme) return false;
+        var oldIndex = ThemeOptions.IndexOf(theme);
+        if (oldIndex < 0) return false;
+
+        var insertionIndex = Math.Clamp(request.TargetIndex, 0, ThemeOptions.Count);
+        var newIndex = insertionIndex > oldIndex ? insertionIndex - 1 : insertionIndex;
+        newIndex = Math.Clamp(newIndex, 0, ThemeOptions.Count - 1);
+        if (newIndex == oldIndex) return false;
+
+        ThemeOptions.Move(oldIndex, newIndex);
+        NormalizeThemeOrder();
         return true;
     }
 
@@ -2244,6 +2262,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         _userSettings.LastActivityTabIndex = source.LastActivityTabIndex;
         _userSettings.IsActivityExpanded = source.IsActivityExpanded;
         _userSettings.CustomThemes = source.CustomThemes.Select(theme => theme.Clone()).ToList();
+        _userSettings.ThemeOrder = source.ThemeOrder?.ToList() ?? [];
 
         var languageId = _localizationService.ApplyLanguage(_userSettings.LanguageId);
         _userSettings.LanguageId = languageId;
@@ -2260,10 +2279,8 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(SelectedLanguageOption));
 
         ThemeOptions.Clear();
-        foreach (var theme in _themeManager.AvailableThemes)
-            ThemeOptions.Add(new ThemeOptionViewModel(theme, _localizationService));
-        foreach (var theme in _userSettings.CustomThemes)
-            ThemeOptions.Add(new ThemeOptionViewModel(theme, _localizationService));
+        foreach (var option in CreateOrderedThemeOptions())
+            ThemeOptions.Add(option);
         var selectedTheme = ThemeOptions.FirstOrDefault(option =>
             string.Equals(option.Id, _userSettings.ThemeId, StringComparison.OrdinalIgnoreCase)) ??
             ThemeOptions.First(option => string.Equals(option.Id, ThemeIds.Graphite, StringComparison.OrdinalIgnoreCase));
@@ -2594,10 +2611,41 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         finally { IsStatusRefreshing = false; }
     }
 
-    private bool CanRunProfile() => SelectedProfile is not null &&
-        SelectedProfile.Actions.All(action => !action.IsEnabled || action.IsValid) &&
-        ProfileReferencesAreValid(SelectedProfile.Id) &&
-        !IsProfileRunning && !IsRestoreRunning && !IsSaving && !_profileRunner.IsRunning;
+    private bool CanRunProfile()
+    {
+        try
+        {
+            var reason = SelectedProfile is null ? "SelectedProfile=null"
+                : SelectedProfile.Actions.Any(action => action.IsEnabled && !action.IsValid) ? "ValidationError"
+                : !ProfileReferencesAreValid(SelectedProfile.Id) ? "InvalidProfileReference"
+                : IsProfileRunning ? "IsProfileRunning=true"
+                : IsRestoreRunning ? "IsRestoreRunning=true"
+                : IsSaving ? "IsSaving=true"
+                : _profileRunner.IsRunning ? "ExecutionGateBusy"
+                : null;
+            TraceCanExecute(reason);
+            return reason is null;
+        }
+        catch (Exception exception)
+        {
+            var reason = $"CanExecuteException:{exception.GetType().Name}";
+            TraceCanExecute(reason);
+            _logger?.Error("ProfileRun", exception,
+                $"CAN_EXECUTE_FALSE ProfileId={SelectedProfile?.Id.ToString() ?? "none"} Reason={reason}");
+            return false;
+        }
+    }
+
+    private void TraceCanExecute(string? reason)
+    {
+        if (string.Equals(_lastRunCanExecuteDiagnostic, reason, StringComparison.Ordinal)) return;
+        if (reason is not null)
+            _logger?.Info("ProfileRun",
+                $"CAN_EXECUTE_FALSE ProfileId={SelectedProfile?.Id.ToString() ?? "none"} Reason={reason}");
+        else if (_lastRunCanExecuteDiagnostic is not null)
+            _logger?.Info("ProfileRun", $"CAN_EXECUTE_TRUE ProfileId={SelectedProfile?.Id.ToString() ?? "none"}");
+        _lastRunCanExecuteDiagnostic = reason;
+    }
 
     private bool ProfileReferencesAreValid(Guid rootProfileId) =>
         ProfileReferenceValidator.AreValid(_allProfiles.Select(item => item.ToModel()), rootProfileId);
@@ -2606,17 +2654,36 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
     private async Task RunProfileAsync()
     {
         var profileViewModel = SelectedProfile;
+        TraceRunStage("COMMAND_ENTER", profileViewModel);
         if (profileViewModel is null || IsProfileRunning)
         {
+            TraceRunStage("RUN_REJECTED", profileViewModel,
+                profileViewModel is null ? "Reason=SelectedProfile=null" : "Reason=IsProfileRunning=true");
             return;
         }
 
         try
         {
+            TraceRunStage("PREFLIGHT_START", profileViewModel);
             var preflight = BuildPreflight(profileViewModel);
+            TraceRunStage("PREFLIGHT_RESULT", profileViewModel,
+                preflight is null
+                    ? "Result=null"
+                    : $"Ready={preflight.ReadyActionCount} Warnings={preflight.WarningCount} Errors={preflight.ErrorCount}");
             if (preflight is null || preflight.HasErrors)
             {
                 StatusMessage = _localizationService.GetString("Status.PreflightBlocked");
+                HasExecutionStatus = true;
+                SetExecutionStatus("Execution.Status.Failed");
+                ExecutionErrorMessage = preflight is null
+                    ? StatusMessage
+                    : string.Join(Environment.NewLine, preflight.Issues
+                        .Where(issue => issue.Level == ProfilePreflightIssueLevel.Error)
+                        .Select(issue => $"{issue.ActionName}: " +
+                            (issue.IsResourceKey ? _localizationService.GetString(issue.Message) : issue.Message)));
+                SetProfileExecutionState(profileViewModel, ProfileExecutionState.Error);
+                TraceRunStage("RUN_REJECTED", profileViewModel,
+                    $"Reason=Preflight Errors={preflight?.ErrorCount.ToString() ?? "unknown"}");
                 return;
             }
             if (preflight.RequiresAdministrator && !_dialogService.Confirm(
@@ -2624,6 +2691,8 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
                     _localizationService.Format("Dialog.AdminRequiredMessage",
                         string.Join(Environment.NewLine, preflight.AdministratorActions))))
             {
+                StatusMessage = _localizationService.GetString("Status.RunAdminDeclined");
+                TraceRunStage("RUN_CANCELLED", profileViewModel, "Reason=AdministratorConfirmationDeclined");
                 return;
             }
 
@@ -2631,8 +2700,25 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
                 profileViewModel.Actions[actionIndex].SortOrder = actionIndex;
 
             var profile = profileViewModel.ToModel();
+            var runtimeValidation = ProfileRuntimeValidator.Validate(profile);
+            LogRuntimeProfile(profile, runtimeValidation);
+            if (!runtimeValidation.IsValid)
+            {
+                var message = string.Join(Environment.NewLine, runtimeValidation.Errors);
+                ReportProfileFailure(profileViewModel, new InvalidDataException(message));
+                HasExecutionStatus = true;
+                TraceRunStage("RUN_REJECTED", profileViewModel,
+                    $"Reason=RuntimeValidation Errors={runtimeValidation.Errors.Count}");
+                return;
+            }
             _allowCloseWithoutConfirmation = false;
-            _profileExecutionCancellation = new CancellationTokenSource();
+            if (_profileExecutionCancellation is not null)
+            {
+                _logger?.Warning("ProfileRun", "STALE_CTS_DISCARDED before a new profile run.");
+                _profileExecutionCancellation.Dispose();
+            }
+            var executionCancellation = new CancellationTokenSource();
+            _profileExecutionCancellation = executionCancellation;
             IsProfileRunning = true;
             SetProfileExecutionState(profileViewModel, ProfileExecutionState.Executing);
             ResetActionExecutionStates(profileViewModel);
@@ -2642,6 +2728,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
                 !string.Equals(action.Type, ActionTypeIds.Comment, StringComparison.OrdinalIgnoreCase));
             CurrentExecutionActionName = profileViewModel.Name;
             _currentExecutionActionId = null;
+            _currentExecutionProfileId = profile.Id;
             ExecutionErrorMessage = string.Empty;
             SetExecutionStatus("Execution.Status.Running");
             StatusMessage = _localizationService.GetString("Status.ProfileRunning");
@@ -2649,11 +2736,15 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
             var progress = new Progress<ProfileExecutionProgress>(ApplyExecutionProgress);
             try
             {
+                TraceRunStage("EXECUTOR_START", profileViewModel,
+                    $"ProfileId={profile.Id} Actions={runtimeValidation.Actions.Count}");
                 var session = await _profileRunner.RunAsync(
                     profile,
                     progress,
-                    _profileExecutionCancellation.Token);
+                    executionCancellation.Token);
                 LastExecutionSession = session;
+                TraceRunStage("EXECUTOR_RESULT", profileViewModel,
+                    $"SessionId={session.Id} Status={session.Status} Journal={session.Journal.Count}");
                 await RefreshPendingRestoreAsync(profile.Id);
                 if (RestoreChangeCount > 0)
                 {
@@ -2694,16 +2785,20 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
             }
             catch (Exception exception)
             {
+                _logger?.Error("ProfileRun", exception,
+                    $"EXECUTOR_FAILED ProfileId={profile.Id} ProfileName={SanitizeDiagnostic(profile.Name)}");
                 ReportProfileFailure(profileViewModel, exception);
             }
             finally
             {
-                _profileExecutionCancellation.Dispose();
-                _profileExecutionCancellation = null;
+                executionCancellation.Dispose();
+                if (ReferenceEquals(_profileExecutionCancellation, executionCancellation))
+                    _profileExecutionCancellation = null;
                 IsProfileRunning = false;
                 ClearActiveActionExecutionStates();
                 if (profileViewModel.ExecutionState == ProfileExecutionState.Executing)
                     SetProfileExecutionState(profileViewModel, ProfileExecutionState.Normal);
+                TraceRunStage("COMMAND_EXIT", profileViewModel, "ExecutionStateReset=true");
             }
         }
         catch (Exception exception)
@@ -2711,9 +2806,47 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
             // Preflight/model conversion also runs from the UI command. Keep a
             // malformed action from escaping AsyncRelayCommand.Execute (async void)
             // and taking down the WPF process before execution even begins.
+            _logger?.Error("ProfileRun", exception,
+                $"RUN_REJECTED ProfileId={profileViewModel.Id} Reason=CommandPreparationFailed");
             ReportProfileFailure(profileViewModel, exception);
         }
     }
+
+    public void TraceRunClicked()
+    {
+        var profile = SelectedProfile;
+        _logger?.Info("ProfileRun",
+            $"RUN_CLICKED ProfileId={profile?.Id.ToString() ?? "none"} " +
+            $"ProfileName={SanitizeDiagnostic(profile?.Name ?? "none")} CanExecute={CanRunProfile()}");
+    }
+
+    private void TraceRunStage(string stage, ProfileItemViewModel? profile, string? details = null) =>
+        _logger?.Info("ProfileRun",
+            $"{stage} ProfileId={profile?.Id.ToString() ?? "none"} " +
+            $"ProfileName={SanitizeDiagnostic(profile?.Name ?? "none")}" +
+            (string.IsNullOrWhiteSpace(details) ? string.Empty : $" {details}"));
+
+    private void LogRuntimeProfile(ProfileDefinition profile, ProfileRuntimeValidationResult validation)
+    {
+        foreach (var action in validation.Actions)
+        {
+            var parameters = action.Parameters?.ToJsonString() ?? "null";
+            _logger?.Info("ProfileRun",
+                $"ACTION_DATA Index={action.Index} Location={action.Location} ActionTypeId={SanitizeDiagnostic(action.ActionTypeId)} " +
+                $"ActionId={action.Id} Name={SanitizeDiagnostic(action.Name ?? "none")} Enabled={action.Enabled} " +
+                $"SortOrder={action.SortOrder} RuntimeModel={SanitizeDiagnostic(action.RuntimeModelType)} " +
+                $"Parameters={SanitizeDiagnostic(parameters, 2000)} ProfileId={profile.Id}");
+        }
+        foreach (var warning in validation.Warnings)
+            _logger?.Warning("ProfileRun", $"RUNTIME_VALIDATION_WARNING ProfileId={profile.Id} {SanitizeDiagnostic(warning)}");
+        foreach (var error in validation.Errors)
+            _logger?.Warning("ProfileRun", $"RUNTIME_VALIDATION_ERROR ProfileId={profile.Id} {SanitizeDiagnostic(error)}");
+    }
+
+    private static string SanitizeDiagnostic(string value, int maximumLength = 400) =>
+        value.Replace('\r', ' ').Replace('\n', ' ') is var clean && clean.Length > maximumLength
+            ? clean[..maximumLength] + "…"
+            : clean;
 
     private void ReportProfileFailure(ProfileItemViewModel profile, Exception exception)
     {
@@ -2905,12 +3038,18 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
             action.ResetExecutionState();
     }
 
-    private ActionItemViewModel? FindRuntimeAction(Guid actionId) =>
-        _allProfiles.SelectMany(profile => EnumerateActions(profile.Actions))
-            .FirstOrDefault(action => action.Id == actionId);
+    private ActionItemViewModel? FindRuntimeAction(Guid actionId, Guid? profileId = null)
+    {
+        var profile = profileId is Guid id
+            ? _allProfiles.FirstOrDefault(item => item.Id == id)
+            : SelectedProfile;
+        return profile is null
+            ? null
+            : EnumerateActions(profile.Actions).FirstOrDefault(action => action.Id == actionId);
+    }
 
-    private void ApplyActionExecutionState(Guid actionId, ActionExecutionState state) =>
-        FindRuntimeAction(actionId)?.SetExecutionState(state);
+    private void ApplyActionExecutionState(Guid actionId, Guid profileId, ActionExecutionState state) =>
+        FindRuntimeAction(actionId, profileId)?.SetExecutionState(state);
 
     private void ClearActiveActionExecutionStates()
     {
@@ -2942,8 +3081,9 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         CurrentExecutionActionNumber = progress.CurrentActionNumber;
         TotalExecutionActions = progress.TotalActiveActions;
         _currentExecutionActionId = progress.ActionId;
-        ApplyActionExecutionState(progress.ActionId, MapExecutionState(progress.Status));
-        CurrentExecutionActionName = FindRuntimeAction(progress.ActionId)?.DisplayName
+        _currentExecutionProfileId = progress.JournalEntry.ProfileId;
+        ApplyActionExecutionState(progress.ActionId, progress.JournalEntry.ProfileId, MapExecutionState(progress.Status));
+        CurrentExecutionActionName = FindRuntimeAction(progress.ActionId, progress.JournalEntry.ProfileId)?.DisplayName
             ?? progress.Action.Name
             ?? progress.Action.Type;
         SetExecutionStatus(GetExecutionStatusResourceKey(progress.Status));
@@ -2957,8 +3097,9 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         CurrentExecutionActionNumber = progress.CurrentAction;
         TotalExecutionActions = progress.TotalActions;
         _currentExecutionActionId = progress.Action.ActionId;
-        ApplyActionExecutionState(progress.Action.ActionId, MapRestoreState(progress.Status));
-        CurrentExecutionActionName = FindRuntimeAction(progress.Action.ActionId)?.DisplayName
+        _currentExecutionProfileId = progress.Action.ProfileId;
+        ApplyActionExecutionState(progress.Action.ActionId, progress.Action.ProfileId, MapRestoreState(progress.Status));
+        CurrentExecutionActionName = FindRuntimeAction(progress.Action.ActionId, progress.Action.ProfileId)?.DisplayName
             ?? progress.Action.ActionName
             ?? progress.Action.ActionType;
         if (progress.Status == PersistentActionRestoreStatus.Restoring)
@@ -2980,7 +3121,16 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
             : string.Empty;
     }
 
-    private void CancelProfile() => _profileExecutionCancellation?.Cancel();
+    private void CancelProfile()
+    {
+        if (_profileExecutionCancellation is null)
+        {
+            _logger?.Info("ProfileRun", "CANCEL_IGNORED Reason=NoActiveCancellationToken");
+            return;
+        }
+        _logger?.Info("ProfileRun", $"CANCEL_REQUESTED ProfileId={SelectedProfile?.Id.ToString() ?? "none"}");
+        _profileExecutionCancellation.Cancel();
+    }
 
     private void BrowseProgram(ActionItemViewModel? action)
     {
@@ -3249,7 +3399,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         ExecutionStatusText = _localizationService.GetString(_executionStatusResourceKey);
         if (_currentExecutionActionId is Guid actionId)
         {
-            var action = FindRuntimeAction(actionId);
+            var action = FindRuntimeAction(actionId, _currentExecutionProfileId);
             if (action is not null)
             {
                 CurrentExecutionActionName = action.DisplayName;
@@ -3306,6 +3456,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         _userSettings.CustomThemes.Add(definition);
         var option = new ThemeOptionViewModel(definition, _localizationService);
         ThemeOptions.Add(option);
+        NormalizeThemeOrder();
         await SelectApplyAndSaveThemeAsync(option, "CustomTheme.AddedStatus");
     }
 
@@ -3339,6 +3490,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
             imported = _themeExchangeService.Import(dialog.FileName, _userSettings.CustomThemes);
             _userSettings.CustomThemes.Add(imported);
             ThemeOptions.Add(new ThemeOptionViewModel(imported, _localizationService));
+            NormalizeThemeOrder();
             _userSettings.SchemaVersion = SettingsSchema.CurrentVersion;
             await _settingsRepository.SaveAsync(_userSettings);
             StatusMessage = _localizationService.Format("CustomTheme.ImportSuccess", imported.Name);
@@ -3355,6 +3507,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
                 _userSettings.CustomThemes.Remove(imported);
                 var importedOption = GetThemeOptionById(imported.Id);
                 if (importedOption is not null) ThemeOptions.Remove(importedOption);
+                NormalizeThemeOrder();
                 _themeExchangeService.DeleteOwnedAssets(imported.Id);
             }
             StatusMessage = _localizationService.Format("CustomTheme.ExchangeError", exception.Message);
@@ -3400,6 +3553,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         _userSettings.CustomThemes.Add(duplicate);
         var duplicateOption = new ThemeOptionViewModel(duplicate, _localizationService);
         ThemeOptions.Add(duplicateOption);
+        NormalizeThemeOrder();
         await SelectApplyAndSaveThemeAsync(duplicateOption, "CustomTheme.DuplicatedStatus");
     }
 
@@ -3449,6 +3603,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         _userSettings.CustomThemes.Remove(custom);
         var option = GetThemeOptionById(themeId);
         if (option is not null) ThemeOptions.Remove(option);
+        NormalizeThemeOrder();
         if (wasActive)
         {
             var fallback = GetThemeOptionById(ThemeIds.Graphite)!;
@@ -3477,6 +3632,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         try
         {
             _userSettings.SchemaVersion = SettingsSchema.CurrentVersion;
+            NormalizeThemeOrder();
             await _settingsRepository.SaveAsync(_userSettings);
             StatusMessage = _localizationService.GetString(successStatusKey);
         }
@@ -3484,6 +3640,59 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         {
             StatusMessage = _localizationService.Format("Status.SettingsSaveFailed", exception.Message);
         }
+    }
+
+    private List<ThemeOptionViewModel> CreateOrderedThemeOptions()
+    {
+        _userSettings.CustomThemes ??= [];
+        _userSettings.CustomThemes.RemoveAll(theme => theme is null);
+
+        var usedIds = _themeManager.AvailableThemes
+            .Select(theme => theme.Id)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var customTheme in _userSettings.CustomThemes)
+        {
+            if (string.IsNullOrWhiteSpace(customTheme.Id) || !usedIds.Add(customTheme.Id))
+                customTheme.Id = CustomThemeDefinition.CreateId();
+        }
+
+        var options = _themeManager.AvailableThemes
+            .Select(theme => new ThemeOptionViewModel(theme, _localizationService))
+            .Concat(_userSettings.CustomThemes.Select(theme => new ThemeOptionViewModel(theme, _localizationService)))
+            .ToList();
+        var byId = options.ToDictionary(option => option.Id, StringComparer.OrdinalIgnoreCase);
+        var ordered = new List<ThemeOptionViewModel>(options.Count);
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var id in _userSettings.ThemeOrder ?? [])
+        {
+            if (id is not null && byId.TryGetValue(id, out var option) && seen.Add(option.Id))
+                ordered.Add(option);
+        }
+        foreach (var option in options)
+        {
+            if (seen.Add(option.Id)) ordered.Add(option);
+        }
+
+        _userSettings.ThemeOrder = ordered.Select(option => option.Id).ToList();
+        return ordered;
+    }
+
+    private void NormalizeThemeOrder()
+    {
+        var validIds = ThemeOptions.Select(option => option.Id)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var order = new List<string>(ThemeOptions.Count);
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var id in _userSettings.ThemeOrder ?? [])
+        {
+            if (!string.IsNullOrWhiteSpace(id) && validIds.Contains(id) && seen.Add(id))
+                order.Add(id);
+        }
+        foreach (var option in ThemeOptions)
+        {
+            if (seen.Add(option.Id)) order.Add(option.Id);
+        }
+        _userSettings.ThemeOrder = order;
     }
 
     private CustomThemeDefinition? FindCustomTheme(string id) => _userSettings.CustomThemes.FirstOrDefault(theme =>

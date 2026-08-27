@@ -1,8 +1,6 @@
 using System.IO;
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
-using SwitchBoard.Models.Actions;
 using SwitchBoard.Models.Profiles;
 
 namespace SwitchBoard.Services.Profiles;
@@ -37,10 +35,9 @@ public sealed class ProfileExchangeService
             throw new InvalidDataException("The profile package format is unsupported.");
 
         var imported = document.Profile;
-        ProfileCatalogService.ValidateProfileActions(imported);
-        imported.Id = Guid.NewGuid();
+        ProfileIdentityNormalizer.AssignNewProfileAndActionIds(imported);
         imported.CategoryId = Guid.Empty;
-        foreach (var action in imported.Actions.OrderBy(item => item.SortOrder)) ResetIds(action);
+        ProfileCatalogService.ValidateProfileActions(imported);
         return imported;
     }
 
@@ -48,32 +45,8 @@ public sealed class ProfileExchangeService
     {
         var clone = JsonSerializer.Deserialize<ProfileDefinition>(JsonSerializer.Serialize(profile, _options), _options)
                     ?? throw new InvalidDataException("The profile could not be duplicated.");
-        clone.Id = Guid.NewGuid();
-        foreach (var action in clone.Actions) ResetIds(action);
+        ProfileIdentityNormalizer.AssignNewProfileAndActionIds(clone);
         return clone;
-    }
-
-    private static void ResetIds(ActionDefinition action)
-    {
-        action.Id = Guid.NewGuid();
-        foreach (var key in new[] { ActionParameterNames.ThenActions, ActionParameterNames.ElseActions })
-        {
-            if (action.Parameters[key] is not JsonArray nested) continue;
-            for (var index = 0; index < nested.Count; index++)
-            {
-                if (nested[index]?.Deserialize<ActionDefinition>(new JsonSerializerOptions
-                    {
-                        PropertyNameCaseInsensitive = true,
-                        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
-                    }) is not { } child) continue;
-                ResetIds(child);
-                nested[index] = JsonSerializer.SerializeToNode(child, new JsonSerializerOptions
-                {
-                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-                    Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
-                });
-            }
-        }
     }
 }
 

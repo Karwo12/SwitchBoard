@@ -90,8 +90,9 @@ public sealed class ProfileCatalogService(ICatalogRepository repository) : IProf
         }
 
         var profileIds = catalog.Profiles.Select(profile => profile.Id).ToHashSet();
+        var actionIds = new HashSet<Guid>();
         foreach (var profile in catalog.Profiles)
-            ValidateProfileActions(profile, profileIds);
+            ValidateProfileActions(profile, profileIds, actionIds);
 
         var edges = catalog.Profiles.ToDictionary(profile => profile.Id,
             profile => profile.Actions.SelectMany(EnumerateProfileTargets).ToHashSet());
@@ -102,21 +103,26 @@ public sealed class ProfileCatalogService(ICatalogRepository repository) : IProf
                 throw new InvalidOperationException("Profile dependencies contain a cycle.");
     }
 
-    internal static void ValidateProfileActions(ProfileDefinition profile, IReadOnlySet<Guid>? profileIds = null)
+    internal static void ValidateProfileActions(ProfileDefinition profile, IReadOnlySet<Guid>? profileIds = null,
+        HashSet<Guid>? actionIds = null)
     {
         ArgumentNullException.ThrowIfNull(profile);
         if (profile.Actions is null)
             throw new InvalidDataException("A profile contains a missing action list.");
+        actionIds ??= [];
         foreach (var action in profile.Actions)
-            ValidateAction(action, 0, profileIds);
+            ValidateAction(action, 0, profileIds, actionIds);
     }
 
-    private static void ValidateAction(ActionDefinition? action, int depth, IReadOnlySet<Guid>? profileIds)
+    private static void ValidateAction(ActionDefinition? action, int depth, IReadOnlySet<Guid>? profileIds,
+        HashSet<Guid> actionIds)
     {
         if (action is null)
             throw new InvalidDataException("A profile contains an invalid action.");
         if (action.Id == Guid.Empty || string.IsNullOrWhiteSpace(action.Type))
             throw new InvalidOperationException("Every action must have an identifier and a type.");
+        if (!actionIds.Add(action.Id))
+            throw new InvalidOperationException($"Action identifier {action.Id} is duplicated.");
         if (action.Parameters is null)
             throw new InvalidDataException("An action contains missing parameters.");
         if (depth > ProfileRunner.MaximumNestingDepth)
@@ -127,7 +133,7 @@ public sealed class ProfileCatalogService(ICatalogRepository repository) : IProf
             if (!Guid.TryParse(value, out var target) || !profileIds.Contains(target))
                 throw new InvalidOperationException("A Run another profile action points to a missing profile.");
         }
-        foreach (var nested in EnumerateNested(action)) ValidateAction(nested, depth + 1, profileIds);
+        foreach (var nested in EnumerateNested(action)) ValidateAction(nested, depth + 1, profileIds, actionIds);
     }
 
     private static IEnumerable<Guid> EnumerateProfileTargets(ActionDefinition action)
@@ -151,8 +157,8 @@ public sealed class ProfileCatalogService(ICatalogRepository repository) : IProf
                 if (node is null)
                     throw new InvalidDataException($"The nested action branch '{name}' contains an empty action.");
                 ActionDefinition? nested;
-                try { nested = node.Deserialize<ActionDefinition>(); }
-                catch (Exception exception) when (exception is JsonException or InvalidOperationException)
+                try { nested = ActionDefinitionJson.Deserialize(node); }
+                catch (Exception exception) when (exception is JsonException or InvalidOperationException or NotSupportedException)
                 {
                     throw new InvalidDataException($"The nested action branch '{name}' contains malformed action data.",
                         exception);

@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
+using SwitchBoard.ViewModels;
 
 namespace SwitchBoard.Controls;
 
@@ -11,6 +12,11 @@ public partial class ActionEditorControl : UserControl
     public ActionEditorControl()
     {
         InitializeComponent();
+    }
+
+    private void RunProfile_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainWindowViewModel viewModel) viewModel.TraceRunClicked();
     }
 
     public void BringActionIntoView(Guid actionId)

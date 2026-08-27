@@ -1257,7 +1257,7 @@ public sealed class ActionItemViewModel : ObservableObject
         {
             try
             {
-                if (node?.Deserialize<ActionDefinition>() is { } action)
+                if (ActionDefinitionJson.Deserialize(node) is { } action)
                 {
                     var item = new ActionItemViewModel(action, _localizationService, depth);
                     SubscribeNested(item);
@@ -1273,7 +1273,7 @@ public sealed class ActionItemViewModel : ObservableObject
         {
             var model = action.ToModel();
             model.SortOrder = index;
-            return JsonSerializer.SerializeToNode(model);
+            return ActionDefinitionJson.Serialize(model);
         }).ToArray());
 
     private static void SetString(JsonObject parameters, string propertyName, string? value)

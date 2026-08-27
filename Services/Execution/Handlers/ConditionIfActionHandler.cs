@@ -71,9 +71,12 @@ public sealed class ConditionIfActionHandler(IWindowsServiceManager serviceManag
         {
             try
             {
-                if (node?.Deserialize<ActionDefinition>() is { } action) result.Add(action);
+                if (ActionDefinitionJson.Deserialize(node) is { } action) result.Add(action);
             }
-            catch (JsonException) { }
+            catch (Exception exception) when (exception is JsonException or InvalidOperationException or NotSupportedException)
+            {
+                throw new InvalidDataException("A nested condition action is malformed.", exception);
+            }
         }
         return result;
     }

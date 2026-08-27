@@ -14,7 +14,12 @@ public static class ProfileReferenceValidator
 {
     public static bool AreValid(IEnumerable<ProfileDefinition> source, Guid rootProfileId)
     {
-        var profiles = source.ToDictionary(profile => profile.Id);
+        ArgumentNullException.ThrowIfNull(source);
+        var profiles = new Dictionary<Guid, ProfileDefinition>();
+        foreach (var profile in source)
+        {
+            if (profile is null || profile.Id == Guid.Empty || !profiles.TryAdd(profile.Id, profile)) return false;
+        }
         var visiting = new HashSet<Guid>();
         var visited = new HashSet<Guid>();
         return Visit(rootProfileId);
@@ -24,7 +29,8 @@ public static class ProfileReferenceValidator
             if (!profiles.TryGetValue(id, out var profile)) return false;
             if (visited.Contains(id)) return true;
             if (!visiting.Add(id)) return false;
-            foreach (var target in profile.Actions.SelectMany(EnumerateProfileTargets))
+            if (profile.Actions is null || !TryGetProfileTargets(profile.Actions, out var targets)) return false;
+            foreach (var target in targets)
                 if (!Visit(target)) return false;
             visiting.Remove(id);
             visited.Add(id);
@@ -32,22 +38,72 @@ public static class ProfileReferenceValidator
         }
     }
 
-    private static IEnumerable<Guid> EnumerateProfileTargets(ActionDefinition action)
+    private static bool TryGetProfileTargets(IEnumerable<ActionDefinition> actions, out IReadOnlyList<Guid> targets)
     {
-        if (action.Type == ActionTypeIds.ProfileRun &&
-            Guid.TryParse(action.Parameters[ActionParameterNames.ProfileId]?.GetValue<string>(), out var id))
-            yield return id;
-        if (action.Type != ActionTypeIds.ConditionIf) yield break;
-        foreach (var name in new[] { ActionParameterNames.ThenActions, ActionParameterNames.ElseActions })
+        var result = new List<Guid>();
+        foreach (var action in actions)
         {
-            if (action.Parameters[name] is not JsonArray array) continue;
-            foreach (var node in array)
+            if (action is null || action.Parameters is null)
             {
-                ActionDefinition? nested = null;
-                try { nested = node?.Deserialize<ActionDefinition>(); } catch (JsonException) { }
-                if (nested is null) continue;
-                foreach (var target in EnumerateProfileTargets(nested)) yield return target;
+                targets = [];
+                return false;
+            }
+            // Disabled actions (including composite branches) are never executed and
+            // therefore must not introduce a false cycle or a missing-profile block.
+            if (!action.IsEnabled) continue;
+            if (action.Type == ActionTypeIds.ProfileRun)
+            {
+                try
+                {
+                    if (!Guid.TryParse(action.Parameters[ActionParameterNames.ProfileId]?.GetValue<string>(), out var id))
+                    {
+                        targets = [];
+                        return false;
+                    }
+                    result.Add(id);
+                }
+                catch (InvalidOperationException)
+                {
+                    targets = [];
+                    return false;
+                }
+            }
+            if (action.Type != ActionTypeIds.ConditionIf) continue;
+            foreach (var name in new[] { ActionParameterNames.ThenActions, ActionParameterNames.ElseActions })
+            {
+                if (!action.Parameters.TryGetPropertyValue(name, out var branch)) continue;
+                if (branch is not JsonArray array)
+                {
+                    targets = [];
+                    return false;
+                }
+                var nested = new List<ActionDefinition>();
+                foreach (var node in array)
+                {
+                    try
+                    {
+                        if (ActionDefinitionJson.Deserialize(node) is not { } child)
+                        {
+                            targets = [];
+                            return false;
+                        }
+                        nested.Add(child);
+                    }
+                    catch (Exception exception) when (exception is JsonException or InvalidOperationException or NotSupportedException)
+                    {
+                        targets = [];
+                        return false;
+                    }
+                }
+                if (!TryGetProfileTargets(nested, out var nestedTargets))
+                {
+                    targets = [];
+                    return false;
+                }
+                result.AddRange(nestedTargets);
             }
         }
+        targets = result;
+        return true;
     }
 }

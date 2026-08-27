@@ -272,6 +272,7 @@
     <system:String x:Key="Settings.Themes">Motywy</system:String>
     <system:String x:Key="Settings.Appearance">Wygląd</system:String>
     <system:String x:Key="Settings.Theme">Motyw</system:String>
+    <system:String x:Key="Settings.ThemeReorder">Przeciągnij, aby zmienić kolejność</system:String>
     <system:String x:Key="Settings.Language">Język</system:String>
     <system:String x:Key="Settings.General">Ogólne</system:String>
     <system:String x:Key="Settings.Data">Dane</system:String>
@@ -496,6 +497,7 @@
     <system:String x:Key="Status.ActionOrderChanged">Zmieniono kolejność akcji — pamiętaj o zapisaniu</system:String>
     <system:String x:Key="Status.CategoryOrderChanged">Zmieniono kolejność kategorii</system:String>
     <system:String x:Key="Status.ProfileOrderChanged">Zmieniono kolejność profili</system:String>
+    <system:String x:Key="Status.ThemeOrderChanged">Zmieniono kolejność motywów</system:String>
     <system:String x:Key="Status.ProfileCategoryChanged">Przeniesiono profil do innej kategorii</system:String>
     <system:String x:Key="Status.Saved">Zapisano o {0}</system:String>
     <system:String x:Key="Status.SaveFailed">Błąd zapisu: {0}</system:String>
@@ -639,6 +641,7 @@
     <system:String x:Key="Result.ConditionUnsupported">Nieobsługiwany warunek: {0}</system:String>
     <system:String x:Key="Result.ConditionBranchEmpty">Gałąź „{0}” jest pusta.</system:String>
     <system:String x:Key="Validation.RunBlocked">Nie można uruchomić profilu: {0} aktywnych akcji wymaga konfiguracji.</system:String>
+    <system:String x:Key="Validation.RunDataError">Nie można uruchomić profilu, ponieważ nie udało się zweryfikować jego danych: {0}</system:String>
     <system:String x:Key="Validation.ProfileReferenceCycle">Nie można uruchomić profilu: odwołania zawierają cykl lub brakujący profil.</system:String>
     <system:String x:Key="Validation.RunBusy">Profil nie może zostać uruchomiony podczas innej operacji.</system:String>
     <system:String x:Key="Validation.NoOp">Ta akcja nie wprowadzi żadnej zmiany.</system:String>
@@ -759,6 +762,7 @@
     <system:String x:Key="Activity.Filter.Clear">Wyczysc filtry</system:String>
     <system:String x:Key="Preflight.Summary">Gotowe akcje: {0}, ostrzezenia: {1}, bledy: {2}</system:String>
     <system:String x:Key="Status.PreflightBlocked">Preflight profilu wykryl bledy. Uruchomienie nie nastapilo.</system:String>
+    <system:String x:Key="Status.RunAdminDeclined">Uruchomienie profilu anulowano przed wykonaniem, ponieważ nie potwierdzono uprawnień administratora.</system:String>
     <system:String x:Key="Dialog.AdminRequiredTitle">Moga byc wymagane uprawnienia administratora</system:String>
     <system:String x:Key="Dialog.AdminRequiredMessage">Nastepujace akcje moga wymagac uprawnien administratora:{0}{1}</system:String>
     <system:String x:Key="Status.DiagnosticsExported">Pakiet diagnostyczny wyeksportowano.</system:String>

@@ -51,8 +51,13 @@ sealed class TestSettingsRepository : ISettingsRepository
 
 sealed class TestThemeManager : IThemeManager
 {
-    public IReadOnlyList<ThemeDefinition> AvailableThemes =>
-        [new(ThemeIds.Graphite, "Graphite", new Uri("Themes/GraphiteTheme.xaml", UriKind.Relative))];
+    private readonly IReadOnlyList<ThemeDefinition> _availableThemes;
+
+    public TestThemeManager(IReadOnlyList<ThemeDefinition>? availableThemes = null) =>
+        _availableThemes = availableThemes ??
+            [new(ThemeIds.Graphite, "Graphite", new Uri("Themes/GraphiteTheme.xaml", UriKind.Relative))];
+
+    public IReadOnlyList<ThemeDefinition> AvailableThemes => _availableThemes;
     public string CurrentThemeId { get; private set; } = ThemeIds.Graphite;
     public string ApplyTheme(string? themeId, CustomThemeSettings? customTheme = null)
     {

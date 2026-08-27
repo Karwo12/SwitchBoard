@@ -183,7 +183,7 @@ public partial class App : Application
                 displayManager,
                 new WpfCustomThemeEditorService(paths, _localizationService),
                 activityService, statusMonitoring, new ThemeExchangeService(paths), paths, startupRegistrationService,
-                new GitHubReleaseUpdateService(_httpClient));
+                new GitHubReleaseUpdateService(_httpClient), _logger);
 
             var window = new MainWindow(viewModel);
             MainWindow = window;

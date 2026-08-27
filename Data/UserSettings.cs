@@ -50,6 +50,13 @@ public sealed class UserSettings
 
     public List<CustomThemeDefinition> CustomThemes { get; set; } = [];
 
+    /// <summary>
+    /// Stable IDs in the user-defined order shown by the Themes settings page.
+    /// Missing or unknown IDs are ignored and newly discovered themes are appended
+    /// in the historical default order.
+    /// </summary>
+    public List<string> ThemeOrder { get; set; } = [];
+
     // Schema 4 compatibility. Migrated once at startup and omitted from subsequent JSON.
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public CustomThemeSettings? CustomTheme { get; set; }

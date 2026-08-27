@@ -4,7 +4,8 @@ public enum ReorderItemKind
 {
     Category,
     Profile,
-    Action
+    Action,
+    Theme
 }
 
 public sealed record ReorderDropRequest(

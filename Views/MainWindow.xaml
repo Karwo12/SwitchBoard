@@ -1847,6 +1847,10 @@
                                            Text="{DynamicResource Settings.Theme}" />
                                 <ListBox ItemsSource="{Binding ThemeOptions}"
                                          SelectedItem="{Binding SelectedThemeOption, Mode=TwoWay}"
+                                         controls:ListBoxDragDrop.DragKind="Theme"
+                                         controls:ListBoxDragDrop.AcceptKinds="Theme"
+                                         controls:ListBoxDragDrop.DropCommand="{Binding ReorderDropCommand}"
+                                         controls:ListBoxDragDrop.SuppressSelectionOnDrag="True"
                                          ScrollViewer.VerticalScrollBarVisibility="Disabled"
                                          ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                                     <ListBox.Template>
@@ -1858,8 +1862,16 @@
                                         <DataTemplate>
                                             <Grid Margin="4,2" MinHeight="30">
                                                 <Grid.ColumnDefinitions><ColumnDefinition Width="16"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                                <Ellipse Width="7" Height="7" Fill="{DynamicResource AccentBrush}"
-                                                         Visibility="{Binding IsActive, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <Path Width="8" Height="12" Margin="0,0,6,0"
+                                                          Fill="{DynamicResource TextTertiaryBrush}"
+                                                          Data="M1,2 H3 V4 H1 Z M5,2 H7 V4 H5 Z M1,5 H3 V7 H1 Z M5,5 H7 V7 H5 Z M1,8 H3 V10 H1 Z M5,8 H7 V10 H5 Z"
+                                                          Cursor="SizeAll"
+                                                          controls:ListBoxDragDrop.IsDragHandle="True"
+                                                          ToolTip="{DynamicResource Settings.ThemeReorder}" />
+                                                    <Ellipse Width="7" Height="7" Fill="{DynamicResource AccentBrush}"
+                                                             Visibility="{Binding IsActive, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                                </StackPanel>
                                                 <TextBlock Grid.Column="1" Margin="3,0,7,0" VerticalAlignment="Center" Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis" />
                                                 <Button Grid.Column="2" Padding="0"
                                                         DataContext="{Binding}" Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=Window}}"

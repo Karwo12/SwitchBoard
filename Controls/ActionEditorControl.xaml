@@ -76,9 +76,10 @@
                     </StackPanel>
                     <Button Grid.Column="1"
                             Width="134"
-                            Height="36"
-                            Command="{Binding RunProfileCommand}"
-                            ToolTip="{Binding RunAvailabilityMessage}"
+                             Height="36"
+                             Command="{Binding RunProfileCommand}"
+                             Click="RunProfile_OnClick"
+                             ToolTip="{Binding RunAvailabilityMessage}"
                             ToolTipService.ShowOnDisabled="True">
                         <Button.Style>
                             <Style TargetType="Button" BasedOn="{StaticResource AccentButton}">
@@ -639,7 +640,7 @@
                                                               <Grid>
                                                                   <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="250"/></Grid.ColumnDefinitions>
                                                                   <TextBlock VerticalAlignment="Center" Text="{DynamicResource ActionEditor.OnFailure}" ToolTip="{DynamicResource ActionEditor.OnFailure}" />
-                                                                  <ComboBox Grid.Column="1" ItemsSource="{Binding AvailableFailurePolicies}" DisplayMemberPath="DisplayName" SelectedValue="{Binding FailurePolicyId, Mode=TwoWay}" SelectedValuePath="Value" />
+                                                                  <ComboBox Grid.Column="1" ItemsSource="{Binding AvailableFailurePolicies}" DisplayMemberPath="DisplayName" SelectedValuePath="Value" SelectedValue="{Binding FailurePolicyId, Mode=TwoWay}" />
                                                               </Grid>
                                                           </Border>
                                                      </StackPanel>
@@ -676,11 +677,11 @@
                                                           <Border Style="{StaticResource SettingsRowBorderStyle}" Margin="0,5,0,0"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="250"/></Grid.ColumnDefinitions><TextBlock VerticalAlignment="Center" Text="{DynamicResource Advanced.RetryEnabled}" ToolTip="{DynamicResource Advanced.RetryEnabled}"/><CheckBox Grid.Column="1" HorizontalAlignment="Center" VerticalAlignment="Center" IsChecked="{Binding RetryOnFailure}" /></Grid></Border>
                                                           <Border Margin="0,4,0,0" Padding="10,7" Background="{DynamicResource InputBackgroundBrush}" CornerRadius="6"><Border.Style><Style TargetType="Border"><Setter Property="BorderThickness" Value="0"/><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding RetryOnFailure}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Border.Style><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="250"/></Grid.ColumnDefinitions><TextBlock VerticalAlignment="Center" Text="{DynamicResource Advanced.MaximumAttempts}"/><TextBox Grid.Column="1" Text="{Binding MaximumAttempts}" /></Grid></Border>
                                                           <Border Margin="0,4,0,0" Padding="10,7" Background="{DynamicResource InputBackgroundBrush}" CornerRadius="6"><Border.Style><Style TargetType="Border"><Setter Property="BorderThickness" Value="0"/><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding RetryOnFailure}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Border.Style><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="250"/></Grid.ColumnDefinitions><TextBlock VerticalAlignment="Center" Text="{DynamicResource Advanced.RetryDelay}"/><TextBox Grid.Column="1" Text="{Binding RetryDelaySeconds}" /></Grid></Border>
-                                                          <Border Style="{StaticResource SettingsRowBorderStyle}" Margin="0,4,0,0"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="250"/></Grid.ColumnDefinitions><TextBlock VerticalAlignment="Center" Text="{DynamicResource ActionEditor.OnFailure}" ToolTip="{DynamicResource ActionEditor.OnFailure}"/><ComboBox Grid.Column="1" ItemsSource="{Binding AvailableFailurePolicies}" DisplayMemberPath="DisplayName" SelectedValue="{Binding FailurePolicyId, Mode=TwoWay}" SelectedValuePath="Value" /></Grid></Border>
+                                                          <Border Style="{StaticResource SettingsRowBorderStyle}" Margin="0,4,0,0"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="250"/></Grid.ColumnDefinitions><TextBlock VerticalAlignment="Center" Text="{DynamicResource ActionEditor.OnFailure}" ToolTip="{DynamicResource ActionEditor.OnFailure}"/><ComboBox Grid.Column="1" ItemsSource="{Binding AvailableFailurePolicies}" DisplayMemberPath="DisplayName" SelectedValuePath="Value" SelectedValue="{Binding FailurePolicyId, Mode=TwoWay}" /></Grid></Border>
                                                      </StackPanel>
                                                      <StackPanel Margin="0,8,0,0"><StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding Type}" Value="program.run"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></StackPanel.Style>
                                                           <TextBlock Style="{StaticResource ActionEditorSectionHeader}" Text="{DynamicResource Advanced.Restoring}" ToolTip="{DynamicResource ActionEditor.RestoreBehavior}" />
-                                                          <Border Style="{StaticResource SettingsRowBorderStyle}" Margin="0,5,0,0"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="250"/></Grid.ColumnDefinitions><TextBlock VerticalAlignment="Center" Text="{DynamicResource ActionEditor.RestoreBehavior}"/><ComboBox Grid.Column="1" ItemsSource="{Binding AvailableRestoreBehaviors}" DisplayMemberPath="DisplayName" SelectedValue="{Binding RestoreBehaviorId, Mode=TwoWay}" SelectedValuePath="Value" /></Grid></Border>
+                                                          <Border Style="{StaticResource SettingsRowBorderStyle}" Margin="0,5,0,0"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="250"/></Grid.ColumnDefinitions><TextBlock VerticalAlignment="Center" Text="{DynamicResource ActionEditor.RestoreBehavior}"/><ComboBox Grid.Column="1" ItemsSource="{Binding AvailableRestoreBehaviors}" DisplayMemberPath="DisplayName" SelectedValuePath="Value" SelectedValue="{Binding RestoreBehaviorId, Mode=TwoWay}" /></Grid></Border>
                                                      </StackPanel>
                                                       <StackPanel Margin="0,11,0,0">
                                                         <StackPanel.Style>
@@ -702,7 +703,7 @@
                                                                  <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="250"/></Grid.ColumnDefinitions>
                                                                  <TextBlock VerticalAlignment="Center" Text="{DynamicResource ActionEditor.RestoreBehavior}" />
                                                                  <ComboBox Grid.Column="1" ItemsSource="{Binding AvailableRestoreBehaviors}" DisplayMemberPath="DisplayName"
-                                                                           SelectedValue="{Binding RestoreBehaviorId, Mode=TwoWay}" SelectedValuePath="Value" />
+                                                                           SelectedValuePath="Value" SelectedValue="{Binding RestoreBehaviorId, Mode=TwoWay}" />
                                                              </Grid>
                                                          </Border>
                                                         <StackPanel Margin="0,11,0,0">

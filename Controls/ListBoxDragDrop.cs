@@ -21,6 +21,7 @@ public static class ListBoxDragDrop
     private static object? _pressedItem;
     private static ListBox? _sourceList;
     private static ListBoxItem? _sourceContainer;
+    private static bool _dragStarted;
     private static Adorner? _activeAdorner;
     private static AdornerLayer? _activeAdornerLayer;
 
@@ -40,6 +41,9 @@ public static class ListBoxDragDrop
     public static readonly DependencyProperty IsDragHandleProperty = DependencyProperty.RegisterAttached(
         "IsDragHandle", typeof(bool), typeof(ListBoxDragDrop), new PropertyMetadata(false));
 
+    public static readonly DependencyProperty SuppressSelectionOnDragProperty = DependencyProperty.RegisterAttached(
+        "SuppressSelectionOnDrag", typeof(bool), typeof(ListBoxDragDrop), new PropertyMetadata(false));
+
     public static readonly DependencyProperty IsRootNavigationTargetProperty = DependencyProperty.RegisterAttached(
         "IsRootNavigationTarget", typeof(bool), typeof(ListBoxDragDrop), new PropertyMetadata(false));
 
@@ -57,6 +61,10 @@ public static class ListBoxDragDrop
     public static object? GetTargetParentId(DependencyObject element) => element.GetValue(TargetParentIdProperty);
     public static void SetIsDragHandle(DependencyObject element, bool value) => element.SetValue(IsDragHandleProperty, value);
     public static bool GetIsDragHandle(DependencyObject element) => (bool)element.GetValue(IsDragHandleProperty);
+    public static void SetSuppressSelectionOnDrag(DependencyObject element, bool value) =>
+        element.SetValue(SuppressSelectionOnDragProperty, value);
+    public static bool GetSuppressSelectionOnDrag(DependencyObject element) =>
+        (bool)element.GetValue(SuppressSelectionOnDragProperty);
     public static void SetIsRootNavigationTarget(DependencyObject element, bool value) => element.SetValue(IsRootNavigationTargetProperty, value);
     public static bool GetIsRootNavigationTarget(DependencyObject element) => (bool)element.GetValue(IsRootNavigationTargetProperty);
     public static void SetIsProfileFolderDropTarget(DependencyObject element, bool value) => element.SetValue(IsProfileFolderDropTargetProperty, value);
@@ -68,6 +76,7 @@ public static class ListBoxDragDrop
         if (e.OldValue is not null)
         {
             listBox.PreviewMouseLeftButtonDown -= OnPreviewMouseLeftButtonDown;
+            listBox.PreviewMouseLeftButtonUp -= OnPreviewMouseLeftButtonUp;
             listBox.PreviewMouseMove -= OnPreviewMouseMove;
             listBox.DragOver -= OnDragOver;
             listBox.DragLeave -= OnDragLeave;
@@ -76,6 +85,7 @@ public static class ListBoxDragDrop
         if (e.NewValue is null) return;
         listBox.AllowDrop = true;
         listBox.PreviewMouseLeftButtonDown += OnPreviewMouseLeftButtonDown;
+        listBox.PreviewMouseLeftButtonUp += OnPreviewMouseLeftButtonUp;
         listBox.PreviewMouseMove += OnPreviewMouseMove;
         listBox.DragOver += OnDragOver;
         listBox.DragLeave += OnDragLeave;
@@ -114,6 +124,27 @@ public static class ListBoxDragDrop
         _pressedItem = container.DataContext;
         _sourceList = listBox;
         _sourceContainer = container;
+        _dragStarted = false;
+        if (GetSuppressSelectionOnDrag(listBox))
+        {
+            // Defer ListBox selection until mouse-up. This keeps a drag from
+            // applying a different theme while still making a simple click select it.
+            listBox.CaptureMouse();
+            e.Handled = true;
+        }
+    }
+
+    private static void OnPreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is not ListBox listBox || !ReferenceEquals(listBox, _sourceList)) return;
+
+        if (GetSuppressSelectionOnDrag(listBox) && !_dragStarted && _pressedItem is { } item)
+        {
+            listBox.SelectedItem = item;
+            e.Handled = true;
+        }
+
+        ResetPressedItem();
     }
 
     private static void OnPreviewMouseMove(object sender, MouseEventArgs e)
@@ -129,6 +160,7 @@ public static class ListBoxDragDrop
 
         var kind = ResolveDragKind(listBox, _pressedItem);
         if (kind is null) return;
+        _dragStarted = true;
         var payload = new DragPayload(kind.Value, _pressedItem);
         var data = new DataObject(DataFormat, payload);
         var container = _sourceContainer;
@@ -406,9 +438,13 @@ public static class ListBoxDragDrop
 
     private static void ResetPressedItem()
     {
+        if (_sourceList is not null && GetSuppressSelectionOnDrag(_sourceList) &&
+            ReferenceEquals(Mouse.Captured, _sourceList))
+            Mouse.Capture(null);
         _pressedItem = null;
         _sourceList = null;
         _sourceContainer = null;
+        _dragStarted = false;
     }
 
     private static T? FindDescendant<T>(DependencyObject parent) where T : DependencyObject

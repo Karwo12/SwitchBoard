@@ -270,6 +270,7 @@
     <system:String x:Key="Settings.Themes">Themes</system:String>
     <system:String x:Key="Settings.Appearance">Appearance</system:String>
     <system:String x:Key="Settings.Theme">Theme</system:String>
+    <system:String x:Key="Settings.ThemeReorder">Drag to reorder</system:String>
     <system:String x:Key="Settings.Language">Language</system:String>
     <system:String x:Key="Settings.General">General</system:String>
     <system:String x:Key="Settings.Data">Data</system:String>
@@ -494,6 +495,7 @@
     <system:String x:Key="Status.ActionOrderChanged">Action order changed — remember to save</system:String>
     <system:String x:Key="Status.CategoryOrderChanged">Category order changed</system:String>
     <system:String x:Key="Status.ProfileOrderChanged">Profile order changed</system:String>
+    <system:String x:Key="Status.ThemeOrderChanged">Theme order changed</system:String>
     <system:String x:Key="Status.ProfileCategoryChanged">Profile moved to another category</system:String>
     <system:String x:Key="Status.Saved">Saved at {0}</system:String>
     <system:String x:Key="Status.SaveFailed">Save failed: {0}</system:String>
@@ -631,6 +633,7 @@
     <system:String x:Key="Result.ConditionUnsupported">Unsupported condition: {0}</system:String>
     <system:String x:Key="Result.ConditionBranchEmpty">The {0} branch is empty.</system:String>
     <system:String x:Key="Validation.RunBlocked">Cannot run profile: {0} enabled action(s) need configuration.</system:String>
+    <system:String x:Key="Validation.RunDataError">Cannot run profile because its data could not be validated: {0}</system:String>
     <system:String x:Key="Validation.ProfileReferenceCycle">Cannot run profile: profile references contain a cycle or missing profile.</system:String>
     <system:String x:Key="Validation.RunBusy">Profile cannot run while another operation is active.</system:String>
     <system:String x:Key="Validation.NoOp">This action will not make any change.</system:String>
@@ -751,6 +754,7 @@
     <system:String x:Key="Activity.Filter.Clear">Clear filters</system:String>
     <system:String x:Key="Preflight.Summary">{0} actions ready, {1} warnings, {2} errors</system:String>
     <system:String x:Key="Status.PreflightBlocked">Profile preflight found errors. The run was not started.</system:String>
+    <system:String x:Key="Status.RunAdminDeclined">Profile run cancelled before execution because administrator confirmation was declined.</system:String>
     <system:String x:Key="Dialog.AdminRequiredTitle">Administrator permissions may be required</system:String>
     <system:String x:Key="Dialog.AdminRequiredMessage">The following actions may require administrator permissions:{0}{1}</system:String>
     <system:String x:Key="Status.DiagnosticsExported">Diagnostic package exported.</system:String>
