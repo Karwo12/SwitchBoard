@@ -607,6 +607,18 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         }
     }
 
+    public bool AutoFitWindowToBackground
+    {
+        get => _userSettings.AutoFitWindowToBackground;
+        set
+        {
+            if (_userSettings.AutoFitWindowToBackground == value) return;
+            _userSettings.AutoFitWindowToBackground = value;
+            OnPropertyChanged();
+            ScheduleSettingsSave();
+        }
+    }
+
     public bool AutomaticBackupEnabled
     {
         get => _userSettings.AutomaticBackupEnabled;
@@ -2256,6 +2268,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         _userSettings.WarnBeforeClosingWithUnsavedChanges = source.WarnBeforeClosingWithUnsavedChanges;
         _userSettings.InterfaceDensity = source.InterfaceDensity;
         _userSettings.ShowCardDetails = source.ShowCardDetails;
+        _userSettings.AutoFitWindowToBackground = source.AutoFitWindowToBackground;
         _userSettings.WindowWidth = source.WindowWidth;
         _userSettings.WindowHeight = source.WindowHeight;
         _userSettings.WindowX = source.WindowX;
@@ -2309,6 +2322,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(CloseBehavior));
         OnPropertyChanged(nameof(InterfaceDensity));
         OnPropertyChanged(nameof(ShowCardDetails));
+        OnPropertyChanged(nameof(AutoFitWindowToBackground));
         OnPropertyChanged(nameof(AutomaticBackupEnabled));
         OnPropertyChanged(nameof(AutomaticBackupCount));
         ApplyInterfaceDensityResources();

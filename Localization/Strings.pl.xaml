@@ -293,6 +293,8 @@
     <system:String x:Key="Settings.DensityHint">Tryb kompaktowy zmniejsza padding kart i odstępy pionowe bez zmiany układu.</system:String>
     <system:String x:Key="Settings.ShowCardDetails">Pokazuj dodatkowe informacje na kartach</system:String>
     <system:String x:Key="Settings.ShowCardDetailsHint">Błędy, ostrzeżenia i stan wykonywania pozostają widoczne.</system:String>
+    <system:String x:Key="Settings.AutoFitWindowToBackground">Dopasuj rozmiar okna do rozdzielczości tła</system:String>
+    <system:String x:Key="Settings.AutoFitWindowToBackgroundHint">Przy zmianie tła rozmiar okna dopasuje się do jego natywnych pikseli i bieżącego skalowania ekranu.</system:String>
     <system:String x:Key="Settings.Backup">Kopia zapasowa i przywracanie</system:String>
     <system:String x:Key="Settings.BackupHint">Kopia zawiera profile, kategorie, kolejność root, ustawienia i definicje własnych motywów. Zewnętrzne pliki obrazów motywów nie są kopiowane.</system:String>
     <system:String x:Key="Settings.ExportBackup">Eksportuj profile i ustawienia</system:String>

@@ -35,6 +35,9 @@ public sealed class UserSettings
 
     public bool ShowCardDetails { get; set; } = true;
 
+    /// <summary>Resize the main window to the native dimensions of a theme background asset.</summary>
+    public bool AutoFitWindowToBackground { get; set; }
+
     public int WindowWidth { get; set; } = 1340;
 
     public int WindowHeight { get; set; } = 820;

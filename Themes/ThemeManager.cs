@@ -52,8 +52,14 @@ public sealed class ThemeManager(AppDataPaths paths) : IThemeManager
         }
 
         var dictionaries = Application.Current.Resources.MergedDictionaries;
-        foreach (var existing in dictionaries.Where(IsThemeDictionary).ToList()) dictionaries.Remove(existing);
+        var previousThemes = dictionaries.Where(IsThemeDictionary).ToList();
+
+        // Keep the background resource continuously available while a live preview
+        // replaces the theme dictionary. Removing the previous dictionary first made
+        // DynamicResource briefly resolve CustomBackgroundPath to an empty fallback,
+        // which closed and reopened the same GIF/MP4 on every color edit.
         dictionaries.Insert(0, dictionary);
+        foreach (var existing in previousThemes) dictionaries.Remove(existing);
         CurrentThemeId = appliedId;
         return appliedId;
     }

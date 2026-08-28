@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.IO;
 using System.Windows;
 using System.Windows.Media;
@@ -35,8 +36,9 @@ internal static class ThemeImageLoader
     private static IReadOnlyList<ThemeImageFrame> LoadGif(string path)
     {
         using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
-        var decoder = new GifBitmapDecoder(stream, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad);
+        var decoder = new GifBitmapDecoder(stream, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.None);
         if (decoder.Frames.Count == 0) return [];
+        BackgroundMediaDiagnostics.GifDecoded();
 
         var globalMetadata = decoder.Metadata as BitmapMetadata;
         var width = ReadInt(globalMetadata, "/logscrdesc/Width");
@@ -57,16 +59,19 @@ internal static class ThemeImageLoader
             var disposal = ReadDisposal(metadata);
             if (disposal == 3) previous = canvas;
 
-            // Copy the decoded frame before composing it. The returned frames then
-            // contain no reference to the decoder or its source stream.
-            var source = CopyToMemory(decodedFrame);
             var left = ReadInt(metadata, "/imgdesc/Left");
             var top = ReadInt(metadata, "/imgdesc/Top");
+            // Detach the frame from the decoder before composition. Drawing decoder
+            // frames directly leaves their native frame storage retained by WPF. The
+            // pooled copy keeps that lifetime deterministic without allocating a new
+            // large managed byte array for every frame.
+            var source = CopyToMemory(decodedFrame);
             canvas = DrawGifFrame(canvas, source, width, height, left, top);
             result.Add(new ThemeImageFrame(canvas, ReadDelay(metadata)));
 
             if (disposal == 2)
-                canvas = ClearGifRegion(canvas, width, height, left, top, source.PixelWidth, source.PixelHeight);
+                canvas = ClearGifRegion(canvas, width, height, left, top,
+                    source.PixelWidth, source.PixelHeight);
             else if (disposal == 3 && previous is not null)
                 canvas = previous;
         }
@@ -79,12 +84,20 @@ internal static class ThemeImageLoader
         var converted = new FormatConvertedBitmap(source, PixelFormats.Pbgra32, null, 0);
         converted.Freeze();
         var stride = converted.PixelWidth * 4;
-        var pixels = new byte[stride * converted.PixelHeight];
-        converted.CopyPixels(pixels, stride, 0);
-        var copy = BitmapSource.Create(converted.PixelWidth, converted.PixelHeight, 96, 96,
-            PixelFormats.Pbgra32, null, pixels, stride);
-        copy.Freeze();
-        return copy;
+        var length = stride * converted.PixelHeight;
+        var pixels = ArrayPool<byte>.Shared.Rent(length);
+        try
+        {
+            converted.CopyPixels(pixels, stride, 0);
+            var copy = BitmapSource.Create(converted.PixelWidth, converted.PixelHeight, 96, 96,
+                PixelFormats.Pbgra32, null, pixels, stride);
+            copy.Freeze();
+            return copy;
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(pixels);
+        }
     }
 
     private static BitmapSource DrawGifFrame(BitmapSource canvas, BitmapSource source,

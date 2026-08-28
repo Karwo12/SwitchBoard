@@ -20,6 +20,7 @@ public sealed class SettingsWorkspaceTests
         Assert.True(settings.WarnBeforeClosingWithUnsavedChanges);
         Assert.Equal("standard", settings.InterfaceDensity);
         Assert.True(settings.ShowCardDetails);
+        Assert.False(settings.AutoFitWindowToBackground);
     }
 
     [Fact]
@@ -34,7 +35,8 @@ public sealed class SettingsWorkspaceTests
             {
                 CloseBehavior = "tray",
                 AutomaticBackupEnabled = true,
-                AutomaticBackupCount = 7
+                AutomaticBackupCount = 7,
+                AutoFitWindowToBackground = true
             };
 
             using (var repository = new JsonSettingsRepository(paths))
@@ -48,6 +50,7 @@ public sealed class SettingsWorkspaceTests
             Assert.Equal("tray", reloaded.CloseBehavior);
             Assert.True(reloaded.AutomaticBackupEnabled);
             Assert.Equal(7, reloaded.AutomaticBackupCount);
+            Assert.True(reloaded.AutoFitWindowToBackground);
         }
         finally
         {
@@ -75,6 +78,7 @@ public sealed class SettingsWorkspaceTests
             Assert.True(settings.WarnBeforeClosingWithUnsavedChanges);
             Assert.Equal("standard", settings.InterfaceDensity);
             Assert.True(settings.ShowCardDetails);
+            Assert.False(settings.AutoFitWindowToBackground);
         }
         finally
         {
@@ -184,6 +188,7 @@ public sealed class SettingsWorkspaceTests
                 LastMainView = "Activity",
                 InterfaceDensity = "compact",
                 ShowCardDetails = false,
+                AutoFitWindowToBackground = true,
                 CustomThemes =
                 [
                     new CustomThemeDefinition
@@ -213,6 +218,7 @@ public sealed class SettingsWorkspaceTests
             Assert.Equal("Activity", imported.Settings.LastMainView);
             Assert.Equal("compact", imported.Settings.InterfaceDensity);
             Assert.False(imported.Settings.ShowCardDetails);
+            Assert.True(imported.Settings.AutoFitWindowToBackground);
             var importedTheme = Assert.Single(imported.Settings.CustomThemes);
             Assert.Equal("#FF123456", importedTheme.Colors.Accent);
             Assert.Null(importedTheme.Colors.BackgroundAssetFileName);
@@ -269,6 +275,7 @@ public sealed class SettingsWorkspaceTests
         Assert.Contains("CustomTheme.HoverIntensity", themeWindowXaml, StringComparison.Ordinal);
         Assert.Contains("Minimum=\"0\" Maximum=\"100\"", themeWindowXaml, StringComparison.Ordinal);
         Assert.Contains("controls:ThemeBackground", mainXaml, StringComparison.Ordinal);
+        Assert.Contains("AutoFitWindowToBackground", mainXaml, StringComparison.Ordinal);
         Assert.Contains("HasGifBackground", themeWindowXaml, StringComparison.Ordinal);
         Assert.Contains("HasVideoBackground", themeWindowXaml, StringComparison.Ordinal);
         Assert.Contains("CustomTheme.VideoPlaybackSpeed", themeWindowXaml, StringComparison.Ordinal);

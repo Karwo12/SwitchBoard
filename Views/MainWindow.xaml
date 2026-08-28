@@ -657,7 +657,8 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <controls:ThemeBackground Grid.RowSpan="3"
+        <controls:ThemeBackground x:Name="ThemeBackgroundHost"
+                                     Grid.RowSpan="3"
                                      SourcePath="{DynamicResource CustomBackgroundPath}"
                                      ImageOpacity="{DynamicResource CustomBackgroundOpacity}"
                                      ImageStretch="{DynamicResource CustomBackgroundStretch}"
@@ -833,6 +834,7 @@
                 </ToggleButton>
                 <ToggleButton x:Name="SettingsNavigationButton"
                               AutomationProperties.Name="{DynamicResource Settings.Title}"
+                              AutomationProperties.AutomationId="SettingsNavigationButton"
                               Click="SettingsNavigationButton_OnClick"
                               Style="{StaticResource TopNavigationButtonStyle}"
                               ToolTip="{DynamicResource Settings.Title}">
@@ -1718,6 +1720,7 @@
 
                     <ToggleButton x:Name="SettingsInterfaceCategoryButton"
                                   AutomationProperties.Name="{DynamicResource Settings.Interface}"
+                                  AutomationProperties.AutomationId="SettingsInterfaceCategoryButton"
                                   Click="SettingsInterfaceCategoryButton_OnClick"
                                   HorizontalAlignment="Stretch"
                                   HorizontalContentAlignment="Left"
@@ -1920,6 +1923,11 @@
                                                   Content="{DynamicResource Settings.ShowCardDetails}" />
                                         <TextBlock Margin="0,4,0,0" Style="{StaticResource CaptionText}"
                                                    Text="{DynamicResource Settings.ShowCardDetailsHint}" TextWrapping="Wrap" />
+                                        <CheckBox Margin="0,16,0,0" AutomationProperties.AutomationId="AutoFitWindowToBackgroundCheckBox"
+                                                  IsChecked="{Binding AutoFitWindowToBackground, Mode=TwoWay}"
+                                                  Content="{DynamicResource Settings.AutoFitWindowToBackground}" />
+                                        <TextBlock Margin="0,4,0,0" Style="{StaticResource CaptionText}"
+                                                   Text="{DynamicResource Settings.AutoFitWindowToBackgroundHint}" TextWrapping="Wrap" />
                                     </StackPanel>
                                 </controls:CardSurfaceControl>
                             </StackPanel>

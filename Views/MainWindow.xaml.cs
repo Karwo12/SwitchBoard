@@ -7,6 +7,8 @@ using System.Threading.Tasks;
 using System.Runtime.InteropServices;
 using System.Windows.Threading;
 using System.Windows.Interop;
+using System.Windows.Media;
+using SwitchBoard.Controls;
 using SwitchBoard.ViewModels;
 using SwitchBoard.Services.Tray;
 
@@ -27,7 +29,18 @@ public partial class MainWindow : Window
     private SettingsCategory _selectedSettingsCategory = SettingsCategory.Profile;
     private readonly MainWindowViewModel _viewModel;
     private SystemTrayService? _trayService;
+    private HwndSource? _windowSource;
+    private DispatcherOperation? _pendingBackgroundFit;
+    private BackgroundNativeSize? _pendingNativeBackgroundSize;
+    private double _defaultMaxWidth;
+    private double _defaultMaxHeight;
     private bool _exitRequestedFromTray;
+
+    private const int WmDpiChanged = 0x02E0;
+    private const uint MonitorDefaultToNearest = 2;
+    private const uint SwpNoSize = 0x0001;
+    private const uint SwpNoZOrder = 0x0004;
+    private const uint SwpNoActivate = 0x0010;
 
     public MainWindow(MainWindowViewModel viewModel)
     {
@@ -38,7 +51,13 @@ public partial class MainWindow : Window
         MinHeight = Math.Min(MinHeight, workArea.Height);
         MaxWidth = workArea.Width;
         MaxHeight = workArea.Height;
+        _defaultMaxWidth = MaxWidth;
+        _defaultMaxHeight = MaxHeight;
         DataContext = viewModel;
+        ThemeBackgroundHost.NativeSizeChanged += ThemeBackgroundHostOnNativeSizeChanged;
+        _viewModel.PropertyChanged += ViewModelOnPropertyChanged;
+        Loaded += MainWindowOnLoaded;
+        SourceInitialized += MainWindowOnSourceInitialized;
         SetSettingsCategory(_selectedSettingsCategory);
         SetMainView(viewModel.InitialMainView);
         RestoreWindowGeometry(viewModel, workArea);
@@ -284,6 +303,12 @@ public partial class MainWindow : Window
     private void OnClosed(object? sender, EventArgs e)
     {
         Closed -= OnClosed;
+        Loaded -= MainWindowOnLoaded;
+        SourceInitialized -= MainWindowOnSourceInitialized;
+        ThemeBackgroundHost.NativeSizeChanged -= ThemeBackgroundHostOnNativeSizeChanged;
+        _viewModel.PropertyChanged -= ViewModelOnPropertyChanged;
+        if (_windowSource is not null) _windowSource.RemoveHook(WindowMessageHook);
+        _windowSource = null;
         _trayService?.Dispose();
         _trayService = null;
         _viewModel.Dispose();
@@ -312,6 +337,122 @@ public partial class MainWindow : Window
             WindowState = WindowState.Maximized;
     }
 
+    private void MainWindowOnLoaded(object sender, RoutedEventArgs e) => QueueBackgroundFit(ThemeBackgroundHost.NativeSize);
+
+    private void MainWindowOnSourceInitialized(object? sender, EventArgs e)
+    {
+        _windowSource = PresentationSource.FromVisual(this) as HwndSource;
+        _windowSource?.AddHook(WindowMessageHook);
+    }
+
+    private IntPtr WindowMessageHook(IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        if (message == WmDpiChanged) QueueBackgroundFit(ThemeBackgroundHost.NativeSize);
+        return IntPtr.Zero;
+    }
+
+    private void ViewModelOnPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(MainWindowViewModel.AutoFitWindowToBackground)) return;
+        if (!Dispatcher.CheckAccess())
+        {
+            _ = Dispatcher.BeginInvoke(() => ViewModelOnPropertyChanged(sender, e));
+            return;
+        }
+
+        if (_viewModel.AutoFitWindowToBackground) QueueBackgroundFit(ThemeBackgroundHost.NativeSize);
+        else RestoreDefaultWindowLimits();
+    }
+
+    private void ThemeBackgroundHostOnNativeSizeChanged(object? sender, BackgroundNativeSizeChangedEventArgs e) =>
+        QueueBackgroundFit(e.Size);
+
+    private void QueueBackgroundFit(BackgroundNativeSize? nativeSize)
+    {
+        if (!_viewModel.AutoFitWindowToBackground || nativeSize is not BackgroundNativeSize size || !size.IsValid ||
+            WindowState != WindowState.Normal)
+            return;
+
+        _pendingNativeBackgroundSize = size;
+        if (_pendingBackgroundFit?.Status == DispatcherOperationStatus.Pending) return;
+        _pendingBackgroundFit = Dispatcher.BeginInvoke(DispatcherPriority.ContextIdle, new Action(() =>
+        {
+            _pendingBackgroundFit = null;
+            var pending = _pendingNativeBackgroundSize;
+            _pendingNativeBackgroundSize = null;
+            if (pending is BackgroundNativeSize background) ApplyBackgroundFit(background);
+        }));
+    }
+
+    private void ApplyBackgroundFit(BackgroundNativeSize nativeSize)
+    {
+        if (!_viewModel.AutoFitWindowToBackground || WindowState != WindowState.Normal || !nativeSize.IsValid ||
+            !TryGetMonitorMetrics(out var metrics))
+            return;
+
+        var backgroundPixels = new Size(
+            Math.Max(1, ThemeBackgroundHost.ActualWidth * metrics.Dpi.DpiScaleX),
+            Math.Max(1, ThemeBackgroundHost.ActualHeight * metrics.Dpi.DpiScaleY));
+        var fit = BackgroundWindowAutoSize.Calculate(nativeSize, metrics.WorkAreaPixels, metrics.WindowPixels,
+            backgroundPixels, metrics.Dpi);
+        if (fit is null) return;
+
+        var maximumWidth = Math.Max(MinWidth, metrics.WorkAreaPixels.Width / metrics.Dpi.DpiScaleX);
+        var maximumHeight = Math.Max(MinHeight, metrics.WorkAreaPixels.Height / metrics.Dpi.DpiScaleY);
+        MaxWidth = maximumWidth;
+        MaxHeight = maximumHeight;
+
+        // The existing minimum window size protects the layout. Do not upscale a small
+        // background merely to satisfy it; leave the user's current size unchanged.
+        if (fit.Value.WindowDips.Width < MinWidth || fit.Value.WindowDips.Height < MinHeight) return;
+
+        var targetWidth = Math.Clamp(fit.Value.WindowDips.Width, MinWidth, MaxWidth);
+        var targetHeight = Math.Clamp(fit.Value.WindowDips.Height, MinHeight, MaxHeight);
+        if (Math.Abs(Width - targetWidth) > 0.5) Width = targetWidth;
+        if (Math.Abs(Height - targetHeight) > 0.5) Height = targetHeight;
+        UpdateLayout();
+        KeepWindowInsideWorkingArea(metrics.WorkArea, metrics.WindowHandle);
+    }
+
+    private void RestoreDefaultWindowLimits()
+    {
+        MaxWidth = _defaultMaxWidth;
+        MaxHeight = _defaultMaxHeight;
+    }
+
+    private bool TryGetMonitorMetrics(out MonitorMetrics metrics)
+    {
+        metrics = default;
+        var handle = new WindowInteropHelper(this).Handle;
+        if (handle == IntPtr.Zero) return false;
+        var monitor = MonitorFromWindow(handle, MonitorDefaultToNearest);
+        if (monitor == IntPtr.Zero) return false;
+        var info = new MonitorInfo { CbSize = Marshal.SizeOf<MonitorInfo>() };
+        if (!GetMonitorInfo(monitor, ref info) || !GetWindowRect(handle, out var windowRect)) return false;
+
+        uint dpiValue;
+        try { dpiValue = GetDpiForWindow(handle); }
+        catch (EntryPointNotFoundException) { dpiValue = 0; }
+        var dpi = dpiValue > 0
+            ? new DpiScale(dpiValue / 96d, dpiValue / 96d)
+            : VisualTreeHelper.GetDpi(ThemeBackgroundHost);
+        metrics = new MonitorMetrics(handle, info.Work, new Size(info.Work.Right - info.Work.Left,
+            info.Work.Bottom - info.Work.Top), new Size(windowRect.Right - windowRect.Left,
+            windowRect.Bottom - windowRect.Top), dpi);
+        return true;
+    }
+
+    private static void KeepWindowInsideWorkingArea(NativeRect workingArea, IntPtr handle)
+    {
+        if (!GetWindowRect(handle, out var bounds)) return;
+        var left = Math.Clamp(bounds.Left, workingArea.Left, Math.Max(workingArea.Left, workingArea.Right -
+            (bounds.Right - bounds.Left)));
+        var top = Math.Clamp(bounds.Top, workingArea.Top, Math.Max(workingArea.Top, workingArea.Bottom -
+            (bounds.Bottom - bounds.Top)));
+        if (left == bounds.Left && top == bounds.Top) return;
+        _ = SetWindowPos(handle, IntPtr.Zero, left, top, 0, 0, SwpNoSize | SwpNoZOrder | SwpNoActivate);
+    }
+
     private static Rect? GetWorkingArea(Rect bounds)
     {
         var nativeRect = new NativeRect
@@ -329,8 +470,21 @@ public partial class MainWindow : Window
     [DllImport("user32.dll")]
     private static extern IntPtr MonitorFromRect(ref NativeRect rect, uint flags);
 
+    [DllImport("user32.dll")]
+    private static extern IntPtr MonitorFromWindow(IntPtr window, uint flags);
+
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     private static extern bool GetMonitorInfo(IntPtr monitor, ref MonitorInfo info);
+
+    [DllImport("user32.dll")]
+    private static extern bool GetWindowRect(IntPtr window, out NativeRect rect);
+
+    [DllImport("user32.dll")]
+    private static extern uint GetDpiForWindow(IntPtr window);
+
+    [DllImport("user32.dll")]
+    private static extern bool SetWindowPos(IntPtr window, IntPtr insertAfter, int x, int y, int width, int height,
+        uint flags);
 
     [DllImport("user32.dll")]
     private static extern bool SetForegroundWindow(IntPtr windowHandle);
@@ -346,6 +500,9 @@ public partial class MainWindow : Window
         public NativeRect Work;
         public uint Flags;
     }
+
+    private readonly record struct MonitorMetrics(IntPtr WindowHandle, NativeRect WorkArea, Size WorkAreaPixels,
+        Size WindowPixels, DpiScale Dpi);
 
     private void SystemChangeEntry_OnMouseDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {

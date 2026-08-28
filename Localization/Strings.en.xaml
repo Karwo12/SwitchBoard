@@ -291,6 +291,8 @@
     <system:String x:Key="Settings.DensityHint">Compact reduces card padding and vertical spacing without changing the layout.</system:String>
     <system:String x:Key="Settings.ShowCardDetails">Show additional card details</system:String>
     <system:String x:Key="Settings.ShowCardDetailsHint">Errors, warnings, and running state remain visible.</system:String>
+    <system:String x:Key="Settings.AutoFitWindowToBackground">Fit window size to background resolution</system:String>
+    <system:String x:Key="Settings.AutoFitWindowToBackgroundHint">When the background changes, the window follows its native pixels and the current display scaling.</system:String>
     <system:String x:Key="Settings.Backup">Backup and restore</system:String>
     <system:String x:Key="Settings.BackupHint">Profiles, categories, root order, settings, and custom theme definitions are included. External theme image files are not copied.</system:String>
     <system:String x:Key="Settings.ExportBackup">Export profiles and settings</system:String>

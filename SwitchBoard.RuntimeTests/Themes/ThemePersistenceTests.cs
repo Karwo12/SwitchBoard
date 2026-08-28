@@ -140,6 +140,9 @@ public sealed class ThemePersistenceTests : RuntimeTestBase
             var firstAsset = Path.Combine(paths.CustomThemeDirectory, first.Colors.BackgroundAssetFileName!);
             var firstFrames = ThemeImageLoader.Load(firstAsset);
             Assert.Equal(2, firstFrames.Count);
+            Assert.All(firstFrames, frame => Assert.True(frame.Source.IsFrozen));
+            Assert.Equal(new byte[] { 0, 0, 255, 255 }, ReadFirstPixel(firstFrames[0].Source));
+            Assert.Equal(new byte[] { 255, 0, 0, 255 }, ReadFirstPixel(firstFrames[1].Source));
             Assert.Equal(BackgroundImageFits.Center, first.Colors.ImageFit);
             Assert.Equal(GifAnimationDirections.PingPong, first.Colors.GifAnimationDirection);
             Assert.Equal(1.5, first.Colors.GifAnimationSpeed, 3);
@@ -253,10 +256,12 @@ public sealed class ThemePersistenceTests : RuntimeTestBase
             VerifyBuiltInThemes(app, manager);
             VerifyContrastMatrix(app, manager);
             VerifyAssetsAndOpacity(app, manager, paths);
+            var backgroundHost = VerifyBackgroundLifecycle(manager, paths);
             VerifyEditor(app, manager, paths);
             VerifyLiveResourceInheritance(manager);
             VerifyThemePickerControl(app, manager);
             VerifyCardSurfaceControl(app, manager);
+            backgroundHost.Close();
         });
     }
 
@@ -378,6 +383,228 @@ public sealed class ThemePersistenceTests : RuntimeTestBase
         Assert.Equal(2, decoder.Frames.Count);
     }
 
+    private static System.Windows.Window VerifyBackgroundLifecycle(ThemeManager manager, AppDataPaths paths)
+    {
+        var countersBefore = BackgroundMediaDiagnostics.Snapshot;
+        var videoSettings = CustomThemeSettings.CreateDefault();
+        videoSettings.BackgroundAssetFileName = "test.mp4";
+        manager.ApplyTheme("background-lifecycle", videoSettings);
+
+        var background = new ThemeBackground();
+        var nativeSizeEvents = new List<BackgroundNativeSize>();
+        background.NativeSizeChanged += (_, args) => nativeSizeEvents.Add(args.Size);
+        background.SetResourceReference(ThemeBackground.SourcePathProperty, "CustomBackgroundPath");
+        background.SetResourceReference(ThemeBackground.ImageOpacityProperty, "CustomBackgroundOpacity");
+        background.SetResourceReference(ThemeBackground.ImageStretchProperty, "CustomBackgroundStretch");
+        background.SetResourceReference(ThemeBackground.GifAnimationDirectionProperty,
+            "CustomBackgroundGifAnimationDirection");
+        background.SetResourceReference(ThemeBackground.GifAnimationSpeedProperty,
+            "CustomBackgroundGifAnimationSpeed");
+        background.SetResourceReference(ThemeBackground.VideoPlaybackSpeedProperty,
+            "CustomBackgroundVideoPlaybackSpeed");
+        background.SetResourceReference(ThemeBackground.VideoAudioEnabledProperty,
+            "CustomBackgroundVideoAudioEnabled");
+        background.SetResourceReference(ThemeBackground.ImageFlipHorizontalProperty,
+            "CustomBackgroundFlipHorizontal");
+        background.SetResourceReference(ThemeBackground.ImageFlipVerticalProperty,
+            "CustomBackgroundFlipVertical");
+
+        var host = new System.Windows.Window
+        {
+            ShowActivated = false,
+            ShowInTaskbar = false,
+            Width = 640,
+            Height = 360,
+            Content = background
+        };
+
+        host.Show();
+        DrainDispatcher();
+        Assert.Equal(BackgroundAssetKind.Video, background.ActiveAssetKind);
+        Assert.Equal(1, background.ActiveRendererCount);
+        var video = Assert.IsType<VideoBackgroundPlayer>(background.ActiveVideoRenderer);
+        Assert.True(video.IsPlaybackRequested);
+        var opensAfterInitialLoad = BackgroundMediaDiagnostics.Snapshot.VideoOpenCount;
+        Assert.Equal(countersBefore.VideoOpenCount + 1, opensAfterInitialLoad);
+        Assert.Equal(countersBefore.ActiveRenderers + 1, BackgroundMediaDiagnostics.Snapshot.ActiveRenderers);
+
+        // Theme color/opacity/playback changes replace the resource dictionary but
+        // must retain the same renderer and must not reopen an unchanged MP4.
+        var recoloredVideo = videoSettings.Clone();
+        recoloredVideo.Accent = "#FF33AA77";
+        recoloredVideo.Card = "#FF152535";
+        recoloredVideo.BackgroundOpacity = 0.61;
+        recoloredVideo.VideoPlaybackSpeed = 1.5;
+        recoloredVideo.ImageFlipHorizontal = true;
+        manager.ApplyTemporary("background-lifecycle", recoloredVideo);
+        DrainDispatcher();
+        Assert.Same(video, background.ActiveVideoRenderer);
+        Assert.Equal(opensAfterInitialLoad, BackgroundMediaDiagnostics.Snapshot.VideoOpenCount);
+
+        video.SuspendForInteraction();
+        Assert.True(video.IsInteractionSuspended);
+        Assert.False(video.IsPlaybackRequested);
+        video.ResumeAfterInteraction();
+        Assert.False(video.IsInteractionSuspended);
+        Assert.True(video.IsPlaybackRequested);
+        Assert.Equal(opensAfterInitialLoad, BackgroundMediaDiagnostics.Snapshot.VideoOpenCount);
+
+        var wheel = new System.Windows.Input.MouseWheelEventArgs(
+            System.Windows.Input.Mouse.PrimaryDevice, Environment.TickCount, -120)
+        {
+            RoutedEvent = System.Windows.Input.Mouse.PreviewMouseWheelEvent
+        };
+        host.RaiseEvent(wheel);
+        Assert.True(video.IsInteractionSuspended);
+        Assert.False(video.IsPlaybackRequested);
+        video.ResumeAfterInteraction();
+
+        background.ImageOpacity = 0;
+        DrainDispatcher();
+        Assert.False(video.IsPlaybackRequested);
+        background.ImageOpacity = recoloredVideo.BackgroundOpacity;
+        DrainDispatcher();
+        Assert.True(video.IsPlaybackRequested);
+        Assert.Equal(opensAfterInitialLoad, BackgroundMediaDiagnostics.Snapshot.VideoOpenCount);
+
+        host.WindowState = System.Windows.WindowState.Minimized;
+        DrainDispatcher();
+        Assert.False(video.IsPlaybackRequested);
+        host.WindowState = System.Windows.WindowState.Normal;
+        DrainDispatcher();
+        Assert.True(video.IsPlaybackRequested);
+        host.Hide();
+        DrainDispatcher();
+        Assert.False(video.IsPlaybackRequested);
+        host.Show();
+        DrainDispatcher();
+        Assert.True(video.IsPlaybackRequested);
+        Assert.Equal(opensAfterInitialLoad, BackgroundMediaDiagnostics.Snapshot.VideoOpenCount);
+
+        // The editor sends its preview to application resources/MainWindow. It must
+        // not contain or create another media host/player of its own.
+        var rendererCountBeforeEditor = BackgroundMediaDiagnostics.Snapshot.ActiveRenderers;
+        var editor = new SwitchBoard.Views.CustomThemeWindow(
+            new CustomThemeEditRequest(CustomThemeEditMode.EditCustom, "Lifecycle", recoloredVideo, [],
+                "background-lifecycle", settings => manager.ApplyTemporary("background-lifecycle", settings)),
+            paths, new TestLocalizationService());
+        editor.Show();
+        editor.UpdateLayout();
+        Assert.Empty(FindVisualChildren<ThemeBackground>(editor));
+        Assert.Equal(rendererCountBeforeEditor, BackgroundMediaDiagnostics.Snapshot.ActiveRenderers);
+        editor.ViewModel.Colors.First(item => item.Key == "accent").Color = "#FF4488CC";
+        DrainDispatcher();
+        Assert.Equal(rendererCountBeforeEditor, BackgroundMediaDiagnostics.Snapshot.ActiveRenderers);
+        Assert.Equal(opensAfterInitialLoad, BackgroundMediaDiagnostics.Snapshot.VideoOpenCount);
+        editor.Close();
+        DrainDispatcher();
+
+        var gifSettings = CustomThemeSettings.CreateDefault();
+        gifSettings.BackgroundAssetFileName = "test.gif";
+        manager.ApplyTemporary("background-lifecycle", gifSettings);
+        DrainDispatcher();
+        Assert.Equal(BackgroundAssetKind.Gif, background.ActiveAssetKind);
+        Assert.Equal(1, background.ActiveRendererCount);
+        var gif = Assert.IsType<AnimatedBackground>(background.ActiveImageRenderer);
+        Assert.Equal(2, gif.DecodedFrameCount);
+        Assert.True(gif.AreDecodedFramesFrozen);
+        Assert.True(gif.IsAnimationRunning);
+        Assert.Equal(new BackgroundNativeSize(Path.GetFullPath(Path.Combine(paths.CustomThemeDirectory, "test.gif")), 2, 2),
+            Assert.Single(nativeSizeEvents));
+        var gifDecodes = BackgroundMediaDiagnostics.Snapshot.GifDecodeCount;
+
+        var adjustedGif = gifSettings.Clone();
+        adjustedGif.Accent = "#FFAA6633";
+        adjustedGif.BackgroundOpacity = 0.72;
+        adjustedGif.ImageFit = BackgroundImageFits.Center;
+        adjustedGif.GifAnimationDirection = GifAnimationDirections.PingPong;
+        adjustedGif.GifAnimationSpeed = 2;
+        adjustedGif.ImageFlipVertical = true;
+        manager.ApplyTemporary("background-lifecycle", adjustedGif);
+        DrainDispatcher();
+        Assert.Same(gif, background.ActiveImageRenderer);
+        Assert.Equal(gifDecodes, BackgroundMediaDiagnostics.Snapshot.GifDecodeCount);
+        Assert.Equal(2, gif.DecodedFrameCount);
+        Assert.Single(nativeSizeEvents);
+
+        gif.SuspendForInteraction();
+        Assert.True(gif.IsInteractionSuspended);
+        Assert.False(gif.IsAnimationRunning);
+        gif.ResumeAfterInteraction();
+        Assert.False(gif.IsInteractionSuspended);
+        Assert.True(gif.IsAnimationRunning);
+
+        background.ImageOpacity = 0;
+        DrainDispatcher();
+        Assert.False(gif.IsAnimationRunning);
+        background.ImageOpacity = adjustedGif.BackgroundOpacity;
+        DrainDispatcher();
+        Assert.True(gif.IsAnimationRunning);
+        Assert.Equal(gifDecodes, BackgroundMediaDiagnostics.Snapshot.GifDecodeCount);
+
+        host.WindowState = System.Windows.WindowState.Minimized;
+        DrainDispatcher();
+        Assert.False(gif.IsAnimationRunning);
+        Assert.Equal(gifDecodes, BackgroundMediaDiagnostics.Snapshot.GifDecodeCount);
+        host.WindowState = System.Windows.WindowState.Normal;
+        DrainDispatcher();
+        Assert.True(gif.IsAnimationRunning);
+        host.Hide();
+        DrainDispatcher();
+        Assert.False(gif.IsAnimationRunning);
+        host.Show();
+        DrainDispatcher();
+        Assert.True(gif.IsAnimationRunning);
+        Assert.Equal(gifDecodes, BackgroundMediaDiagnostics.Snapshot.GifDecodeCount);
+
+        // Exercise repeated type changes. Each transition releases the previous
+        // renderer before the next one exists, and removing the asset releases all.
+        foreach (var asset in new[] { "test.jpg", "test.gif", "test.mp4", "test.jpg", "test.gif", "test.mp4" })
+        {
+            var settings = CustomThemeSettings.CreateDefault();
+            settings.BackgroundAssetFileName = asset;
+            manager.ApplyTemporary("background-lifecycle", settings);
+            DrainDispatcher();
+            Assert.Equal(1, background.ActiveRendererCount);
+            Assert.Equal(countersBefore.ActiveRenderers + 1,
+                BackgroundMediaDiagnostics.Snapshot.ActiveRenderers);
+            Assert.InRange(BackgroundMediaDiagnostics.Snapshot.ActiveMediaPlayers, 0, 1);
+            Assert.InRange(BackgroundMediaDiagnostics.Snapshot.ActiveGifTimers, 0, 1);
+        }
+
+        var noBackground = CustomThemeSettings.CreateDefault();
+        manager.ApplyTemporary("background-lifecycle", noBackground);
+        DrainDispatcher();
+        Assert.Equal(BackgroundAssetKind.None, background.ActiveAssetKind);
+        Assert.Equal(0, background.ActiveRendererCount);
+        Assert.Equal(countersBefore.ActiveRenderers, BackgroundMediaDiagnostics.Snapshot.ActiveRenderers);
+        Assert.Equal(countersBefore.ActiveMediaPlayers, BackgroundMediaDiagnostics.Snapshot.ActiveMediaPlayers);
+        Assert.Equal(countersBefore.ActiveGifTimers, BackgroundMediaDiagnostics.Snapshot.ActiveGifTimers);
+        Assert.Equal(0, gif.DecodedFrameCount);
+
+        return host;
+    }
+
+    private static IEnumerable<T> FindVisualChildren<T>(System.Windows.DependencyObject root)
+        where T : System.Windows.DependencyObject
+    {
+        for (var index = 0; index < System.Windows.Media.VisualTreeHelper.GetChildrenCount(root); index++)
+        {
+            var child = System.Windows.Media.VisualTreeHelper.GetChild(root, index);
+            if (child is T match) yield return match;
+            foreach (var descendant in FindVisualChildren<T>(child)) yield return descendant;
+        }
+    }
+
+    private static void DrainDispatcher()
+    {
+        var frame = new System.Windows.Threading.DispatcherFrame();
+        _ = System.Windows.Threading.Dispatcher.CurrentDispatcher.BeginInvoke(
+            System.Windows.Threading.DispatcherPriority.Background,
+            new Action(() => frame.Continue = false));
+        System.Windows.Threading.Dispatcher.PushFrame(frame);
+    }
+
     private static void VerifyEditor(System.Windows.Application app, ThemeManager manager, AppDataPaths paths)
     {
         var extreme = CustomThemeSettings.CreateDefault();
@@ -402,6 +629,33 @@ public sealed class ThemePersistenceTests : RuntimeTestBase
         Assert.True(liveApplyCount >= 2);
         Assert.Equal("draft-live", manager.CurrentThemeId);
         Assert.Equal(Color.FromRgb(8, 14, 20), ((SolidColorBrush)app.TryFindResource("BackgroundBrush")!).Color);
+
+        var scheduledApplyCount = 0;
+        CustomThemeSettings? lastScheduled = null;
+        using (var scheduler = new WpfCustomThemeEditorService.ThemePreviewScheduler(
+                   settings => { scheduledApplyCount++; lastScheduled = settings; }, extreme,
+                   System.Windows.Threading.Dispatcher.CurrentDispatcher))
+        {
+            var firstQueued = extreme.Clone();
+            firstQueued.Accent = "#FF010203";
+            scheduler.Queue(firstQueued);
+            var latestQueued = firstQueued.Clone();
+            latestQueued.Accent = "#FF040506";
+            scheduler.Queue(latestQueued);
+            Assert.True(scheduler.HasPendingUpdate);
+            Assert.Equal(0, scheduledApplyCount);
+            scheduler.Flush();
+            Assert.Equal(1, scheduledApplyCount);
+            Assert.Equal("#FF040506", lastScheduled?.Accent);
+
+            // Source switches stay synchronous so the old player/file handle is
+            // released before CustomThemeWindow removes a temporary media asset.
+            var changedAsset = latestQueued.Clone();
+            changedAsset.BackgroundAssetFileName = "new-background.mp4";
+            scheduler.Queue(changedAsset);
+            Assert.Equal(2, scheduledApplyCount);
+            Assert.False(scheduler.HasPendingUpdate);
+        }
 
         var applyCountBeforeHoverChange = liveApplyCount;
         editor.ViewModel.HoverIntensityPercent = 50;
@@ -593,6 +847,13 @@ public sealed class ThemePersistenceTests : RuntimeTestBase
     private static void AssertBrushColor(Brush? brush, Color expected) =>
         Assert.Equal(expected, Assert.IsType<SolidColorBrush>(brush).Color);
 
+    private static byte[] ReadFirstPixel(BitmapSource source)
+    {
+        var pixel = new byte[4];
+        source.CopyPixels(new System.Windows.Int32Rect(0, 0, 1, 1), pixel, 4, 0);
+        return pixel;
+    }
+
     private static void AssertNoImportDirectories(string directory) =>
         Assert.Empty(Directory.GetDirectories(directory, ".import-*", SearchOption.TopDirectoryOnly));
 
@@ -620,6 +881,10 @@ public sealed class ThemePersistenceTests : RuntimeTestBase
         var thread = new Thread(() =>
         {
             var app = new SwitchBoard.App();
+            // The scenario creates and closes auxiliary windows without running the
+            // normal application loop. Keep the WPF lifetime explicit so an
+            // intermediate window cannot begin Application shutdown.
+            app.ShutdownMode = System.Windows.ShutdownMode.OnExplicitShutdown;
             try
             {
                 // The test host does not execute the production startup path that normally
