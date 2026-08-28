@@ -1,0 +1,131 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Publish Windows release
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Validate tag and main ancestry
+        shell: pwsh
+        run: |
+          $tag = $env:GITHUB_REF_NAME
+          if ($tag -notmatch '^v(?<version>\d+\.\d+\.\d+)$') {
+            throw "Release tags must use stable SemVer in the form vX.Y.Z. Received: $tag"
+          }
+
+          git fetch --no-tags origin main
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Could not fetch the main branch for tag validation.'
+          }
+
+          $tagCommit = (git rev-list -n 1 $tag).Trim()
+          if ([string]::IsNullOrWhiteSpace($tagCommit)) {
+            throw "Could not resolve tag: $tag"
+          }
+
+          git merge-base --is-ancestor $tagCommit origin/main
+          if ($LASTEXITCODE -ne 0) {
+            throw "Tag $tag does not point to a commit in the history of main."
+          }
+
+          $version = $Matches.version
+          @(
+            "RELEASE_VERSION=$version"
+            "RELEASE_TAG=$tag"
+            "ZIP_NAME=SwitchBoard-$tag-win-x64.zip"
+            "CHECKSUM_NAME=SwitchBoard-$tag-win-x64.sha256.txt"
+          ) | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        shell: pwsh
+        run: dotnet restore .\SwitchBoard.sln -r win-x64
+
+      - name: Build Release
+        shell: pwsh
+        run: dotnet build .\SwitchBoard.sln -c Release --no-restore
+
+      - name: Test Release
+        shell: pwsh
+        run: dotnet test .\SwitchBoard.sln -c Release --no-build --no-restore
+
+      - name: Publish self-contained win-x64
+        shell: pwsh
+        run: |
+          $publishDirectory = Join-Path $env:GITHUB_WORKSPACE 'artifacts\publish'
+          dotnet publish .\SwitchBoard.csproj `
+            -c Release `
+            -r win-x64 `
+            --self-contained true `
+            -o $publishDirectory `
+            --no-restore `
+            -p:Version=$env:RELEASE_VERSION
+
+          $requiredFiles = @(
+            'SwitchBoard.exe'
+            'SwitchBoard.dll'
+            'SwitchBoard.deps.json'
+            'SwitchBoard.runtimeconfig.json'
+          )
+          foreach ($file in $requiredFiles) {
+            if (-not (Test-Path (Join-Path $publishDirectory $file))) {
+              throw "Publish output is missing required file: $file"
+            }
+          }
+
+      - name: Package and checksum
+        shell: pwsh
+        run: |
+          $publishDirectory = Join-Path $env:GITHUB_WORKSPACE 'artifacts\publish'
+          $packageDirectory = Join-Path $env:GITHUB_WORKSPACE 'artifacts\release'
+          New-Item -ItemType Directory -Path $packageDirectory -Force | Out-Null
+
+          $zipPath = Join-Path $packageDirectory $env:ZIP_NAME
+          Compress-Archive -Path (Join-Path $publishDirectory '*') -DestinationPath $zipPath -CompressionLevel Optimal
+
+          $hash = (Get-FileHash -Path $zipPath -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash *$env:ZIP_NAME" | Set-Content -Path (Join-Path $packageDirectory $env:CHECKSUM_NAME) -Encoding ascii
+
+          if (-not (Test-Path $zipPath)) {
+            throw "Package was not created: $zipPath"
+          }
+
+      - name: Create GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $packageDirectory = Join-Path $env:GITHUB_WORKSPACE 'artifacts\release'
+          $zipPath = Join-Path $packageDirectory $env:ZIP_NAME
+          $checksumPath = Join-Path $packageDirectory $env:CHECKSUM_NAME
+          $arguments = @(
+            'release', 'create', $env:RELEASE_TAG,
+            $zipPath,
+            $checksumPath,
+            '--title', "SwitchBoard $env:RELEASE_TAG",
+            '--generate-notes',
+            '--verify-tag'
+          )
+
+          & gh @arguments
+          if ($LASTEXITCODE -ne 0) {
+            throw 'GitHub Release creation failed.'
+          }

@@ -1,0 +1,63 @@
+<UserControl x:Class="SwitchBoard.Controls.ActionEditors.ProgramActionEditor"
+             HorizontalContentAlignment="Stretch"
+             VerticalContentAlignment="Top"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:SwitchBoard.Controls"
+             xmlns:editors="clr-namespace:SwitchBoard.Controls.ActionEditors">
+    <StackPanel>
+        <StackPanel>
+            <StackPanel.Style>
+                <Style TargetType="StackPanel">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding Type}" Value="program.run"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </StackPanel.Style>
+            <Border Style="{StaticResource SettingsRowBorderStyle}" Margin="0,0,0,8">
+                <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions>
+                    <TextBlock VerticalAlignment="Center" Text="{DynamicResource ActionEditor.TargetType}" />
+                    <ComboBox Grid.Column="1" ItemsSource="{Binding AvailableTargetTypes}" DisplayMemberPath="DisplayName" SelectedValuePath="Value" SelectedValue="{Binding TargetType, Mode=TwoWay}" />
+                </Grid>
+            </Border>
+            <StackPanel>
+                <StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed" /><Style.Triggers><DataTrigger Binding="{Binding IsExecutableTarget}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers></Style></StackPanel.Style>
+                <Border Style="{StaticResource SettingsRowBorderStyle}" Margin="0,0,0,8">
+                    <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="170" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                        <TextBlock VerticalAlignment="Center" Text="{DynamicResource ActionEditor.ProgramPath}" />
+                        <Grid Grid.Column="1"><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="8" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="8" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                            <TextBox Text="{Binding Target, UpdateSourceTrigger=PropertyChanged}" />
+                            <Button Grid.Column="2" Command="{Binding DataContext.BrowseProgramCommand, RelativeSource={RelativeSource AncestorType={x:Type controls:ActionEditorControl}}}" CommandParameter="{Binding}" Content="{DynamicResource ActionEditor.Browse}" />
+                            <Button Grid.Column="4" Command="{Binding DataContext.FindProgramCommand, RelativeSource={RelativeSource AncestorType={x:Type controls:ActionEditorControl}}}" CommandParameter="{Binding}" Content="{DynamicResource ActionEditor.FindProgram}" />
+                        </Grid>
+                    </Grid>
+                </Border>
+            </StackPanel>
+            <StackPanel>
+                <StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed" /><Style.Triggers><DataTrigger Binding="{Binding IsUriTarget}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers></Style></StackPanel.Style>
+                <Border Style="{StaticResource SettingsRowBorderStyle}" Margin="0,0,0,8">
+                    <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="170" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                        <TextBlock VerticalAlignment="Center" Text="{DynamicResource ActionEditor.Uri}" /><TextBox Grid.Column="1" Text="{Binding Target, UpdateSourceTrigger=PropertyChanged}" />
+                    </Grid>
+                </Border>
+                <Border Style="{StaticResource SettingsRowBorderStyle}" Margin="0,0,0,8">
+                    <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="170" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                        <TextBlock VerticalAlignment="Center" Text="{DynamicResource ActionEditor.PostLaunchProcess}" />
+                        <Grid Grid.Column="1"><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="8" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                            <TextBox Text="{Binding ProcessName, UpdateSourceTrigger=PropertyChanged}" />
+                            <Button Grid.Column="2" Command="{Binding DataContext.SelectProcessCommand, RelativeSource={RelativeSource AncestorType={x:Type controls:ActionEditorControl}}}" CommandParameter="{Binding}" Content="{DynamicResource ActionEditor.SelectProcess}" />
+                        </Grid>
+                    </Grid>
+                </Border>
+                <Border Style="{StaticResource SettingsRowBorderStyle}" Margin="0,0,0,8">
+                    <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="170" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                        <TextBlock VerticalAlignment="Center" Text="{DynamicResource ActionEditor.ExecutablePath}" /><TextBox Grid.Column="1" Text="{Binding ExecutablePath, UpdateSourceTrigger=PropertyChanged}" />
+                    </Grid>
+                </Border>
+                <TextBlock Margin="0,0,0,8" Style="{StaticResource CaptionText}" Text="{DynamicResource Advanced.ScriptTargetProcessHelp}" TextWrapping="Wrap" />
+            </StackPanel>
+        </StackPanel>
+    </StackPanel>
+</UserControl>

@@ -1,0 +1,176 @@
+<UserControl x:Class="SwitchBoard.Controls.NestedActionEditorControl"
+             x:Name="Root"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:SwitchBoard.Controls"
+             xmlns:editors="clr-namespace:SwitchBoard.Controls.ActionEditors"
+             DataContext="{Binding Action, ElementName=Root}">
+    <Grid Margin="{DynamicResource NestedActionMargin}">
+        <Border CornerRadius="7">
+            <Border.Style>
+                <Style TargetType="Border" BasedOn="{StaticResource ActionCardSurfaceStyle}">
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsComment}" Value="True">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+        </Border>
+        <Border Padding="{DynamicResource NestedActionPadding}" Background="Transparent" CornerRadius="7">
+            <Border.Style>
+                <Style TargetType="Border">
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsComment}" Value="True">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+        <StackPanel>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <CheckBox Margin="0,0,9,0" VerticalAlignment="Center" IsChecked="{Binding IsEnabled}"
+                          ToolTip="{DynamicResource Tooltip.EnableAction}" />
+                <Button Grid.Column="1" Padding="0" HorizontalContentAlignment="Stretch"
+                        Background="Transparent" BorderThickness="0"
+                        Command="{Binding DataContext.ToggleActionExpandedCommand, RelativeSource={RelativeSource AncestorType={x:Type controls:ActionEditorControl}}}"
+                        CommandParameter="{Binding}">
+                    <StackPanel>
+                        <TextBlock FontWeight="SemiBold" Text="{Binding DisplayName}" />
+                        <TextBlock Margin="0,2,0,0" Text="{Binding Summary}">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding DataContext.ShowCardDetails, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="False">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                        <TextBlock Margin="0,4,0,0" FontSize="11" FontWeight="SemiBold"
+                                   Text="{Binding ExecutionStateText}">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsExecutionRunning}" Value="True">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding IsRestoring}" Value="True">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding HasExecutionError}" Value="True">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                            <Setter Property="Foreground" Value="{DynamicResource DangerBrush}" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </StackPanel>
+                </Button>
+                <TextBlock Grid.Column="2" Margin="8,0,8,0" VerticalAlignment="Center"
+                           Foreground="{DynamicResource DangerBrush}" Text="{Binding ValidationMessage}">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding ValidationLevel}" Value="Error"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
+                                <DataTrigger Binding="{Binding ValidationLevel}" Value="Warning"><Setter Property="Visibility" Value="Visible" /><Setter Property="Foreground" Value="{DynamicResource AccentBrush}" /></DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+                <Button Grid.Column="3" Width="28" Height="28" Padding="0" Content="×"
+                        Style="{StaticResource DangerIconButton}" Command="{Binding DeleteCommand, ElementName=Root}"
+                        CommandParameter="{Binding}" ToolTip="{DynamicResource Tooltip.RemoveAction}" />
+                <StackPanel Grid.Column="4" Orientation="Horizontal">
+                    <Button Width="28" Height="28" Padding="0" Content="↑" Command="{Binding MoveUpCommand, ElementName=Root}"
+                            CommandParameter="{Binding}" ToolTip="{DynamicResource Editor.MoveUp}" />
+                    <Button Width="28" Height="28" Padding="0" Content="↓" Command="{Binding MoveDownCommand, ElementName=Root}"
+                            CommandParameter="{Binding}" ToolTip="{DynamicResource Editor.MoveDown}" />
+                </StackPanel>
+            </Grid>
+
+            <TextBlock Margin="0,6,0,0" Foreground="{DynamicResource DangerBrush}" Text="{Binding ValidationMessage}" TextWrapping="Wrap">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding ValidationLevel}" Value="Error"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
+                            <DataTrigger Binding="{Binding ValidationLevel}" Value="Warning"><Setter Property="Visibility" Value="Visible" /><Setter Property="Foreground" Value="{DynamicResource AccentBrush}" /></DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
+
+            <Border Margin="0,9,0,0" Padding="10" Background="{DynamicResource BackgroundBrush}" CornerRadius="6">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers><DataTrigger Binding="{Binding IsExpanded}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers>
+                    </Style>
+                </Border.Style>
+                    <editors:NestedActionEditorFormControl />
+            </Border>
+        </StackPanel>
+        </Border>
+
+        <Border Margin="0,1" Padding="8,4" Background="Transparent" CornerRadius="6">
+            <Border.Style>
+                <Style TargetType="Border">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsComment}" Value="True">
+                            <Setter Property="Visibility" Value="Visible" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+            <StackPanel>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Button Padding="0" HorizontalContentAlignment="Stretch" Background="Transparent" BorderThickness="0"
+                            Command="{Binding DataContext.ToggleActionExpandedCommand, RelativeSource={RelativeSource AncestorType={x:Type controls:ActionEditorControl}}}"
+                            CommandParameter="{Binding}" controls:ListBoxDragDrop.IsDragHandle="True">
+                        <TextBlock FontWeight="SemiBold" Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis" />
+                    </Button>
+                    <Button Grid.Column="1" Width="28" Height="28" Padding="0" Content="&#x00D7;"
+                            Style="{StaticResource DangerIconButton}" Command="{Binding DeleteCommand, ElementName=Root}"
+                            CommandParameter="{Binding}" ToolTip="{DynamicResource Tooltip.RemoveAction}" />
+                    <Button Grid.Column="2" Width="28" Height="28" Padding="0" Content="&#x2191;" Command="{Binding MoveUpCommand, ElementName=Root}"
+                            CommandParameter="{Binding}" ToolTip="{DynamicResource Editor.MoveUp}" />
+                    <Button Grid.Column="3" Width="28" Height="28" Padding="0" Content="&#x2193;" Command="{Binding MoveDownCommand, ElementName=Root}"
+                            CommandParameter="{Binding}" ToolTip="{DynamicResource Editor.MoveDown}" />
+                </Grid>
+                <Border Margin="0,6,0,0">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsExpanded}" Value="True">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <editors:CommentActionEditor />
+                </Border>
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>

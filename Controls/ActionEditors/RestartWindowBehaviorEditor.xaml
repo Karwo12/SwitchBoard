@@ -1,0 +1,12 @@
+<UserControl x:Class="SwitchBoard.Controls.ActionEditors.RestartWindowBehaviorEditor"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <StackPanel Margin="0,8,0,0">
+        <StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed" /><Style.Triggers><DataTrigger Binding="{Binding IsRestartWindowBehaviorEnabled}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers></Style></StackPanel.Style>
+        <TextBlock Style="{StaticResource ActionEditorSectionHeader}" Text="{DynamicResource Advanced.RestartWindowBehavior}" />
+        <Border Style="{DynamicResource SettingsRowBorderStyle}"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions>
+            <TextBlock VerticalAlignment="Center" Text="{DynamicResource Advanced.WindowBehavior}" />
+            <ComboBox Grid.Column="1" ItemsSource="{Binding AvailableWindowBehaviors}" DisplayMemberPath="DisplayName" SelectedValuePath="Value" SelectedValue="{Binding WindowBehavior, Mode=TwoWay}" />
+        </Grid></Border>
+    </StackPanel>
+</UserControl>

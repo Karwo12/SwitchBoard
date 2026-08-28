@@ -1,0 +1,33 @@
+using System.Text.Json.Nodes;
+
+namespace SwitchBoard.Models.Actions;
+
+public sealed class ActionDefinition
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+
+    public string Type { get; set; } = string.Empty;
+
+    public int ActionSchemaVersion { get; set; } = 1;
+
+    public int SortOrder { get; set; }
+
+    public string? Name { get; set; }
+
+    public bool IsEnabled { get; set; } = true;
+
+    public ActionFailurePolicy FailurePolicy { get; set; } = ActionFailurePolicy.Continue;
+
+    public ActionRestoreBehavior RestoreBehavior { get; set; } = ActionRestoreBehavior.DoNotRestore;
+
+    public TimeSpan? Timeout { get; set; }
+
+    public bool RetryOnFailure { get; set; }
+
+    public int MaximumAttempts { get; set; } = 1;
+
+    public TimeSpan RetryDelay { get; set; } = TimeSpan.Zero;
+
+    public JsonObject Parameters { get; set; } = [];
+
+}

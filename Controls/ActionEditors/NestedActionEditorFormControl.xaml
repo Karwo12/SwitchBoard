@@ -1,0 +1,162 @@
+<UserControl x:Class="SwitchBoard.Controls.ActionEditors.NestedActionEditorFormControl"
+             HorizontalContentAlignment="Stretch"
+             VerticalContentAlignment="Top"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:SwitchBoard.Controls"
+             xmlns:editors="clr-namespace:SwitchBoard.Controls.ActionEditors">
+    <StackPanel>
+        <Border>
+            <Border.Style>
+                <Style TargetType="Border">
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsComment}" Value="True">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+            <editors:NestedActionNameEditor />
+        </Border>
+
+        <editors:CommentActionEditor>
+            <editors:CommentActionEditor.Style>
+                <Style TargetType="editors:CommentActionEditor">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsComment}" Value="True">
+                            <Setter Property="Visibility" Value="Visible" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </editors:CommentActionEditor.Style>
+        </editors:CommentActionEditor>
+
+        <!-- Keep the primary fields identical to the top-level action editor. -->
+        <Grid>
+            <Grid.Style>
+                <Style TargetType="Grid">
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsComment}" Value="True">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Grid.Style>
+            <editors:ProgramActionEditor />
+            <editors:SystemActionEditor />
+            <editors:ProcessActionEditor />
+            <editors:AutomationActionEditor />
+        </Grid>
+
+        <Button Margin="0,13,0,0" Padding="0" HorizontalAlignment="Left" Background="Transparent" BorderThickness="0" Cursor="Hand"
+                Command="{Binding DataContext.ToggleAdvancedOptionsCommand, RelativeSource={RelativeSource AncestorType={x:Type controls:ActionEditorControl}}}"
+                CommandParameter="{Binding}">
+            <Button.Style>
+                <Style TargetType="Button">
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsComment}" Value="True">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Button.Style>
+            <StackPanel Orientation="Horizontal">
+                <TextBlock VerticalAlignment="Center">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Text" Value="›" />
+                            <Style.Triggers><DataTrigger Binding="{Binding IsAdvancedOptionsExpanded}" Value="True"><Setter Property="Text" Value="⌄" /></DataTrigger></Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+                <TextBlock Margin="6,0,0,0" VerticalAlignment="Center" Text="{DynamicResource ActionEditor.AdvancedOptions}" />
+            </StackPanel>
+        </Button>
+
+        <Border Margin="0,8,0,0" Padding="12" Background="{DynamicResource InputBackgroundBrush}" CornerRadius="7">
+            <Border.Style>
+                <Style TargetType="Border">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsAdvancedOptionsExpanded}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger>
+                        <DataTrigger Binding="{Binding IsComment}" Value="True"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+            <StackPanel>
+                <editors:DisplayOptionsEditor />
+                <editors:RestartWindowBehaviorEditor />
+                <editors:ScriptTargetEditor />
+
+                <StackPanel>
+                    <StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed" /><Style.Triggers><DataTrigger Binding="{Binding Type}" Value="program.run"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers></Style></StackPanel.Style>
+                    <TextBlock Style="{StaticResource ActionEditorSectionHeader}" Text="{DynamicResource Advanced.Launching}" />
+                    <Border Style="{StaticResource SettingsRowBorderStyle}" Margin="0,5,0,0"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions><TextBlock VerticalAlignment="Center" Text="{DynamicResource ActionEditor.Arguments}" /><TextBox Grid.Column="1" Text="{Binding Arguments, UpdateSourceTrigger=PropertyChanged}" ToolTip="{DynamicResource ActionEditor.ArgumentsHelp}" /></Grid></Border>
+                    <Border Style="{StaticResource SettingsRowBorderStyle}" Margin="0,4,0,0"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions><TextBlock VerticalAlignment="Center" Text="{DynamicResource Advanced.InstanceBehavior}" /><ComboBox Grid.Column="1" ItemsSource="{Binding AvailableInstanceBehaviors}" DisplayMemberPath="DisplayName" SelectedValuePath="Value" SelectedValue="{Binding InstanceBehavior}" /></Grid></Border>
+                    <Border Style="{StaticResource SettingsRowBorderStyle}" Margin="0,4,0,0"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions><TextBlock VerticalAlignment="Center" Text="{DynamicResource ActionEditor.RunAsAdministrator}" /><CheckBox Grid.Column="1" HorizontalAlignment="Center" IsChecked="{Binding RunAsAdministrator}" /></Grid></Border>
+                    <Border Style="{StaticResource SettingsRowBorderStyle}" Margin="0,4,0,0"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions><TextBlock VerticalAlignment="Center" Text="{DynamicResource Advanced.UseCustomWorkingDirectory}" /><CheckBox Grid.Column="1" HorizontalAlignment="Center" IsChecked="{Binding UseCustomWorkingDirectory}" /></Grid></Border>
+                    <Border Margin="0,4,0,0"><Border.Style><Style TargetType="Border" BasedOn="{StaticResource SettingsRowBorderStyle}"><Setter Property="BorderThickness" Value="0" /><Setter Property="Visibility" Value="Collapsed" /><Style.Triggers><DataTrigger Binding="{Binding UseCustomWorkingDirectory}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers></Style></Border.Style><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions><TextBlock VerticalAlignment="Center" Text="{DynamicResource ActionEditor.WorkingDirectory}" /><Grid Grid.Column="1"><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="86" /></Grid.ColumnDefinitions><TextBox Text="{Binding WorkingDirectory, UpdateSourceTrigger=PropertyChanged}" /><Button Grid.Column="1" Margin="6,0,0,0" Content="{DynamicResource ActionEditor.Browse}" Command="{Binding DataContext.BrowseWorkingDirectoryCommand, RelativeSource={RelativeSource AncestorType={x:Type controls:ActionEditorControl}}}" CommandParameter="{Binding}" /></Grid></Grid></Border>
+                </StackPanel>
+
+                <StackPanel Margin="0,8,0,0">
+                    <StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed" /><Style.Triggers><DataTrigger Binding="{Binding Type}" Value="program.run"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers></Style></StackPanel.Style>
+                    <TextBlock Style="{StaticResource ActionEditorSectionHeader}" Text="{DynamicResource Advanced.AfterLaunch}" />
+                    <Border Style="{StaticResource SettingsRowBorderStyle}" Margin="0,5,0,0"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions><TextBlock VerticalAlignment="Center" Text="{DynamicResource ActionEditor.Priority}" /><ComboBox Grid.Column="1" ItemsSource="{Binding AvailableProcessPriorities}" DisplayMemberPath="DisplayName" SelectedValuePath="Value" SelectedValue="{Binding ProcessPriority, Mode=TwoWay}" /></Grid></Border>
+                    <Border Style="{StaticResource SettingsRowBorderStyle}" Margin="0,4,0,0"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions><TextBlock VerticalAlignment="Center" Text="{DynamicResource ActionEditor.MemoryPriority}" /><ComboBox Grid.Column="1" ItemsSource="{Binding AvailableProcessMemoryPriorities}" DisplayMemberPath="DisplayName" SelectedValuePath="Value" SelectedValue="{Binding ProcessMemoryPriority, Mode=TwoWay}" /></Grid></Border>
+                    <Border Style="{StaticResource SettingsRowBorderStyle}" Margin="0,4,0,0"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions><TextBlock VerticalAlignment="Center" Text="{DynamicResource ActionEditor.PerformanceMode}" /><ComboBox Grid.Column="1" ItemsSource="{Binding AvailableProcessPerformanceModes}" DisplayMemberPath="DisplayName" SelectedValuePath="Value" SelectedValue="{Binding ProcessPerformanceMode, Mode=TwoWay}" /></Grid></Border>
+                    <Border Margin="0,4,0,0"><Border.Style><Style TargetType="Border" BasedOn="{StaticResource SettingsRowBorderStyle}"><Setter Property="Visibility" Value="Collapsed" /><Style.Triggers><DataTrigger Binding="{Binding HasPostLaunchProcessSettings}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers></Style></Border.Style><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions><TextBlock VerticalAlignment="Center" Text="{DynamicResource Advanced.WaitForProcessStart}" /><CheckBox Grid.Column="1" HorizontalAlignment="Center" IsChecked="{Binding WaitForProcessStart}" /></Grid></Border>
+                    <Border Margin="0,4,0,0"><Border.Style><Style TargetType="Border" BasedOn="{StaticResource SettingsRowBorderStyle}"><Setter Property="Visibility" Value="Collapsed" /><Style.Triggers><MultiDataTrigger><MultiDataTrigger.Conditions><Condition Binding="{Binding HasPostLaunchProcessSettings}" Value="True" /><Condition Binding="{Binding WaitForProcessStart}" Value="True" /></MultiDataTrigger.Conditions><Setter Property="Visibility" Value="Visible" /></MultiDataTrigger></Style.Triggers></Style></Border.Style><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions><TextBlock VerticalAlignment="Center" Text="{DynamicResource Advanced.MaximumProcessWait}" /><StackPanel Grid.Column="1" Orientation="Horizontal"><TextBox Width="80" Text="{Binding ProcessStartWaitSeconds}" /><TextBlock Margin="6,0,0,0" VerticalAlignment="Center" Text="{DynamicResource Common.Seconds}" /></StackPanel></Grid></Border>
+                    <Border Style="{StaticResource SettingsRowBorderStyle}" Margin="0,4,0,0"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions><TextBlock VerticalAlignment="Center" Text="{DynamicResource ActionEditor.ChangeAffinity}" /><CheckBox Grid.Column="1" HorizontalAlignment="Center" IsChecked="{Binding ChangeAffinity}" /></Grid></Border>
+                    <Border Margin="0,4,0,0"><Border.Style><Style TargetType="Border" BasedOn="{StaticResource SettingsRowBorderStyle}"><Setter Property="Visibility" Value="Collapsed" /><Style.Triggers><DataTrigger Binding="{Binding ChangeAffinity}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers></Style></Border.Style><StackPanel><WrapPanel><Button Margin="0,0,6,6" Content="{DynamicResource ActionEditor.SelectAll}" Command="{Binding DataContext.SelectAllCpusCommand, RelativeSource={RelativeSource AncestorType={x:Type controls:ActionEditorControl}}}" CommandParameter="{Binding}" /><Button Margin="0,0,6,6" Content="{DynamicResource ActionEditor.ClearAll}" Command="{Binding DataContext.ClearAllCpusCommand, RelativeSource={RelativeSource AncestorType={x:Type controls:ActionEditorControl}}}" CommandParameter="{Binding}" /><Button Margin="0,0,0,6" Content="{DynamicResource ActionEditor.AllExceptCpu0}" Command="{Binding DataContext.SelectAllExceptCpu0Command, RelativeSource={RelativeSource AncestorType={x:Type controls:ActionEditorControl}}}" CommandParameter="{Binding}" /></WrapPanel><ScrollViewer MaxHeight="118" VerticalScrollBarVisibility="Auto"><ItemsControl ItemsSource="{Binding LogicalCpus}"><ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel><ItemsControl.ItemTemplate><DataTemplate><CheckBox Width="76" Margin="2" IsChecked="{Binding IsSelected}" Content="{Binding DisplayName}" /></DataTemplate></ItemsControl.ItemTemplate></ItemsControl></ScrollViewer></StackPanel></Border>
+                    <Border Margin="0,4,0,0"><Border.Style><Style TargetType="Border" BasedOn="{StaticResource SettingsRowBorderStyle}"><Setter Property="Visibility" Value="Collapsed" /><Style.Triggers><MultiDataTrigger><MultiDataTrigger.Conditions><Condition Binding="{Binding HasPostLaunchProcessSettings}" Value="True" /><Condition Binding="{Binding IsUriTarget}" Value="False" /></MultiDataTrigger.Conditions><Setter Property="Visibility" Value="Visible" /></MultiDataTrigger></Style.Triggers></Style></Border.Style><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions><TextBlock VerticalAlignment="Center" Text="{DynamicResource ActionEditor.ProcessTarget}" /><ComboBox Grid.Column="1" ItemsSource="{Binding AvailableProcessTargetModes}" DisplayMemberPath="DisplayName" SelectedValuePath="Value" SelectedValue="{Binding ProcessTargetMode, Mode=TwoWay}" /></Grid></Border>
+                    <Border Margin="0,4,0,0"><Border.Style><Style TargetType="Border" BasedOn="{StaticResource SettingsRowBorderStyle}"><Setter Property="Visibility" Value="Collapsed" /><Style.Triggers><MultiDataTrigger><MultiDataTrigger.Conditions><Condition Binding="{Binding IsManualProcessTarget}" Value="True" /><Condition Binding="{Binding IsUriTarget}" Value="False" /></MultiDataTrigger.Conditions><Setter Property="Visibility" Value="Visible" /></MultiDataTrigger></Style.Triggers></Style></Border.Style><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions><TextBlock VerticalAlignment="Center" Text="{DynamicResource ActionEditor.ProcessName}" /><Grid Grid.Column="1"><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="8" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions><TextBox Text="{Binding ProcessName, UpdateSourceTrigger=PropertyChanged}" /><Button Grid.Column="2" Content="{DynamicResource ActionEditor.SelectProcess}" Command="{Binding DataContext.SelectProcessCommand, RelativeSource={RelativeSource AncestorType={x:Type controls:ActionEditorControl}}}" CommandParameter="{Binding}" /></Grid></Grid></Border>
+                </StackPanel>
+
+                <StackPanel Margin="0,8,0,0">
+                    <StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed" /><Style.Triggers><DataTrigger Binding="{Binding Type}" Value="program.run"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers></Style></StackPanel.Style>
+                    <TextBlock Style="{StaticResource ActionEditorSectionHeader}" Text="{DynamicResource Advanced.ProgramWindow}" />
+                    <Border Style="{StaticResource SettingsRowBorderStyle}" Margin="0,5,0,0"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions><TextBlock VerticalAlignment="Center" Text="{DynamicResource Advanced.WindowBehavior}" /><ComboBox Grid.Column="1" ItemsSource="{Binding AvailableWindowBehaviors}" DisplayMemberPath="DisplayName" SelectedValuePath="Value" SelectedValue="{Binding WindowBehavior}" /></Grid></Border>
+                    <Border Margin="0,4,0,0"><Border.Style><Style TargetType="Border" BasedOn="{StaticResource SettingsRowBorderStyle}"><Setter Property="Visibility" Value="Collapsed" /><Style.Triggers><DataTrigger Binding="{Binding IsWindowWaitEnabled}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers></Style></Border.Style><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions><TextBlock VerticalAlignment="Center" Text="{DynamicResource Advanced.WindowWait}" /><TextBox Grid.Column="1" Text="{Binding WindowWaitSeconds}" /></Grid></Border>
+                </StackPanel>
+
+                <StackPanel Margin="0,8,0,0">
+                    <StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed" /><Style.Triggers><DataTrigger Binding="{Binding IsProcessConfigureOperation}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers></Style></StackPanel.Style>
+                    <TextBlock Style="{StaticResource ActionEditorSectionHeader}" Text="{DynamicResource Advanced.ProcessParameters}" />
+                    <Border Style="{StaticResource SettingsRowBorderStyle}" Margin="0,5,0,0"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions><TextBlock VerticalAlignment="Center" Text="{DynamicResource ActionEditor.Priority}" /><ComboBox Grid.Column="1" ItemsSource="{Binding AvailableProcessPriorities}" DisplayMemberPath="DisplayName" SelectedValuePath="Value" SelectedValue="{Binding ProcessPriority, Mode=TwoWay}" /></Grid></Border>
+                    <Border Style="{StaticResource SettingsRowBorderStyle}" Margin="0,4,0,0"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions><TextBlock VerticalAlignment="Center" Text="{DynamicResource ActionEditor.MemoryPriority}" /><ComboBox Grid.Column="1" ItemsSource="{Binding AvailableProcessMemoryPriorities}" DisplayMemberPath="DisplayName" SelectedValuePath="Value" SelectedValue="{Binding ProcessMemoryPriority, Mode=TwoWay}" /></Grid></Border>
+                    <Border Style="{StaticResource SettingsRowBorderStyle}" Margin="0,4,0,0"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions><TextBlock VerticalAlignment="Center" Text="{DynamicResource ActionEditor.PerformanceMode}" /><ComboBox Grid.Column="1" ItemsSource="{Binding AvailableProcessPerformanceModes}" DisplayMemberPath="DisplayName" SelectedValuePath="Value" SelectedValue="{Binding ProcessPerformanceMode, Mode=TwoWay}" /></Grid></Border>
+                    <Border Style="{StaticResource SettingsRowBorderStyle}" Margin="0,4,0,0"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions><TextBlock VerticalAlignment="Center" Text="{DynamicResource ActionEditor.ChangeAffinity}" /><CheckBox Grid.Column="1" HorizontalAlignment="Center" IsChecked="{Binding ChangeAffinity}" /></Grid></Border>
+                    <Border Margin="0,4,0,0"><Border.Style><Style TargetType="Border" BasedOn="{StaticResource SettingsRowBorderStyle}"><Setter Property="Visibility" Value="Collapsed" /><Style.Triggers><DataTrigger Binding="{Binding ChangeAffinity}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers></Style></Border.Style><StackPanel><WrapPanel><Button Margin="0,0,6,6" Content="{DynamicResource ActionEditor.SelectAll}" Command="{Binding DataContext.SelectAllCpusCommand, RelativeSource={RelativeSource AncestorType={x:Type controls:ActionEditorControl}}}" CommandParameter="{Binding}" /><Button Margin="0,0,6,6" Content="{DynamicResource ActionEditor.ClearAll}" Command="{Binding DataContext.ClearAllCpusCommand, RelativeSource={RelativeSource AncestorType={x:Type controls:ActionEditorControl}}}" CommandParameter="{Binding}" /><Button Margin="0,0,0,6" Content="{DynamicResource ActionEditor.AllExceptCpu0}" Command="{Binding DataContext.SelectAllExceptCpu0Command, RelativeSource={RelativeSource AncestorType={x:Type controls:ActionEditorControl}}}" CommandParameter="{Binding}" /></WrapPanel><ScrollViewer MaxHeight="118" VerticalScrollBarVisibility="Auto"><ItemsControl ItemsSource="{Binding LogicalCpus}"><ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel><ItemsControl.ItemTemplate><DataTemplate><CheckBox Width="76" Margin="2" IsChecked="{Binding IsSelected}" Content="{Binding DisplayName}" /></DataTemplate></ItemsControl.ItemTemplate></ItemsControl></ScrollViewer></StackPanel></Border>
+                </StackPanel>
+
+                <StackPanel Margin="0,8,0,0">
+                    <StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed" /><Style.Triggers><DataTrigger Binding="{Binding IsProcessStopMode}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger><DataTrigger Binding="{Binding Type}" Value="service.setState"><Setter Property="Visibility" Value="Visible" /></DataTrigger><DataTrigger Binding="{Binding Type}" Value="script.run"><Setter Property="Visibility" Value="Visible" /></DataTrigger><DataTrigger Binding="{Binding Type}" Value="wait.processStart"><Setter Property="Visibility" Value="Visible" /></DataTrigger><DataTrigger Binding="{Binding Type}" Value="wait.processExit"><Setter Property="Visibility" Value="Visible" /></DataTrigger><DataTrigger Binding="{Binding Type}" Value="wait.window"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers></Style></StackPanel.Style>
+                    <TextBlock Style="{StaticResource ActionEditorSectionHeader}" Text="{DynamicResource Advanced.Timeouts}" />
+                    <Border Style="{StaticResource SettingsRowBorderStyle}" Margin="0,5,0,0"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions><TextBlock VerticalAlignment="Center" Text="{DynamicResource ActionEditor.Timeout}" /><TextBox Grid.Column="1" Text="{Binding TimeoutSeconds, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, ValidatesOnExceptions=True}" /></Grid></Border>
+                </StackPanel>
+
+                <StackPanel Margin="0,8,0,0">
+                    <TextBlock Style="{StaticResource ActionEditorSectionHeader}" Text="{DynamicResource Advanced.ErrorHandling}" />
+                    <Border Style="{StaticResource SettingsRowBorderStyle}" Margin="0,5,0,0"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions><TextBlock VerticalAlignment="Center" Text="{DynamicResource Advanced.RetryEnabled}" /><CheckBox Grid.Column="1" HorizontalAlignment="Center" IsChecked="{Binding RetryOnFailure}" /></Grid></Border>
+                    <Border Margin="0,4,0,0"><Border.Style><Style TargetType="Border" BasedOn="{StaticResource SettingsRowBorderStyle}"><Setter Property="Visibility" Value="Collapsed" /><Style.Triggers><DataTrigger Binding="{Binding RetryOnFailure}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers></Style></Border.Style><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions><TextBlock VerticalAlignment="Center" Text="{DynamicResource Advanced.MaximumAttempts}" /><TextBox Grid.Column="1" Text="{Binding MaximumAttempts}" /></Grid></Border>
+                    <Border Margin="0,4,0,0"><Border.Style><Style TargetType="Border" BasedOn="{StaticResource SettingsRowBorderStyle}"><Setter Property="Visibility" Value="Collapsed" /><Style.Triggers><DataTrigger Binding="{Binding RetryOnFailure}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers></Style></Border.Style><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions><TextBlock VerticalAlignment="Center" Text="{DynamicResource Advanced.RetryDelay}" /><TextBox Grid.Column="1" Text="{Binding RetryDelaySeconds}" /></Grid></Border>
+                    <Border Style="{StaticResource SettingsRowBorderStyle}" Margin="0,4,0,0"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions><TextBlock VerticalAlignment="Center" Text="{DynamicResource ActionEditor.OnFailure}" /><ComboBox Grid.Column="1" ItemsSource="{Binding AvailableFailurePolicies}" DisplayMemberPath="DisplayName" SelectedValue="{Binding FailurePolicyId, Mode=TwoWay}" SelectedValuePath="Value" /></Grid></Border>
+                </StackPanel>
+
+                <StackPanel Margin="0,8,0,0">
+                    <StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed" /><Style.Triggers><DataTrigger Binding="{Binding Type}" Value="script.run"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers></Style></StackPanel.Style>
+                    <TextBlock Style="{StaticResource ActionEditorSectionHeader}" Text="{DynamicResource Advanced.Restoring}" />
+                    <Border Style="{StaticResource SettingsRowBorderStyle}" Margin="0,5,0,0"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions><TextBlock VerticalAlignment="Center" Text="{DynamicResource ActionEditor.RestoreBehavior}" /><ComboBox Grid.Column="1" ItemsSource="{Binding AvailableRestoreBehaviors}" DisplayMemberPath="DisplayName" SelectedValuePath="Value" SelectedValue="{Binding RestoreBehaviorId}" /></Grid></Border>
+                    <StackPanel Margin="0,10,0,0"><StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed" /><Style.Triggers><DataTrigger Binding="{Binding IsRestoreScriptEnabled}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers></Style></StackPanel.Style><TextBlock Margin="0,0,0,8" Style="{StaticResource CaptionText}" Text="{DynamicResource RestoreScript.Help}" TextWrapping="Wrap" /><TextBlock Style="{StaticResource EyebrowText}" Text="{DynamicResource RestoreScript.Path}" /><Grid Margin="0,5,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="8" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions><TextBox Text="{Binding RestoreScriptPath, UpdateSourceTrigger=PropertyChanged}" /><Button Grid.Column="2" Content="{DynamicResource ActionEditor.Browse}" Command="{Binding DataContext.BrowseRestoreScriptCommand, RelativeSource={RelativeSource AncestorType={x:Type controls:ActionEditorControl}}}" CommandParameter="{Binding}" /></Grid><Grid Margin="0,10,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="12" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions><StackPanel><TextBlock Style="{StaticResource EyebrowText}" Text="{DynamicResource ActionEditor.Arguments}" /><TextBox Margin="0,5,0,0" Text="{Binding RestoreScriptArguments, UpdateSourceTrigger=PropertyChanged}" /></StackPanel><StackPanel Grid.Column="2"><TextBlock Style="{StaticResource EyebrowText}" Text="{DynamicResource ActionEditor.WorkingDirectory}" /><TextBox Margin="0,5,0,0" Text="{Binding RestoreScriptWorkingDirectory, UpdateSourceTrigger=PropertyChanged}" /></StackPanel></Grid><TextBlock Margin="0,10,0,0" Style="{StaticResource EyebrowText}" Text="{DynamicResource ActionEditor.ScriptType}" /><ComboBox Margin="0,5,0,0" ItemsSource="{Binding AvailableScriptTypes}" DisplayMemberPath="DisplayName" SelectedValuePath="Value" SelectedValue="{Binding RestoreScriptType}" /><CheckBox Margin="0,10,0,0" IsChecked="{Binding RestoreScriptWaitForExit}" Content="{DynamicResource RestoreScript.Wait}" /><CheckBox Margin="0,7,0,0" IsChecked="{Binding RestoreScriptRunAsAdministrator}" Content="{DynamicResource ActionEditor.RunAsAdministrator}" /><TextBlock Margin="0,10,0,0" Style="{StaticResource EyebrowText}" Text="{DynamicResource ActionEditor.Timeout}" /><TextBox Margin="0,5,0,0" Text="{Binding RestoreScriptTimeoutSeconds, UpdateSourceTrigger=PropertyChanged}" /></StackPanel>
+                </StackPanel>
+
+                <StackPanel Margin="0,8,0,0">
+                    <StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed" /><Style.Triggers><DataTrigger Binding="{Binding SupportsRestore}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger><DataTrigger Binding="{Binding Type}" Value="script.run"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger></Style.Triggers></Style></StackPanel.Style>
+                    <TextBlock Style="{StaticResource ActionEditorSectionHeader}" Text="{DynamicResource Advanced.Restoring}" />
+                    <Border Style="{StaticResource SettingsRowBorderStyle}" Margin="0,5,0,0"><Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions><TextBlock VerticalAlignment="Center" Text="{DynamicResource ActionEditor.RestoreBehavior}" /><ComboBox Grid.Column="1" ItemsSource="{Binding AvailableRestoreBehaviors}" DisplayMemberPath="DisplayName" SelectedValuePath="Value" SelectedValue="{Binding RestoreBehaviorId}" /></Grid></Border>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+    </StackPanel>
+</UserControl>

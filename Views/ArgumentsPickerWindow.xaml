@@ -1,0 +1,41 @@
+<Window x:Class="SwitchBoard.Views.ArgumentsPickerWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        WindowStartupLocation="CenterOwner" Width="700" Height="560" MinWidth="520" ShowInTaskbar="False"
+        Background="{DynamicResource BackgroundBrush}" Foreground="{DynamicResource TextPrimaryBrush}">
+    <Border Margin="12" Padding="20" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="14">
+        <Grid>
+            <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="8" /><RowDefinition Height="*" /><RowDefinition Height="12" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+            <StackPanel><TextBlock Style="{StaticResource DialogTitle}" Text="{DynamicResource Dialog.ArgumentsHeading}" /><TextBlock Margin="0,4,0,0" Style="{StaticResource CaptionText}" TextWrapping="Wrap" Text="{DynamicResource Dialog.ArgumentsHint}" /></StackPanel>
+            <Grid Grid.Row="2">
+                <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="8" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+                <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="12" /><ColumnDefinition Width="250" /></Grid.ColumnDefinitions>
+                    <TextBox Text="{Binding Search, UpdateSourceTrigger=PropertyChanged}" ToolTip="{DynamicResource ArgumentPicker.Search}" />
+                    <ComboBox Grid.Column="2" ItemsSource="{Binding ApplicationFilters}" SelectedItem="{Binding SelectedApplicationFilter, Mode=TwoWay}" />
+                </Grid>
+                <Border Grid.Row="2" Padding="8" Background="{DynamicResource InputBackgroundBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="8">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto"><ItemsControl ItemsSource="{Binding FilteredPresets}"><ItemsControl.ItemTemplate><DataTemplate>
+                        <Border Padding="4" Margin="0,0,0,6" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                            <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition MinWidth="220" Width="240" /><ColumnDefinition Width="12" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                <CheckBox VerticalAlignment="Top" IsChecked="{Binding IsSelected}" />
+                                <StackPanel Grid.Column="1" Margin="8,0,0,0">
+                                    <TextBlock FontWeight="SemiBold" Text="{Binding Flag}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Flag}" />
+                                    <TextBox Margin="0,6,0,0" Visibility="{Binding RequiresValue, Converter={StaticResource BooleanToVisibilityConverter}}" Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}" ToolTip="{Binding ValuePlaceholder}" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="3" Margin="0,0,4,0">
+                                    <TextBlock Text="{Binding Description}" TextWrapping="Wrap" />
+                                    <TextBlock Margin="0,4,0,0" Style="{StaticResource CaptionText}" Text="{Binding Compatibility}" TextWrapping="Wrap" />
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                    </DataTemplate></ItemsControl.ItemTemplate></ItemsControl></ScrollViewer>
+                </Border>
+            </Grid>
+             <TextBlock Grid.Row="2" VerticalAlignment="Center" HorizontalAlignment="Center" Text="{DynamicResource ArgumentPicker.NoPresets}">
+                 <TextBlock.Style><Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}"><Setter Property="Visibility" Value="Collapsed" /><Style.Triggers><DataTrigger Binding="{Binding FilteredPresets.Count}" Value="0"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers></Style></TextBlock.Style>
+            </TextBlock>
+            <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right"><Button MinWidth="100" Margin="0,0,8,0" IsCancel="True" Content="{DynamicResource Common.Cancel}" /><Button MinWidth="100" IsDefault="True" Click="Select_OnClick" Content="{DynamicResource ActionEditor.SelectArguments}" Style="{StaticResource AccentButton}" /></StackPanel>
+        </Grid>
+    </Border>
+</Window>
