@@ -629,6 +629,13 @@ public sealed class UndoAndCatalogTests : RuntimeTestBase
         {
             var draft = request.Colors.Clone();
             draft.Card = "#FFFF00FF";
+            draft.GifAnimationDirection = GifAnimationDirections.Reverse;
+            draft.GifAnimationSpeed = 2;
+            draft.VideoPlaybackSpeed = 1.5;
+            draft.VideoAudioEnabled = true;
+            draft.ImageFit = BackgroundImageFits.Center;
+            draft.ImageFlipHorizontal = true;
+            draft.ImageFlipVertical = true;
             request.ApplyTemporary?.Invoke(draft);
         });
         scenario.ThemeEditor.Results.Enqueue(null);
@@ -638,6 +645,14 @@ public sealed class UndoAndCatalogTests : RuntimeTestBase
         Assert.Equal(ThemeIds.Graphite, scenario.Settings.ThemeId);
         Assert.Equal(ThemeIds.Graphite, scenario.ThemeManager.CurrentThemeId);
         Assert.Equal(before.Card, scenario.Settings.CustomThemes.Single(item => item.Id == snow.Id).Colors.Card);
+        var persisted = scenario.Settings.CustomThemes.Single(item => item.Id == snow.Id).Colors;
+        Assert.Equal(before.GifAnimationDirection, persisted.GifAnimationDirection);
+        Assert.Equal(before.GifAnimationSpeed, persisted.GifAnimationSpeed);
+        Assert.Equal(before.VideoPlaybackSpeed, persisted.VideoPlaybackSpeed);
+        Assert.Equal(before.VideoAudioEnabled, persisted.VideoAudioEnabled);
+        Assert.Equal(before.ImageFit, persisted.ImageFit);
+        Assert.Equal(before.ImageFlipHorizontal, persisted.ImageFlipHorizontal);
+        Assert.Equal(before.ImageFlipVertical, persisted.ImageFlipVertical);
     }
 
     [Fact]

@@ -32,7 +32,13 @@ public static class TestHelpers
         SaveEncoder(new PngBitmapEncoder(), [red], Path.Combine(directory, "test.png"));
         SaveEncoder(new BmpBitmapEncoder(), [red], Path.Combine(directory, "test.bmp"));
         SaveEncoder(new GifBitmapEncoder(), [red, blue], Path.Combine(directory, "test.gif"));
+        CreateTestMp4(Path.Combine(directory, "test.mp4"));
     }
+
+    public static void CreateTestMp4(string path) => File.WriteAllBytes(path,
+        [0, 0, 0, 20, (byte)'f', (byte)'t', (byte)'y', (byte)'p',
+         (byte)'i', (byte)'s', (byte)'o', (byte)'m', 0, 0, 0, 0,
+         (byte)'i', (byte)'s', (byte)'o', (byte)'m']);
 
     private static void SaveEncoder(BitmapEncoder encoder, IReadOnlyList<BitmapSource> frames, string path)
     {

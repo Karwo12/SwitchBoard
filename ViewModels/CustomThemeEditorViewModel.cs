@@ -29,16 +29,43 @@ public sealed class CustomThemeEditorViewModel : ObservableObject
         BuildColors();
         ImageFitOptions =
         [
-            new("fill", localization.GetString("CustomTheme.Fit.Fill")),
-            new("uniform", localization.GetString("CustomTheme.Fit.Uniform")),
-            new("uniformToFill", localization.GetString("CustomTheme.Fit.UniformToFill")),
-            new("stretch", localization.GetString("CustomTheme.Fit.Stretch"))
+            new(BackgroundImageFits.Fill, localization.GetString("CustomTheme.Fit.UniformToFill")),
+            new(BackgroundImageFits.Fit, localization.GetString("CustomTheme.Fit.Uniform")),
+            new(BackgroundImageFits.Stretch, localization.GetString("CustomTheme.Fit.Stretch")),
+            new(BackgroundImageFits.Center, localization.GetString("CustomTheme.Fit.Center"))
+        ];
+        GifAnimationDirectionOptions =
+        [
+            new(GifAnimationDirections.Normal, localization.GetString("CustomTheme.GifDirection.Normal")),
+            new(GifAnimationDirections.Reverse, localization.GetString("CustomTheme.GifDirection.Reverse")),
+            new(GifAnimationDirections.PingPong, localization.GetString("CustomTheme.GifDirection.PingPong"))
+        ];
+        GifAnimationSpeedOptions =
+        [
+            new(0.5d, localization.GetString("CustomTheme.GifSpeed.Half")),
+            new(0.75d, localization.GetString("CustomTheme.GifSpeed.ThreeQuarters")),
+            new(1d, localization.GetString("CustomTheme.GifSpeed.One")),
+            new(1.25d, localization.GetString("CustomTheme.GifSpeed.OneQuarter")),
+            new(1.5d, localization.GetString("CustomTheme.GifSpeed.OneHalf")),
+            new(2d, localization.GetString("CustomTheme.GifSpeed.Two"))
+        ];
+        VideoPlaybackSpeedOptions =
+        [
+            new(0.5d, localization.GetString("CustomTheme.GifSpeed.Half")),
+            new(0.75d, localization.GetString("CustomTheme.GifSpeed.ThreeQuarters")),
+            new(1d, localization.GetString("CustomTheme.GifSpeed.One")),
+            new(1.25d, localization.GetString("CustomTheme.GifSpeed.OneQuarter")),
+            new(1.5d, localization.GetString("CustomTheme.GifSpeed.OneHalf")),
+            new(2d, localization.GetString("CustomTheme.GifSpeed.Two"))
         ];
     }
 
     public CustomThemeEditMode Mode { get; }
     public ObservableCollection<CustomThemeColorItemViewModel> Colors { get; }
     public IReadOnlyList<CustomThemeFitOption> ImageFitOptions { get; }
+    public IReadOnlyList<CustomThemeFitOption> GifAnimationDirectionOptions { get; }
+    public IReadOnlyList<CustomThemeSpeedOption> GifAnimationSpeedOptions { get; }
+    public IReadOnlyList<CustomThemeSpeedOption> VideoPlaybackSpeedOptions { get; }
     public CustomThemeSettings Settings => _settings;
     public string WindowTitle => Mode == CustomThemeEditMode.Add
         ? _localization.GetString("CustomTheme.Add")
@@ -72,6 +99,8 @@ public sealed class CustomThemeEditorViewModel : ObservableObject
     }
     public string BackgroundFileName => _settings.BackgroundAssetFileName ?? string.Empty;
     public bool HasBackground => !string.IsNullOrWhiteSpace(_settings.BackgroundAssetFileName);
+    public bool HasGifBackground => BackgroundAssetKinds.Detect(_settings.BackgroundAssetFileName) == BackgroundAssetKind.Gif;
+    public bool HasVideoBackground => BackgroundAssetKinds.Detect(_settings.BackgroundAssetFileName) == BackgroundAssetKind.Video;
     public double SurfaceOpacityPercent
     {
         get => _settings.SurfaceOpacity * 100;
@@ -136,7 +165,83 @@ public sealed class CustomThemeEditorViewModel : ObservableObject
     public string ImageFit
     {
         get => _settings.ImageFit;
-        set { if (_settings.ImageFit == value) return; _settings.ImageFit = value; OnPropertyChanged(); ApplyDraft(); }
+        set
+        {
+            var fit = BackgroundImageFits.Normalize(value);
+            if (_settings.ImageFit == fit) return;
+            _settings.ImageFit = fit;
+            OnPropertyChanged();
+            ApplyDraft();
+        }
+    }
+    public string GifAnimationDirection
+    {
+        get => _settings.GifAnimationDirection;
+        set
+        {
+            var direction = GifAnimationDirections.Normalize(value);
+            if (_settings.GifAnimationDirection == direction) return;
+            _settings.GifAnimationDirection = direction;
+            OnPropertyChanged();
+            ApplyDraft();
+        }
+    }
+    public double GifAnimationSpeed
+    {
+        get => _settings.GifAnimationSpeed;
+        set
+        {
+            var speed = GifAnimationSpeeds.Normalize(value);
+            if (Math.Abs(_settings.GifAnimationSpeed - speed) < 0.001) return;
+            _settings.GifAnimationSpeed = speed;
+            OnPropertyChanged();
+            ApplyDraft();
+        }
+    }
+    public double VideoPlaybackSpeed
+    {
+        get => _settings.VideoPlaybackSpeed;
+        set
+        {
+            var speed = GifAnimationSpeeds.Normalize(value);
+            if (Math.Abs(_settings.VideoPlaybackSpeed - speed) < 0.001) return;
+            _settings.VideoPlaybackSpeed = speed;
+            OnPropertyChanged();
+            ApplyDraft();
+        }
+    }
+    public bool VideoAudioEnabled
+    {
+        get => _settings.VideoAudioEnabled;
+        set
+        {
+            if (_settings.VideoAudioEnabled == value) return;
+            _settings.VideoAudioEnabled = value;
+            OnPropertyChanged();
+            ApplyDraft();
+        }
+    }
+    public bool ImageFlipHorizontal
+    {
+        get => _settings.ImageFlipHorizontal;
+        set
+        {
+            if (_settings.ImageFlipHorizontal == value) return;
+            _settings.ImageFlipHorizontal = value;
+            OnPropertyChanged();
+            ApplyDraft();
+        }
+    }
+    public bool ImageFlipVertical
+    {
+        get => _settings.ImageFlipVertical;
+        set
+        {
+            if (_settings.ImageFlipVertical == value) return;
+            _settings.ImageFlipVertical = value;
+            OnPropertyChanged();
+            ApplyDraft();
+        }
     }
     public string Warning { get => _warning; set => SetProperty(ref _warning, value); }
 
@@ -146,6 +251,15 @@ public sealed class CustomThemeEditorViewModel : ObservableObject
         _settings.PreviewBackgroundPath = previewPath;
         OnPropertyChanged(nameof(BackgroundFileName));
         OnPropertyChanged(nameof(HasBackground));
+        OnPropertyChanged(nameof(HasGifBackground));
+        OnPropertyChanged(nameof(HasVideoBackground));
+        ApplyDraft();
+    }
+
+    public void ClearTemporaryBackground()
+    {
+        _settings.BackgroundAssetFileName = null;
+        _settings.PreviewBackgroundPath = null;
         ApplyDraft();
     }
 
@@ -167,6 +281,12 @@ public sealed class CustomThemeEditorViewModel : ObservableObject
         OnPropertyChanged(nameof(BackgroundOpacityPercent));
         OnPropertyChanged(nameof(DarkOverlayPercent));
         OnPropertyChanged(nameof(ImageFit));
+        OnPropertyChanged(nameof(GifAnimationDirection));
+        OnPropertyChanged(nameof(GifAnimationSpeed));
+        OnPropertyChanged(nameof(VideoPlaybackSpeed));
+        OnPropertyChanged(nameof(VideoAudioEnabled));
+        OnPropertyChanged(nameof(ImageFlipHorizontal));
+        OnPropertyChanged(nameof(ImageFlipVertical));
         Warning = string.Empty;
         ApplyDraft();
     }
@@ -200,3 +320,4 @@ public sealed class CustomThemeEditorViewModel : ObservableObject
 }
 
 public sealed record CustomThemeFitOption(string Value, string DisplayName);
+public sealed record CustomThemeSpeedOption(double Value, string DisplayName);

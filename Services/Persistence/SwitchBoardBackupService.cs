@@ -26,7 +26,7 @@ public sealed class SwitchBoardBackupService
     private const long MaxExpandedBytes = 128L * 1024 * 1024;
     private const long MaxAssetBytes = 32L * 1024 * 1024;
     private static readonly HashSet<string> ThemeAssetExtensions =
-        [".jpg", ".jpeg", ".png", ".bmp", ".gif"];
+        [".jpg", ".jpeg", ".png", ".bmp", ".gif", ".mp4"];
 
     private readonly JsonSerializerOptions _json = new()
     {

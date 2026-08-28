@@ -268,6 +268,11 @@ public sealed class SettingsWorkspaceTests
         Assert.Contains("HoverIntensityPercent", themeWindowXaml, StringComparison.Ordinal);
         Assert.Contains("CustomTheme.HoverIntensity", themeWindowXaml, StringComparison.Ordinal);
         Assert.Contains("Minimum=\"0\" Maximum=\"100\"", themeWindowXaml, StringComparison.Ordinal);
+        Assert.Contains("controls:ThemeBackground", mainXaml, StringComparison.Ordinal);
+        Assert.Contains("HasGifBackground", themeWindowXaml, StringComparison.Ordinal);
+        Assert.Contains("HasVideoBackground", themeWindowXaml, StringComparison.Ordinal);
+        Assert.Contains("CustomTheme.VideoPlaybackSpeed", themeWindowXaml, StringComparison.Ordinal);
+        Assert.Contains("CustomTheme.VideoAudioEnabled", themeWindowXaml, StringComparison.Ordinal);
         var settingsCardStyle = baseStyles[settingsCardStart..actionCardStart];
         Assert.Contains("BasedOn=\"{StaticResource CardSurfaceStyle}\"", settingsCardStyle, StringComparison.Ordinal);
         Assert.Contains("x:Key=\"SettingsSectionCard\" TargetType=\"{x:Type controls:CardSurfaceControl}\"", settingsCardStyle, StringComparison.Ordinal);

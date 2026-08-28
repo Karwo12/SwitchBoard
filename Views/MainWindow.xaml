@@ -657,10 +657,16 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <controls:AnimatedBackground Grid.RowSpan="3"
+        <controls:ThemeBackground Grid.RowSpan="3"
                                      SourcePath="{DynamicResource CustomBackgroundPath}"
                                      ImageOpacity="{DynamicResource CustomBackgroundOpacity}"
-                                     ImageStretch="{DynamicResource CustomBackgroundStretch}" />
+                                     ImageStretch="{DynamicResource CustomBackgroundStretch}"
+                                     GifAnimationDirection="{DynamicResource CustomBackgroundGifAnimationDirection}"
+                                     GifAnimationSpeed="{DynamicResource CustomBackgroundGifAnimationSpeed}"
+                                     VideoPlaybackSpeed="{DynamicResource CustomBackgroundVideoPlaybackSpeed}"
+                                     VideoAudioEnabled="{DynamicResource CustomBackgroundVideoAudioEnabled}"
+                                     ImageFlipHorizontal="{DynamicResource CustomBackgroundFlipHorizontal}"
+                                     ImageFlipVertical="{DynamicResource CustomBackgroundFlipVertical}" />
         <Border Grid.RowSpan="3" Background="{DynamicResource CustomBackgroundOverlayBrush}" IsHitTestVisible="False" />
 
         <Grid Grid.Row="0"

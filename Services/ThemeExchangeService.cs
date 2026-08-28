@@ -15,7 +15,7 @@ public sealed class ThemeExchangeService(AppDataPaths paths)
     private const long MaxArchiveBytes = 512L * 1024 * 1024;
     private const long MaxExpandedBytes = 768L * 1024 * 1024;
     private static readonly HashSet<string> AssetExtensions = new(StringComparer.OrdinalIgnoreCase)
-        { ".png", ".jpg", ".jpeg", ".bmp", ".gif" };
+        { ".png", ".jpg", ".jpeg", ".bmp", ".gif", ".mp4" };
     private readonly JsonSerializerOptions _json = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, WriteIndented = true };
 
     public void Export(CustomThemeDefinition theme, string destination)
@@ -52,8 +52,6 @@ public sealed class ThemeExchangeService(AppDataPaths paths)
                 throw new InvalidDataException("Unsafe archive path.");
             if (entry.FullName != "theme.json" && (!entry.FullName.StartsWith("assets/", StringComparison.Ordinal) || !AssetExtensions.Contains(Path.GetExtension(entry.FullName))))
             {
-                if (string.Equals(Path.GetExtension(entry.FullName), ".mp4", StringComparison.OrdinalIgnoreCase))
-                    throw new UnsupportedThemeAssetException();
                 throw new InvalidDataException("Unsupported package entry.");
             }
             expanded += entry.Length;
@@ -73,8 +71,6 @@ public sealed class ThemeExchangeService(AppDataPaths paths)
         ZipArchiveEntry? asset = null;
         if (!string.IsNullOrWhiteSpace(declared))
         {
-            if (string.Equals(Path.GetExtension(declared), ".mp4", StringComparison.OrdinalIgnoreCase))
-                throw new UnsupportedThemeAssetException();
             if (!declared.StartsWith("assets/", StringComparison.Ordinal) || !AssetExtensions.Contains(Path.GetExtension(declared))) throw new InvalidDataException("Invalid background asset reference.");
             asset = archive.GetEntry(declared) ?? throw new InvalidDataException("Declared background asset is missing.");
         }
@@ -128,11 +124,24 @@ public sealed class ThemeExchangeService(AppDataPaths paths)
 
     private static void ValidateAsset(string path)
     {
+        if (string.Equals(Path.GetExtension(path), ".mp4", StringComparison.OrdinalIgnoreCase))
+        {
+            ValidateMp4Container(path);
+            return;
+        }
         using (var imageStream = File.OpenRead(path))
         {
             var decoder = BitmapDecoder.Create(imageStream, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad);
             if (decoder.Frames.Count == 0) throw new InvalidDataException("The image asset contains no frames.");
         }
+    }
+
+    private static void ValidateMp4Container(string path)
+    {
+        Span<byte> header = stackalloc byte[12];
+        using var stream = File.OpenRead(path);
+        if (stream.Read(header) != header.Length || !header.Slice(4, 4).SequenceEqual("ftyp"u8))
+            throw new InvalidDataException("The video asset is not a valid MP4 container.");
     }
 
     private static void TryDeleteDirectory(string path)
@@ -142,9 +151,6 @@ public sealed class ThemeExchangeService(AppDataPaths paths)
         catch (IOException) { }
         catch (UnauthorizedAccessException) { }
     }
-
-    public sealed class UnsupportedThemeAssetException() : Exception(
-        "This theme contains an MP4 background, which is no longer supported.");
 
     private static string UniqueName(string name, IEnumerable<string> names)
     {

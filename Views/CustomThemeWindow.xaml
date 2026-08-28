@@ -5,6 +5,7 @@
         WindowStartupLocation="CenterOwner" ResizeMode="CanResizeWithGrip"
         Background="{DynamicResource BackgroundBrush}" Foreground="{DynamicResource TextPrimaryBrush}">
     <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
         <Style x:Key="EditorSectionTitle" TargetType="TextBlock" BasedOn="{StaticResource SectionTitle}">
             <Setter Property="FontSize" Value="20" />
         </Style>
@@ -96,13 +97,37 @@
                         </StackPanel>
                         <TextBlock Margin="0,9,0,0" Foreground="{DynamicResource DangerBrush}" Text="{Binding Warning}" TextWrapping="Wrap" />
 
-                        <TextBlock Margin="0,15,0,6" Style="{StaticResource EditorEyebrow}" Text="{DynamicResource CustomTheme.ImageFit}" />
-                        <ComboBox ItemsSource="{Binding ImageFitOptions}" DisplayMemberPath="DisplayName" SelectedValuePath="Value"
-                                  SelectedValue="{Binding ImageFit, Mode=TwoWay}" />
-                        <TextBlock Margin="0,15,0,5" Style="{StaticResource EditorEyebrow}" Text="{DynamicResource CustomTheme.BackgroundOpacity}" />
-                        <DockPanel><TextBlock DockPanel.Dock="Right" Margin="10,0,0,0" Text="{Binding BackgroundOpacityPercent, StringFormat={}{0:0}%}"/><Slider Minimum="0" Maximum="100" Value="{Binding BackgroundOpacityPercent}" /></DockPanel>
-                        <TextBlock Margin="0,15,0,5" Style="{StaticResource EditorEyebrow}" Text="{DynamicResource CustomTheme.DarkOverlay}" />
-                        <DockPanel><TextBlock DockPanel.Dock="Right" Margin="10,0,0,0" Text="{Binding DarkOverlayPercent, StringFormat={}{0:0}%}"/><Slider Minimum="0" Maximum="100" Value="{Binding DarkOverlayPercent}" /></DockPanel>
+                        <StackPanel Visibility="{Binding HasBackground, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <TextBlock Margin="0,15,0,6" Style="{StaticResource EditorEyebrow}" Text="{DynamicResource CustomTheme.ImageFit}" />
+                            <ComboBox ItemsSource="{Binding ImageFitOptions}" DisplayMemberPath="DisplayName" SelectedValuePath="Value"
+                                      SelectedValue="{Binding ImageFit, Mode=TwoWay}" />
+                            <StackPanel Margin="0,12,0,0" Orientation="Horizontal">
+                                <CheckBox Content="{DynamicResource CustomTheme.FlipHorizontal}" IsChecked="{Binding ImageFlipHorizontal, Mode=TwoWay}" />
+                                <CheckBox Margin="18,0,0,0" Content="{DynamicResource CustomTheme.FlipVertical}" IsChecked="{Binding ImageFlipVertical, Mode=TwoWay}" />
+                            </StackPanel>
+
+                            <StackPanel Visibility="{Binding HasGifBackground, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <TextBlock Margin="0,15,0,6" Style="{StaticResource EditorEyebrow}" Text="{DynamicResource CustomTheme.GifAnimationDirection}" />
+                                <ComboBox ItemsSource="{Binding GifAnimationDirectionOptions}" DisplayMemberPath="DisplayName" SelectedValuePath="Value"
+                                          SelectedValue="{Binding GifAnimationDirection, Mode=TwoWay}" />
+                                <TextBlock Margin="0,15,0,6" Style="{StaticResource EditorEyebrow}" Text="{DynamicResource CustomTheme.GifAnimationSpeed}" />
+                                <ComboBox ItemsSource="{Binding GifAnimationSpeedOptions}" DisplayMemberPath="DisplayName" SelectedValuePath="Value"
+                                          SelectedValue="{Binding GifAnimationSpeed, Mode=TwoWay}" />
+                            </StackPanel>
+
+                            <StackPanel Visibility="{Binding HasVideoBackground, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <TextBlock Margin="0,15,0,6" Style="{StaticResource EditorEyebrow}" Text="{DynamicResource CustomTheme.VideoPlaybackSpeed}" />
+                                <ComboBox ItemsSource="{Binding VideoPlaybackSpeedOptions}" DisplayMemberPath="DisplayName" SelectedValuePath="Value"
+                                          SelectedValue="{Binding VideoPlaybackSpeed, Mode=TwoWay}" />
+                                <CheckBox Margin="0,12,0,0" Content="{DynamicResource CustomTheme.VideoAudioEnabled}"
+                                          IsChecked="{Binding VideoAudioEnabled, Mode=TwoWay}" />
+                            </StackPanel>
+
+                            <TextBlock Margin="0,15,0,5" Style="{StaticResource EditorEyebrow}" Text="{DynamicResource CustomTheme.BackgroundOpacity}" />
+                            <DockPanel><TextBlock DockPanel.Dock="Right" Margin="10,0,0,0" Text="{Binding BackgroundOpacityPercent, StringFormat={}{0:0}%}"/><Slider Minimum="0" Maximum="100" Value="{Binding BackgroundOpacityPercent}" /></DockPanel>
+                            <TextBlock Margin="0,15,0,5" Style="{StaticResource EditorEyebrow}" Text="{DynamicResource CustomTheme.DarkOverlay}" />
+                            <DockPanel><TextBlock DockPanel.Dock="Right" Margin="10,0,0,0" Text="{Binding DarkOverlayPercent, StringFormat={}{0:0}%}"/><Slider Minimum="0" Maximum="100" Value="{Binding DarkOverlayPercent}" /></DockPanel>
+                        </StackPanel>
                     </StackPanel>
                 </ScrollViewer>
             </Border>

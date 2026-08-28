@@ -296,6 +296,13 @@ public sealed class ThemeManager(AppDataPaths paths) : IThemeManager
         dictionary["CustomBackgroundPath"] = path ?? string.Empty;
         dictionary["CustomBackgroundOpacity"] = settings is null ? 0d : Math.Clamp(settings.BackgroundOpacity, 0, 1);
         dictionary["CustomBackgroundStretch"] = ParseStretch(settings?.ImageFit);
+        dictionary["CustomBackgroundGifAnimationDirection"] = GifAnimationDirections.Normalize(settings?.GifAnimationDirection);
+        dictionary["CustomBackgroundGifAnimationSpeed"] = GifAnimationSpeeds.Normalize(settings?.GifAnimationSpeed ?? 1d);
+        dictionary["CustomBackgroundVideoPlaybackMode"] = GifAnimationDirections.Normalize(settings?.VideoPlaybackMode);
+        dictionary["CustomBackgroundVideoPlaybackSpeed"] = GifAnimationSpeeds.Normalize(settings?.VideoPlaybackSpeed ?? 1d);
+        dictionary["CustomBackgroundVideoAudioEnabled"] = settings?.VideoAudioEnabled ?? false;
+        dictionary["CustomBackgroundFlipHorizontal"] = settings?.ImageFlipHorizontal ?? false;
+        dictionary["CustomBackgroundFlipVertical"] = settings?.ImageFlipVertical ?? false;
         dictionary["CustomBackgroundOverlayBrush"] = Brush(Color.FromArgb(
             (byte)Math.Round(Math.Clamp(settings?.DarkOverlay ?? 0, 0, 1) * 255), 0, 0, 0));
     }
@@ -309,9 +316,9 @@ public sealed class ThemeManager(AppDataPaths paths) : IThemeManager
 
     private static Stretch ParseStretch(string? value) => value?.ToLowerInvariant() switch
     {
-        "fill" => Stretch.Fill,
+        "fill" or "stretch" => Stretch.Fill,
         "uniform" => Stretch.Uniform,
-        "stretch" => Stretch.Fill,
+        "center" => Stretch.None,
         _ => Stretch.UniformToFill
     };
 

@@ -33,7 +33,16 @@ public sealed class CustomThemeSettings
     public double ProfileEditorPanelOpacity { get; set; } = 1.0;
     public double ActivityPanelOpacity { get; set; } = 1.0;
     public string? BackgroundAssetFileName { get; set; }
-    public string ImageFit { get; set; } = "uniformToFill";
+    public string ImageFit { get; set; } = BackgroundImageFits.Fill;
+    public string GifAnimationDirection { get; set; } = GifAnimationDirections.Normal;
+    public double GifAnimationSpeed { get; set; } = 1.0;
+    // MP4 is intentionally forward-only for now. Keeping its own mode field makes
+    // a later video backend upgrade additive without changing persisted themes.
+    public string VideoPlaybackMode { get; set; } = GifAnimationDirections.Normal;
+    public double VideoPlaybackSpeed { get; set; } = 1.0;
+    public bool VideoAudioEnabled { get; set; }
+    public bool ImageFlipHorizontal { get; set; }
+    public bool ImageFlipVertical { get; set; }
     public double BackgroundOpacity { get; set; } = 0.42;
     public double DarkOverlay { get; set; } = 0.38;
 
@@ -70,6 +79,13 @@ public sealed class CustomThemeSettings
         ProfilesPanelOpacity = Math.Clamp(ProfilesPanelOpacity, 0, 1);
         ProfileEditorPanelOpacity = Math.Clamp(ProfileEditorPanelOpacity, 0, 1);
         ActivityPanelOpacity = Math.Clamp(ActivityPanelOpacity, 0, 1);
+        ImageFit = BackgroundImageFits.Normalize(ImageFit);
+        GifAnimationDirection = GifAnimationDirections.Normalize(GifAnimationDirection);
+        GifAnimationSpeed = GifAnimationSpeeds.Normalize(GifAnimationSpeed);
+        // The current WPF video backend is forward-only. Keep the persisted field
+        // for a future backend, but do not retain an unsupported reverse mode.
+        VideoPlaybackMode = GifAnimationDirections.Normal;
+        VideoPlaybackSpeed = GifAnimationSpeeds.Normalize(VideoPlaybackSpeed);
     }
 
     public void MigrateSurfaceOpacityFromLegacyAlpha()
@@ -109,7 +125,15 @@ public sealed class CustomThemeSettings
             ProfilesPanelOpacity = ProfilesPanelOpacity,
             ProfileEditorPanelOpacity = ProfileEditorPanelOpacity,
             ActivityPanelOpacity = ActivityPanelOpacity,
-            BackgroundAssetFileName = BackgroundAssetFileName, ImageFit = ImageFit,
+            BackgroundAssetFileName = BackgroundAssetFileName,
+            ImageFit = ImageFit,
+            GifAnimationDirection = GifAnimationDirection,
+            GifAnimationSpeed = GifAnimationSpeed,
+            VideoPlaybackMode = VideoPlaybackMode,
+            VideoPlaybackSpeed = VideoPlaybackSpeed,
+            VideoAudioEnabled = VideoAudioEnabled,
+            ImageFlipHorizontal = ImageFlipHorizontal,
+            ImageFlipVertical = ImageFlipVertical,
             BackgroundOpacity = BackgroundOpacity, DarkOverlay = DarkOverlay,
             PreviewBackgroundPath = PreviewBackgroundPath
         };

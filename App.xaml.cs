@@ -37,6 +37,8 @@ public partial class App : Application
     private HttpClient? _httpClient;
     private SingleInstanceCoordinator? _singleInstance;
 
+    internal static IAppLogger? Logger { get; private set; }
+
     protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
@@ -64,6 +66,7 @@ public partial class App : Application
             var paths = new AppDataPaths();
             _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
             _logger = new RollingFileLogger(paths);
+            Logger = _logger;
             _logger.Info("Startup", "SwitchBoard startup began.");
             DispatcherUnhandledException += OnDispatcherUnhandledException;
             AppDomain.CurrentDomain.UnhandledException += (_, args) =>
@@ -211,6 +214,7 @@ public partial class App : Application
         _httpClient?.Dispose();
         _singleInstance?.Dispose();
         _singleInstance = null;
+        Logger = null;
         base.OnExit(e);
     }
 

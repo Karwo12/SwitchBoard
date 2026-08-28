@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using System.Windows.Media;
+using SwitchBoard.Themes;
 
 namespace SwitchBoard.Controls;
 
@@ -14,15 +15,27 @@ public partial class AnimatedBackground : UserControl
         new PropertyMetadata(string.Empty, OnImagePropertyChanged));
     public static readonly DependencyProperty ImageStretchProperty = DependencyProperty.Register(
         nameof(ImageStretch), typeof(Stretch), typeof(AnimatedBackground),
-        new PropertyMetadata(Stretch.UniformToFill, OnImagePropertyChanged));
+        new PropertyMetadata(Stretch.UniformToFill, OnVisualPropertyChanged));
     public static readonly DependencyProperty ImageOpacityProperty = DependencyProperty.Register(
         nameof(ImageOpacity), typeof(double), typeof(AnimatedBackground),
-        new PropertyMetadata(0d, OnImagePropertyChanged));
+        new PropertyMetadata(0d, OnVisualPropertyChanged));
+    public static readonly DependencyProperty GifAnimationDirectionProperty = DependencyProperty.Register(
+        nameof(GifAnimationDirection), typeof(string), typeof(AnimatedBackground),
+        new PropertyMetadata(GifAnimationDirections.Normal, OnPlaybackPropertyChanged));
+    public static readonly DependencyProperty GifAnimationSpeedProperty = DependencyProperty.Register(
+        nameof(GifAnimationSpeed), typeof(double), typeof(AnimatedBackground),
+        new PropertyMetadata(1d, OnPlaybackPropertyChanged));
+    public static readonly DependencyProperty ImageFlipHorizontalProperty = DependencyProperty.Register(
+        nameof(ImageFlipHorizontal), typeof(bool), typeof(AnimatedBackground),
+        new PropertyMetadata(false, OnVisualPropertyChanged));
+    public static readonly DependencyProperty ImageFlipVerticalProperty = DependencyProperty.Register(
+        nameof(ImageFlipVertical), typeof(bool), typeof(AnimatedBackground),
+        new PropertyMetadata(false, OnVisualPropertyChanged));
 
     private readonly DispatcherTimer _timer;
     private readonly List<BitmapSource> _frames = [];
     private readonly List<TimeSpan> _delays = [];
-    private int _frameIndex;
+    private GifFrameSequencer? _sequencer;
     private Window? _window;
 
     public AnimatedBackground()
@@ -38,12 +51,28 @@ public partial class AnimatedBackground : UserControl
     public string SourcePath { get => (string)GetValue(SourcePathProperty); set => SetValue(SourcePathProperty, value); }
     public Stretch ImageStretch { get => (Stretch)GetValue(ImageStretchProperty); set => SetValue(ImageStretchProperty, value); }
     public double ImageOpacity { get => (double)GetValue(ImageOpacityProperty); set => SetValue(ImageOpacityProperty, value); }
+    public string GifAnimationDirection { get => (string)GetValue(GifAnimationDirectionProperty); set => SetValue(GifAnimationDirectionProperty, value); }
+    public double GifAnimationSpeed { get => (double)GetValue(GifAnimationSpeedProperty); set => SetValue(GifAnimationSpeedProperty, value); }
+    public bool ImageFlipHorizontal { get => (bool)GetValue(ImageFlipHorizontalProperty); set => SetValue(ImageFlipHorizontalProperty, value); }
+    public bool ImageFlipVertical { get => (bool)GetValue(ImageFlipVerticalProperty); set => SetValue(ImageFlipVerticalProperty, value); }
 
     private static void OnImagePropertyChanged(DependencyObject value, DependencyPropertyChangedEventArgs args)
     {
         if (value is not AnimatedBackground control) return;
         if (args.Property == SourcePathProperty) control.Reload();
         else control.ApplyVisualSettings();
+    }
+
+    private static void OnVisualPropertyChanged(DependencyObject value, DependencyPropertyChangedEventArgs args)
+    {
+        if (value is AnimatedBackground control) control.ApplyVisualSettings();
+    }
+
+    private static void OnPlaybackPropertyChanged(DependencyObject value, DependencyPropertyChangedEventArgs args)
+    {
+        if (value is not AnimatedBackground control) return;
+        if (args.Property == GifAnimationDirectionProperty) control.RestartPlayback();
+        else control.UpdateAnimationState();
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
@@ -77,7 +106,7 @@ public partial class AnimatedBackground : UserControl
                 _frames.Add(frame.Source);
                 _delays.Add(frame.Delay);
             }
-            if (_frames.Count > 0) ImageElement.Source = _frames[0];
+            RestartPlayback();
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or NotSupportedException)
         {
@@ -90,14 +119,16 @@ public partial class AnimatedBackground : UserControl
     {
         ImageElement.Stretch = ImageStretch;
         ImageElement.Opacity = Math.Clamp(ImageOpacity, 0, 1);
+        ImageElement.HorizontalAlignment = ImageStretch == Stretch.None ? HorizontalAlignment.Center : HorizontalAlignment.Stretch;
+        ImageElement.VerticalAlignment = ImageStretch == Stretch.None ? VerticalAlignment.Center : VerticalAlignment.Stretch;
+        ImageElement.RenderTransform = new ScaleTransform(ImageFlipHorizontal ? -1 : 1, ImageFlipVertical ? -1 : 1);
     }
 
     private void TimerOnTick(object? sender, EventArgs e)
     {
-        if (_frames.Count <= 1) { _timer.Stop(); return; }
-        _frameIndex = (_frameIndex + 1) % _frames.Count;
-        ImageElement.Source = _frames[_frameIndex];
-        _timer.Interval = _delays[_frameIndex];
+        if (_frames.Count <= 1 || _sequencer is null) { _timer.Stop(); return; }
+        ImageElement.Source = _frames[_sequencer.MoveNext()];
+        _timer.Interval = _sequencer.GetCurrentDelay(_delays, GifAnimationSpeed);
     }
 
     private void UpdateAnimationState()
@@ -105,10 +136,18 @@ public partial class AnimatedBackground : UserControl
         var shouldRun = _frames.Count > 1 && IsVisible && _window?.WindowState != WindowState.Minimized;
         if (shouldRun)
         {
-            _timer.Interval = _delays[Math.Clamp(_frameIndex, 0, _delays.Count - 1)];
+            _timer.Interval = _sequencer?.GetCurrentDelay(_delays, GifAnimationSpeed) ?? TimeSpan.FromMilliseconds(100);
             _timer.Start();
         }
         else _timer.Stop();
+    }
+
+    private void RestartPlayback()
+    {
+        _timer.Stop();
+        _sequencer = new GifFrameSequencer(_frames.Count, GifAnimationDirection);
+        if (_frames.Count > 0) ImageElement.Source = _frames[_sequencer.CurrentIndex];
+        UpdateAnimationState();
     }
 
     private void ClearFrames()
@@ -116,6 +155,6 @@ public partial class AnimatedBackground : UserControl
         ImageElement.Source = null;
         _frames.Clear();
         _delays.Clear();
-        _frameIndex = 0;
+        _sequencer = null;
     }
 }

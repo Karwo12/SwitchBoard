@@ -1,0 +1,10 @@
+<UserControl x:Class="SwitchBoard.Controls.ThemeBackground"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:SwitchBoard.Controls"
+             IsHitTestVisible="False">
+    <Grid>
+        <local:AnimatedBackground x:Name="ImagePlayer" />
+        <local:VideoBackgroundPlayer x:Name="VideoPlayer" Visibility="Collapsed" />
+    </Grid>
+</UserControl>

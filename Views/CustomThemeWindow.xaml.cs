@@ -92,7 +92,7 @@ public partial class CustomThemeWindow : Window
         {
             Directory.CreateDirectory(_paths.CustomThemeDirectory);
             var extension = Path.GetExtension(dialog.FileName).ToLowerInvariant();
-            if (extension is not (".jpg" or ".jpeg" or ".png" or ".bmp" or ".gif"))
+            if (extension is not (".jpg" or ".jpeg" or ".png" or ".bmp" or ".gif" or ".mp4"))
                 throw new InvalidDataException(_localization.GetString("CustomTheme.InvalidImage"));
             var assetName = $"background-{Guid.NewGuid():N}{extension}";
             var target = Path.Combine(_paths.CustomThemeDirectory, assetName);
@@ -163,6 +163,10 @@ public partial class CustomThemeWindow : Window
     {
         CloseColorPicker(restore: true);
         ColorPickerPopup.Child = null;
+        // A canceled MP4 preview owns a native MediaPlayer. Clearing the temporary
+        // theme before removing a newly selected asset makes the background host
+        // close that player and release the file handle deterministically.
+        if (!_saved) ViewModel.ClearTemporaryBackground();
         CleanupAssets();
         base.OnClosing(e);
     }

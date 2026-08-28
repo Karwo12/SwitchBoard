@@ -3500,11 +3500,6 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
             await _settingsRepository.SaveAsync(_userSettings);
             StatusMessage = _localizationService.Format("CustomTheme.ImportSuccess", imported.Name);
         }
-        catch (ThemeExchangeService.UnsupportedThemeAssetException)
-        {
-            StatusMessage = _localizationService.GetString("CustomTheme.UnsupportedBackgroundMedia");
-            MessageBox.Show(StatusMessage, _localizationService.GetString("CustomTheme.ExchangeTitle"), MessageBoxButton.OK, MessageBoxImage.Warning);
-        }
         catch (Exception exception)
         {
             if (imported is not null)

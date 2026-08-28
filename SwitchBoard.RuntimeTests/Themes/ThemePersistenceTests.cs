@@ -34,6 +34,14 @@ public sealed class ThemePersistenceTests : RuntimeTestBase
         theme.Colors.ProfileEditorPanelOpacity = 0.84;
         theme.Colors.ActivityPanelOpacity = 0.47;
         theme.Colors.BackgroundAssetFileName = "background-test.gif";
+        theme.Colors.ImageFit = BackgroundImageFits.Center;
+        theme.Colors.GifAnimationDirection = GifAnimationDirections.PingPong;
+        theme.Colors.GifAnimationSpeed = 1.5;
+        theme.Colors.VideoPlaybackMode = GifAnimationDirections.Normal;
+        theme.Colors.VideoPlaybackSpeed = 0.75;
+        theme.Colors.VideoAudioEnabled = true;
+        theme.Colors.ImageFlipHorizontal = true;
+        theme.Colors.ImageFlipVertical = true;
         await repository.SaveAsync(new UserSettings { ThemeId = theme.Id, LanguageId = "pl", CustomThemes = [theme] });
         var reloaded = await repository.LoadAsync();
 
@@ -61,6 +69,14 @@ public sealed class ThemePersistenceTests : RuntimeTestBase
         Assert.Equal(0.84, saved.Colors.ProfileEditorPanelOpacity, 3);
         Assert.Equal(0.47, saved.Colors.ActivityPanelOpacity, 3);
         Assert.Equal("background-test.gif", saved.Colors.BackgroundAssetFileName);
+        Assert.Equal(BackgroundImageFits.Center, saved.Colors.ImageFit);
+        Assert.Equal(GifAnimationDirections.PingPong, saved.Colors.GifAnimationDirection);
+        Assert.Equal(1.5, saved.Colors.GifAnimationSpeed, 3);
+        Assert.Equal(GifAnimationDirections.Normal, saved.Colors.VideoPlaybackMode);
+        Assert.Equal(0.75, saved.Colors.VideoPlaybackSpeed, 3);
+        Assert.True(saved.Colors.VideoAudioEnabled);
+        Assert.True(saved.Colors.ImageFlipHorizontal);
+        Assert.True(saved.Colors.ImageFlipVertical);
         Assert.NotEqual(default, saved.CreatedAt);
         Assert.NotEqual(default, saved.UpdatedAt);
 
@@ -77,6 +93,14 @@ public sealed class ThemePersistenceTests : RuntimeTestBase
         var olderTheme = System.Text.Json.JsonSerializer.Deserialize<CustomThemeSettings>(olderJson);
         Assert.NotNull(olderTheme);
         Assert.Equal(78, olderTheme!.HoverIntensity);
+        Assert.Equal(BackgroundImageFits.Fill, olderTheme.ImageFit);
+        Assert.Equal(GifAnimationDirections.Normal, olderTheme.GifAnimationDirection);
+        Assert.Equal(1, olderTheme.GifAnimationSpeed);
+        Assert.Equal(GifAnimationDirections.Normal, olderTheme.VideoPlaybackMode);
+        Assert.Equal(1, olderTheme.VideoPlaybackSpeed);
+        Assert.False(olderTheme.VideoAudioEnabled);
+        Assert.False(olderTheme.ImageFlipHorizontal);
+        Assert.False(olderTheme.ImageFlipVertical);
     }
 
     [Fact]
@@ -93,7 +117,15 @@ public sealed class ThemePersistenceTests : RuntimeTestBase
         exchange.Export(new CustomThemeDefinition
         {
             Name = "Animated theme",
-            Colors = new CustomThemeSettings { BackgroundAssetFileName = "test.gif" }
+            Colors = new CustomThemeSettings
+            {
+                BackgroundAssetFileName = "test.gif",
+                ImageFit = BackgroundImageFits.Center,
+                GifAnimationDirection = GifAnimationDirections.PingPong,
+                GifAnimationSpeed = 1.5,
+                ImageFlipHorizontal = true,
+                ImageFlipVertical = true
+            }
         }, package);
 
         RunOnSta(() =>
@@ -108,6 +140,11 @@ public sealed class ThemePersistenceTests : RuntimeTestBase
             var firstAsset = Path.Combine(paths.CustomThemeDirectory, first.Colors.BackgroundAssetFileName!);
             var firstFrames = ThemeImageLoader.Load(firstAsset);
             Assert.Equal(2, firstFrames.Count);
+            Assert.Equal(BackgroundImageFits.Center, first.Colors.ImageFit);
+            Assert.Equal(GifAnimationDirections.PingPong, first.Colors.GifAnimationDirection);
+            Assert.Equal(1.5, first.Colors.GifAnimationSpeed, 3);
+            Assert.True(first.Colors.ImageFlipHorizontal);
+            Assert.True(first.Colors.ImageFlipVertical);
 
             // Import the same package immediately, then remove the replaced theme
             // while its decoded frames are still strongly referenced.
@@ -131,6 +168,42 @@ public sealed class ThemePersistenceTests : RuntimeTestBase
         });
 
         AssertNoImportDirectories(paths.CustomThemeDirectory);
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public void ThemeExchange_Mp4ImportExportPersistsPlaybackOptions()
+    {
+        using var context = new RuntimeTestContext();
+        var paths = new AppDataPaths(Path.Combine(context.Root, "video-theme-exchange-appdata"));
+        Directory.CreateDirectory(paths.CustomThemeDirectory);
+        TestHelpers.CreateTestMp4(Path.Combine(paths.CustomThemeDirectory, "background.mp4"));
+        var exchange = new ThemeExchangeService(paths);
+        var package = Path.Combine(context.Root, "video.sbtheme");
+        exchange.Export(new CustomThemeDefinition
+        {
+            Name = "Video theme",
+            Colors = new CustomThemeSettings
+            {
+                BackgroundAssetFileName = "background.mp4",
+                ImageFit = BackgroundImageFits.Center,
+                VideoPlaybackMode = GifAnimationDirections.Normal,
+                VideoPlaybackSpeed = 1.5,
+                VideoAudioEnabled = true,
+                ImageFlipHorizontal = true,
+                ImageFlipVertical = true
+            }
+        }, package);
+
+        var imported = exchange.Import(package, []);
+        Assert.EndsWith("/background.mp4", imported.Colors.BackgroundAssetFileName, StringComparison.OrdinalIgnoreCase);
+        Assert.True(File.Exists(Path.Combine(paths.CustomThemeDirectory, imported.Colors.BackgroundAssetFileName!)));
+        Assert.Equal(BackgroundImageFits.Center, imported.Colors.ImageFit);
+        Assert.Equal(GifAnimationDirections.Normal, imported.Colors.VideoPlaybackMode);
+        Assert.Equal(1.5, imported.Colors.VideoPlaybackSpeed, 3);
+        Assert.True(imported.Colors.VideoAudioEnabled);
+        Assert.True(imported.Colors.ImageFlipHorizontal);
+        Assert.True(imported.Colors.ImageFlipVertical);
     }
 
     [Fact]
@@ -208,6 +281,13 @@ public sealed class ThemePersistenceTests : RuntimeTestBase
             Assert.Same(app.TryFindResource("SurfaceBrush"), app.TryFindResource("ActivitySurfaceBrush"));
             Assert.True(TestHelpers.SemanticContrastIsAccessible(app), $"Resource contrast for {theme.Id}");
             Assert.True(TestHelpers.RenderedSemanticControlsAreAccessible(app), $"Rendered controls for {theme.Id}");
+            Assert.Equal(GifAnimationDirections.Normal, app.TryFindResource("CustomBackgroundGifAnimationDirection"));
+            Assert.Equal(1d, app.TryFindResource("CustomBackgroundGifAnimationSpeed"));
+            Assert.Equal(GifAnimationDirections.Normal, app.TryFindResource("CustomBackgroundVideoPlaybackMode"));
+            Assert.Equal(1d, app.TryFindResource("CustomBackgroundVideoPlaybackSpeed"));
+            Assert.False((bool)app.TryFindResource("CustomBackgroundVideoAudioEnabled")!);
+            Assert.False((bool)app.TryFindResource("CustomBackgroundFlipHorizontal")!);
+            Assert.False((bool)app.TryFindResource("CustomBackgroundFlipVertical")!);
             var editable = manager.CreateEditableCopy(theme.Id);
             Assert.All(new[] { editable.Background, editable.Panel, editable.Card, editable.Elevated,
                 editable.Border, editable.PrimaryText, editable.SecondaryText, editable.Accent, editable.Hover,
@@ -243,7 +323,7 @@ public sealed class ThemePersistenceTests : RuntimeTestBase
 
     private static void VerifyAssetsAndOpacity(System.Windows.Application app, ThemeManager manager, AppDataPaths paths)
     {
-        foreach (var asset in new[] { "test.jpg", "test.png", "test.bmp", "test.gif" })
+        foreach (var asset in new[] { "test.jpg", "test.png", "test.bmp", "test.gif", "test.mp4" })
         {
             var custom = CustomThemeSettings.CreateDefault();
             custom.BackgroundAssetFileName = asset;
@@ -330,6 +410,30 @@ public sealed class ThemePersistenceTests : RuntimeTestBase
         var interactiveHover = Assert.IsType<SolidColorBrush>(app.TryFindResource("InteractiveHoverBrush"));
         Assert.Equal((byte)Math.Round(51 * 0.8 * 0.5), interactiveHover.Color.A);
 
+        editor.ViewModel.SetBackground("animated.gif", null);
+        Assert.True(editor.ViewModel.HasGifBackground);
+        editor.ViewModel.GifAnimationDirection = GifAnimationDirections.Reverse;
+        editor.ViewModel.GifAnimationSpeed = 2;
+        editor.ViewModel.ImageFit = BackgroundImageFits.Center;
+        editor.ViewModel.ImageFlipHorizontal = true;
+        editor.ViewModel.ImageFlipVertical = true;
+        Assert.Equal(GifAnimationDirections.Reverse, app.TryFindResource("CustomBackgroundGifAnimationDirection"));
+        Assert.Equal(2d, app.TryFindResource("CustomBackgroundGifAnimationSpeed"));
+        Assert.True((bool)app.TryFindResource("CustomBackgroundFlipHorizontal")!);
+        Assert.True((bool)app.TryFindResource("CustomBackgroundFlipVertical")!);
+        editor.ViewModel.SetBackground("static.png", null);
+        Assert.False(editor.ViewModel.HasGifBackground);
+
+        editor.ViewModel.SetBackground("video.mp4", null);
+        Assert.False(editor.ViewModel.HasGifBackground);
+        Assert.True(editor.ViewModel.HasVideoBackground);
+        editor.ViewModel.VideoPlaybackSpeed = 1.5;
+        editor.ViewModel.VideoAudioEnabled = true;
+        Assert.Equal(1.5d, app.TryFindResource("CustomBackgroundVideoPlaybackSpeed"));
+        Assert.True((bool)app.TryFindResource("CustomBackgroundVideoAudioEnabled")!);
+        editor.ViewModel.SetBackground("static.png", null);
+        Assert.False(editor.ViewModel.HasVideoBackground);
+
         editor.ViewModel.SurfaceOpacityPercent = 68;
         editor.ViewModel.CategoriesPanelOpacityPercent = 31;
         editor.ViewModel.ActivityPanelOpacityPercent = 44;
@@ -346,6 +450,12 @@ public sealed class ThemePersistenceTests : RuntimeTestBase
         Assert.Equal(name, editor.ViewModel.Name);
         Assert.Equal(extreme.Accent, editor.ViewModel.Settings.Accent);
         Assert.Equal(78, editor.ViewModel.Settings.HoverIntensity);
+        Assert.Equal(GifAnimationDirections.Normal, editor.ViewModel.Settings.GifAnimationDirection);
+        Assert.Equal(1d, editor.ViewModel.Settings.GifAnimationSpeed);
+        Assert.Equal(1d, editor.ViewModel.Settings.VideoPlaybackSpeed);
+        Assert.False(editor.ViewModel.Settings.VideoAudioEnabled);
+        Assert.False(editor.ViewModel.Settings.ImageFlipHorizontal);
+        Assert.False(editor.ViewModel.Settings.ImageFlipVertical);
         editor.Close();
     }
 
