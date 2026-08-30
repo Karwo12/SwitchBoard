@@ -32,6 +32,22 @@ public sealed class ActionSelectionTests : RuntimeTestBase
 
     [Fact]
     [Trait("Category", "Unit")]
+    public void SelectedProfileBreadcrumbContainsCategoryAndProfileName()
+    {
+        using var fixture = new SelectionFixture();
+        var main = fixture.Main;
+
+        Assert.Equal("Category A > Profile A", main.SelectedProfileBreadcrumb);
+
+        main.SelectedProfile!.Name = "Renamed profile";
+        Assert.Equal("Category A > Renamed profile", main.SelectedProfileBreadcrumb);
+
+        main.Categories.Single(category => category.Id == fixture.CategoryA.Id).Name = "Renamed category";
+        Assert.Equal("Renamed category > Renamed profile", main.SelectedProfileBreadcrumb);
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
     public void ExecutionStateRemainsIndependentFromActionSelection()
     {
         using var fixture = new SelectionFixture();

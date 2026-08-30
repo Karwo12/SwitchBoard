@@ -35,6 +35,7 @@ public partial class MainWindow : Window
     private double _defaultMaxWidth;
     private double _defaultMaxHeight;
     private bool _exitRequestedFromTray;
+    private string? _lastVideoBackendProblemKey;
 
     private const int WmDpiChanged = 0x02E0;
     private const uint MonitorDefaultToNearest = 2;
@@ -54,7 +55,13 @@ public partial class MainWindow : Window
         _defaultMaxWidth = MaxWidth;
         _defaultMaxHeight = MaxHeight;
         DataContext = viewModel;
+        // LibVLC temporarily reparents MainVisualOverlay into its VideoView.
+        // Keep the window bindings alive when the overlay no longer inherits
+        // DataContext from MainWindow.
+        MainVisualOverlay.DataContext = viewModel;
+        ThemeBackgroundHost.SetExternalOverlay(MainVisualOverlay);
         ThemeBackgroundHost.NativeSizeChanged += ThemeBackgroundHostOnNativeSizeChanged;
+        ThemeBackgroundHost.VideoBackendProblem += ThemeBackgroundHostOnVideoBackendProblem;
         _viewModel.PropertyChanged += ViewModelOnPropertyChanged;
         Loaded += MainWindowOnLoaded;
         SourceInitialized += MainWindowOnSourceInitialized;
@@ -64,7 +71,10 @@ public partial class MainWindow : Window
         Closing += OnClosing;
         SizeChanged += (_, _) => viewModel.CaptureWindowGeometry(this);
         LocationChanged += (_, _) => viewModel.CaptureWindowGeometry(this);
-        StateChanged += (_, _) => viewModel.CaptureWindowGeometry(this);
+        StateChanged += MainWindowOnStateChanged;
+        Activated += MainWindowOnActivationChanged;
+        Deactivated += MainWindowOnActivationChanged;
+        IsVisibleChanged += MainWindowOnVisibilityChanged;
         Closed += OnClosed;
         _trayService = new SystemTrayService(OpenFromTray, ExitFromTray, viewModel.GetTrayProfiles,
             () => viewModel.HasPendingRestore,
@@ -73,6 +83,10 @@ public partial class MainWindow : Window
     }
 
     private void HomeNavigationButton_OnClick(object sender, RoutedEventArgs e) => SetMainView(MainViewMode.Home);
+
+    private void SystemNavigationButton_OnClick(object sender, RoutedEventArgs e) => SetMainView(MainViewMode.System);
+
+    private void PerformanceNavigationButton_OnClick(object sender, RoutedEventArgs e) => SetMainView(MainViewMode.Performance);
 
     private void ActivityNavigationButton_OnClick(object sender, RoutedEventArgs e) => SetMainView(MainViewMode.Activity);
 
@@ -126,13 +140,19 @@ public partial class MainWindow : Window
     private void SetMainView(MainViewMode view)
     {
         var isHome = view == MainViewMode.Home;
+        var isSystem = view == MainViewMode.System;
+        var isPerformance = view == MainViewMode.Performance;
         var isActivity = view == MainViewMode.Activity;
         MainContentGrid.Visibility = view == MainViewMode.Settings ? Visibility.Collapsed : Visibility.Visible;
         ProfileNavigationContent.Visibility = isHome ? Visibility.Visible : Visibility.Collapsed;
         ActionEditor.Visibility = isHome ? Visibility.Visible : Visibility.Collapsed;
+        SystemContent.Visibility = isSystem ? Visibility.Visible : Visibility.Collapsed;
+        PerformanceContent.Visibility = isPerformance ? Visibility.Visible : Visibility.Collapsed;
         ActivityContent.Visibility = isActivity ? Visibility.Visible : Visibility.Collapsed;
         SettingsContent.Visibility = view == MainViewMode.Settings ? Visibility.Visible : Visibility.Collapsed;
         HomeNavigationButton.IsChecked = isHome;
+        SystemNavigationButton.IsChecked = isSystem;
+        PerformanceNavigationButton.IsChecked = isPerformance;
         ActivityNavigationButton.IsChecked = isActivity;
         SettingsNavigationButton.IsChecked = view == MainViewMode.Settings;
         if (DataContext is MainWindowViewModel viewModel)
@@ -140,6 +160,8 @@ public partial class MainWindow : Window
             viewModel.ActiveMainView = view;
             viewModel.IsActivityExpanded = isActivity;
         }
+        if (isSystem) SystemContent.ScrollToTop();
+        if (isPerformance) PerformanceContent.ScrollToTop();
     }
 
     private void ThemeMenuButton_OnClick(object sender, RoutedEventArgs e)
@@ -149,6 +171,25 @@ public partial class MainWindow : Window
             viewModel.SelectedProfile = profile;
         menu.PlacementTarget = button;
         menu.IsOpen = true;
+        e.Handled = true;
+    }
+
+    private void ThemeMenuItem_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuItem { Tag: string action, CommandParameter: string themeId } ||
+            DataContext is not MainWindowViewModel viewModel)
+            return;
+
+        ICommand? command = action switch
+        {
+            "edit" => viewModel.EditThemeCommand,
+            "duplicate" => viewModel.DuplicateThemeCommand,
+            "rename" => viewModel.RenameThemeCommand,
+            "export" => viewModel.ExportThemeCommand,
+            "delete" => viewModel.DeleteThemeCommand,
+            _ => null
+        };
+        if (command?.CanExecute(themeId) == true) command.Execute(themeId);
         e.Handled = true;
     }
 
@@ -167,6 +208,16 @@ public partial class MainWindow : Window
         // WindowChrome performs native drag and resize hit testing. Handle only
         // the caption double-click so the empty titlebar keeps Windows behavior.
         if (e.OriginalSource is DependencyObject source && IsInsideButton(source)) return;
+        if (e.ClickCount == 1 && e.LeftButton == MouseButtonState.Pressed &&
+            sender is DependencyObject element && !ReferenceEquals(Window.GetWindow(element), this))
+        {
+            // LibVLCSharp displays the WPF content in its owned ForegroundWindow.
+            // Forward caption drags to the real application window because that
+            // separate overlay otherwise receives the mouse hit-test.
+            try { DragMove(); } catch (InvalidOperationException) { }
+            e.Handled = true;
+            return;
+        }
         if (e.ClickCount != 2) return;
         ToggleWindowState();
         e.Handled = true;
@@ -245,6 +296,7 @@ public partial class MainWindow : Window
                 Hide();
                 return;
             }
+            await viewModel.CreateBackupForShutdownAsync();
             viewModel.Dispose();
             _closeApproved = true;
             Close();
@@ -305,7 +357,12 @@ public partial class MainWindow : Window
         Closed -= OnClosed;
         Loaded -= MainWindowOnLoaded;
         SourceInitialized -= MainWindowOnSourceInitialized;
+        StateChanged -= MainWindowOnStateChanged;
+        Activated -= MainWindowOnActivationChanged;
+        Deactivated -= MainWindowOnActivationChanged;
+        IsVisibleChanged -= MainWindowOnVisibilityChanged;
         ThemeBackgroundHost.NativeSizeChanged -= ThemeBackgroundHostOnNativeSizeChanged;
+        ThemeBackgroundHost.VideoBackendProblem -= ThemeBackgroundHostOnVideoBackendProblem;
         _viewModel.PropertyChanged -= ViewModelOnPropertyChanged;
         if (_windowSource is not null) _windowSource.RemoveHook(WindowMessageHook);
         _windowSource = null;
@@ -337,7 +394,25 @@ public partial class MainWindow : Window
             WindowState = WindowState.Maximized;
     }
 
-    private void MainWindowOnLoaded(object sender, RoutedEventArgs e) => QueueBackgroundFit(ThemeBackgroundHost.NativeSize);
+    private void MainWindowOnLoaded(object sender, RoutedEventArgs e)
+    {
+        QueueBackgroundFit(ThemeBackgroundHost.NativeSize);
+        UpdateBackgroundRuntimeState();
+    }
+
+    private void MainWindowOnStateChanged(object? sender, EventArgs e)
+    {
+        _viewModel.CaptureWindowGeometry(this);
+        UpdateBackgroundRuntimeState();
+    }
+
+    private void MainWindowOnActivationChanged(object? sender, EventArgs e) => UpdateBackgroundRuntimeState();
+
+    private void MainWindowOnVisibilityChanged(object sender, DependencyPropertyChangedEventArgs e) =>
+        UpdateBackgroundRuntimeState();
+
+    private void UpdateBackgroundRuntimeState() => _viewModel.UpdateBackgroundRuntimeState(IsVisible, IsActive,
+        WindowState == WindowState.Minimized);
 
     private void MainWindowOnSourceInitialized(object? sender, EventArgs e)
     {
@@ -366,6 +441,25 @@ public partial class MainWindow : Window
 
     private void ThemeBackgroundHostOnNativeSizeChanged(object? sender, BackgroundNativeSizeChangedEventArgs e) =>
         QueueBackgroundFit(e.Size);
+
+    private void ThemeBackgroundHostOnVideoBackendProblem(object? sender, VideoBackendProblemEventArgs e)
+    {
+        _viewModel.ReportVideoBackendProblem(e);
+        var key = $"{e.Kind}|{e.SourcePath}";
+        if (!e.CanInstallLibVlc || !_viewModel.CanInstallOptionalLibVlc ||
+            string.Equals(_lastVideoBackendProblemKey, key, StringComparison.Ordinal))
+            return;
+
+        _lastVideoBackendProblemKey = key;
+        var message = _viewModel.GetVideoBackendProblemText(e) + Environment.NewLine + Environment.NewLine +
+            _viewModel.GetLocalizedText("Dialog.Mp4RendererInstallPrompt");
+        if (MessageBox.Show(message, _viewModel.GetLocalizedText("Dialog.Mp4RendererProblemTitle"),
+                MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+            return;
+
+        SetMainView(MainViewMode.Settings);
+        SetSettingsCategory(SettingsCategory.Interface);
+    }
 
     private void QueueBackgroundFit(BackgroundNativeSize? nativeSize)
     {
@@ -504,40 +598,15 @@ public partial class MainWindow : Window
     private readonly record struct MonitorMetrics(IntPtr WindowHandle, NativeRect WorkArea, Size WorkAreaPixels,
         Size WindowPixels, DpiScale Dpi);
 
-    private void SystemChangeEntry_OnMouseDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    private void ActivityContent_OnNavigationRequested(object? sender,
+        Panels.ActivityNavigationRequestedEventArgs e)
     {
-        if (e.ClickCount != 2) return;
-        if (sender is not FrameworkElement { DataContext: ViewModels.SystemChangeItemViewModel entry } ||
-            DataContext is not MainWindowViewModel viewModel) return;
-        if (viewModel.NavigateToProfileAction(entry.ProfileId, entry.ActionId))
+        if (DataContext is MainWindowViewModel viewModel &&
+            viewModel.NavigateToProfileAction(e.ProfileId, e.ActionId))
         {
             SetMainView(MainViewMode.Home);
-            ActionEditor.BringActionIntoView(entry.ActionId);
+            ActionEditor.BringActionIntoView(e.ActionId);
         }
-    }
-
-    private void SystemChangeTarget_OnMouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
-    {
-        if (sender is not FrameworkElement { DataContext: SystemChangeItemViewModel entry } ||
-            DataContext is not MainWindowViewModel viewModel || !entry.IsNavigable) return;
-        if (viewModel.NavigateToProfileAction(entry.ProfileId, entry.ActionId))
-        {
-            SetMainView(MainViewMode.Home);
-            ActionEditor.BringActionIntoView(entry.ActionId);
-        }
-        e.Handled = true;
-    }
-
-    private void HistoryAction_OnMouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
-    {
-        if (sender is not FrameworkElement { DataContext: ProfileExecutionActionViewModel entry } ||
-            DataContext is not MainWindowViewModel viewModel) return;
-        if (viewModel.NavigateToProfileAction(entry.ProfileId, entry.ActionId))
-        {
-            SetMainView(MainViewMode.Home);
-            ActionEditor.BringActionIntoView(entry.ActionId);
-        }
-        e.Handled = true;
     }
 
     private void ActivityLayoutSplitter_OnDragCompleted(object sender, DragCompletedEventArgs e)

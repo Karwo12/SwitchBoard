@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 
@@ -38,12 +39,34 @@ public partial class SearchBoxControl : UserControl
             control.SetValue(HasTextProperty, !string.IsNullOrEmpty(args.NewValue as string));
     }
 
-    private void SearchBoxControl_OnLoaded(object sender, RoutedEventArgs e) =>
+    private void SearchBoxControl_OnLoaded(object sender, RoutedEventArgs e)
+    {
+        ApplyLeftTextAlignment();
         ResetHorizontalScrollIfTextFits();
+    }
 
     private void SearchTextBox_OnTextChanged(object sender, TextChangedEventArgs e)
     {
+        ApplyLeftTextAlignment();
         Dispatcher.BeginInvoke(DispatcherPriority.Loaded, ResetHorizontalScrollIfTextFits);
+    }
+
+    private void ApplyLeftTextAlignment()
+    {
+        SearchTextBox.HorizontalContentAlignment = HorizontalAlignment.Left;
+        SearchTextBox.TextAlignment = TextAlignment.Left;
+    }
+
+    private void SearchTextBox_OnPreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter && e.Key != Key.Return) return;
+
+        // The inner binding normally updates on every keystroke. Force the
+        // source update as well so Enter has the same result for callers that
+        // change the binding trigger or commit through a validation rule.
+        SearchTextBox.GetBindingExpression(TextBox.TextProperty)?.UpdateSource();
+        Keyboard.ClearFocus();
+        e.Handled = true;
     }
 
     private void ResetHorizontalScrollIfTextFits()

@@ -145,6 +145,7 @@ public partial class RenamableListItemControl : UserControl
         }
 
         MoveFocus(new TraversalRequest(FocusNavigationDirection.Next));
+        if (!IsEditing) Keyboard.ClearFocus();
     }
 
     private void CancelEdit()
@@ -155,6 +156,7 @@ public partial class RenamableListItemControl : UserControl
         }
 
         MoveFocus(new TraversalRequest(FocusNavigationDirection.Next));
+        if (!IsEditing) Keyboard.ClearFocus();
     }
 
     private void FocusEditor()

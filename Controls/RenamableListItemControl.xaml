@@ -2,6 +2,7 @@
              x:Name="Root"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:SwitchBoard.Controls"
              MinHeight="38"
              MouseLeftButtonDown="OnMouseLeftButtonDown">
     <Grid Background="Transparent">
@@ -24,6 +25,7 @@
         </TextBlock>
 
         <TextBox x:Name="Editor"
+                 local:TextBoxEnterCommitBehavior.CommitOnEnter="False"
                  Padding="9,6"
                  VerticalContentAlignment="Center"
                  LostKeyboardFocus="OnEditorLostKeyboardFocus"

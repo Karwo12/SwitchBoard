@@ -95,6 +95,10 @@ public partial class App : Application
             settings.CloseBehavior = string.Equals(settings.CloseBehavior, "tray", StringComparison.OrdinalIgnoreCase)
                 ? "tray" : "close";
             settings.AutomaticBackupCount = Math.Clamp(settings.AutomaticBackupCount, 1, 50);
+            settings.BackgroundPerformanceMode = BackgroundPerformanceModes.Normalize(settings.BackgroundPerformanceMode);
+            settings.GifFrameRateLimit = GifFrameRateLimits.Normalize(settings.GifFrameRateLimit);
+            settings.Mp4RendererPreference = Mp4RendererPreferences.Normalize(settings.Mp4RendererPreference);
+            settings.HistoryRetentionDays = HistoryRetentionOptions.Normalize(settings.HistoryRetentionDays);
             NormalizeWindowSize(settings);
             _localizationService = new LocalizationService();
             settings.LanguageId = _localizationService.ApplyLanguage(
@@ -134,7 +138,8 @@ public partial class App : Application
             var audioManager = new WindowsAudioManager();
             var deviceManager = new WindowsDeviceManager();
             var processSettingsService = new ProcessSettingsService();
-            var activityService = new ActivityService(paths, _localizationService, _logger);
+            var activityService = new ActivityService(paths, _localizationService, _logger,
+                retentionDays: settings.HistoryRetentionDays);
             await activityService.ReconcileServiceChangesAsync(windowsServiceManager);
             var displayConfirmationService = new WpfDisplayConfirmationService(_localizationService);
             var processStopHandler = new ProcessSetStateActionHandler(_logger);
@@ -201,6 +206,8 @@ public partial class App : Application
             var window = new MainWindow(viewModel);
             MainWindow = window;
             window.Show();
+            if (viewModel.StartMinimizedToTray) window.Hide();
+            viewModel.CheckUpdatesAfterStartup();
             _logger.Info("Startup", "Main window opened successfully.");
         }
         catch (Exception exception)

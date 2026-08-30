@@ -11,6 +11,7 @@ public sealed class ProfileItemViewModel : ObservableObject
     private string _settingsDisplayName;
     private bool _isEditing;
     private bool _closeSwitchBoardAfterSuccessfulCompletion;
+    private bool _closeSwitchBoardAfterSuccessfulRestore;
     private string? _color;
     private string? _icon;
     private ProfileExecutionState _executionState;
@@ -23,6 +24,7 @@ public sealed class ProfileItemViewModel : ObservableObject
         _editName = profile.Name;
         _settingsDisplayName = profile.Name;
         _closeSwitchBoardAfterSuccessfulCompletion = profile.CloseSwitchBoardAfterSuccessfulCompletion;
+        _closeSwitchBoardAfterSuccessfulRestore = profile.CloseSwitchBoardAfterSuccessfulRestore;
         _color = profile.Color;
         _icon = profile.Icon;
         SortOrder = profile.SortOrder;
@@ -70,6 +72,12 @@ public sealed class ProfileItemViewModel : ObservableObject
     {
         get => _closeSwitchBoardAfterSuccessfulCompletion;
         set => SetProperty(ref _closeSwitchBoardAfterSuccessfulCompletion, value);
+    }
+
+    public bool CloseSwitchBoardAfterSuccessfulRestore
+    {
+        get => _closeSwitchBoardAfterSuccessfulRestore;
+        set => SetProperty(ref _closeSwitchBoardAfterSuccessfulRestore, value);
     }
 
     /// <summary>Optional presentation color persisted with the profile.</summary>
@@ -182,6 +190,7 @@ public sealed class ProfileItemViewModel : ObservableObject
         Name = Name.Trim(),
         SortOrder = SortOrder,
         CloseSwitchBoardAfterSuccessfulCompletion = CloseSwitchBoardAfterSuccessfulCompletion,
+        CloseSwitchBoardAfterSuccessfulRestore = CloseSwitchBoardAfterSuccessfulRestore,
         Color = Color,
         Icon = Icon,
         Actions = Actions.Select(action => action.ToModel()).ToList()
