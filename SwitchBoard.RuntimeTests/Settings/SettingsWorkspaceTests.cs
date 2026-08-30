@@ -12,9 +12,22 @@ public sealed class SettingsWorkspaceTests
         var settings = new UserSettings();
 
         Assert.False(settings.LaunchAtStartup);
+        Assert.False(settings.StartMinimizedToTray);
         Assert.Equal("close", settings.CloseBehavior);
+        Assert.True(settings.PauseAnimatedBackgroundWhenMinimized);
+        Assert.False(settings.PauseAnimatedBackgroundWhenInactive);
+        Assert.False(settings.PauseAnimatedBackgroundDuringProfileExecution);
+        Assert.Equal(BackgroundPerformanceModes.FullQuality, settings.BackgroundPerformanceMode);
+        Assert.Equal(GifFrameRateLimits.Native, settings.GifFrameRateLimit);
+        Assert.Equal(Mp4RendererPreferences.Automatic, settings.Mp4RendererPreference);
         Assert.False(settings.AutomaticBackupEnabled);
         Assert.Equal(5, settings.AutomaticBackupCount);
+        Assert.False(settings.CreateBackupOnExit);
+        Assert.Equal(HistoryRetentionOptions.NinetyDays, settings.HistoryRetentionDays);
+        Assert.False(settings.CheckForUpdatesAtStartup);
+        Assert.Null(settings.LastKnownLatestVersion);
+        Assert.Equal(TimeSpan.FromSeconds(1d / 30d),
+            GifFrameRateLimits.Apply(GifFrameRateLimits.FramesPerSecond30, TimeSpan.FromMilliseconds(1)));
         Assert.False(settings.RememberLastView);
         Assert.Equal("Home", settings.LastMainView);
         Assert.True(settings.WarnBeforeClosingWithUnsavedChanges);
@@ -34,8 +47,21 @@ public sealed class SettingsWorkspaceTests
             var original = new UserSettings
             {
                 CloseBehavior = "tray",
+                StartMinimizedToTray = true,
+                PauseAnimatedBackgroundWhenInactive = true,
+                PauseAnimatedBackgroundDuringProfileExecution = true,
+                BackgroundPerformanceMode = BackgroundPerformanceModes.Economy,
+                GifFrameRateLimit = GifFrameRateLimits.FramesPerSecond30,
+                Mp4RendererPreference = Mp4RendererPreferences.LibVlc,
                 AutomaticBackupEnabled = true,
                 AutomaticBackupCount = 7,
+                CreateBackupOnExit = true,
+                HistoryRetentionDays = HistoryRetentionOptions.ThreeHundredSixtyFiveDays,
+                CheckForUpdatesAtStartup = true,
+                LastKnownLatestVersion = "9.8.7",
+                LastKnownReleaseUrl = "https://example.test/release",
+                LastUpdateCheckUtc = new DateTimeOffset(2026, 8, 28, 12, 0, 0, TimeSpan.Zero),
+                LastUpdateCheckStatus = "UpToDate",
                 AutoFitWindowToBackground = true
             };
 
@@ -48,8 +74,21 @@ public sealed class SettingsWorkspaceTests
             var reloaded = await reloadedRepository.LoadAsync();
 
             Assert.Equal("tray", reloaded.CloseBehavior);
+            Assert.True(reloaded.StartMinimizedToTray);
+            Assert.True(reloaded.PauseAnimatedBackgroundWhenInactive);
+            Assert.True(reloaded.PauseAnimatedBackgroundDuringProfileExecution);
+            Assert.Equal(BackgroundPerformanceModes.Economy, reloaded.BackgroundPerformanceMode);
+            Assert.Equal(GifFrameRateLimits.FramesPerSecond30, reloaded.GifFrameRateLimit);
+            Assert.Equal(Mp4RendererPreferences.LibVlc, reloaded.Mp4RendererPreference);
             Assert.True(reloaded.AutomaticBackupEnabled);
             Assert.Equal(7, reloaded.AutomaticBackupCount);
+            Assert.True(reloaded.CreateBackupOnExit);
+            Assert.Equal(HistoryRetentionOptions.ThreeHundredSixtyFiveDays, reloaded.HistoryRetentionDays);
+            Assert.True(reloaded.CheckForUpdatesAtStartup);
+            Assert.Equal("9.8.7", reloaded.LastKnownLatestVersion);
+            Assert.Equal("https://example.test/release", reloaded.LastKnownReleaseUrl);
+            Assert.Equal(new DateTimeOffset(2026, 8, 28, 12, 0, 0, TimeSpan.Zero), reloaded.LastUpdateCheckUtc);
+            Assert.Equal("UpToDate", reloaded.LastUpdateCheckStatus);
             Assert.True(reloaded.AutoFitWindowToBackground);
         }
         finally
@@ -75,6 +114,14 @@ public sealed class SettingsWorkspaceTests
 
             Assert.Equal(10, settings.SchemaVersion);
             Assert.False(settings.RememberLastView);
+            Assert.False(settings.StartMinimizedToTray);
+            Assert.True(settings.PauseAnimatedBackgroundWhenMinimized);
+            Assert.False(settings.PauseAnimatedBackgroundWhenInactive);
+            Assert.Equal(BackgroundPerformanceModes.FullQuality, settings.BackgroundPerformanceMode);
+            Assert.Equal(GifFrameRateLimits.Native, settings.GifFrameRateLimit);
+            Assert.Equal(Mp4RendererPreferences.Automatic, settings.Mp4RendererPreference);
+            Assert.Equal(HistoryRetentionOptions.NinetyDays, settings.HistoryRetentionDays);
+            Assert.False(settings.CheckForUpdatesAtStartup);
             Assert.True(settings.WarnBeforeClosingWithUnsavedChanges);
             Assert.Equal("standard", settings.InterfaceDensity);
             Assert.True(settings.ShowCardDetails);

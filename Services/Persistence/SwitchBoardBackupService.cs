@@ -112,6 +112,32 @@ public sealed class SwitchBoardBackupService
         return destination;
     }
 
+    /// <summary>Creates a user-requested managed archive without rotating automatic backups.</summary>
+    public async Task<string> CreateManagedBackupAsync(SwitchBoardCatalog catalog, UserSettings settings,
+        AppDataPaths paths, string reason, CancellationToken cancellationToken = default)
+    {
+        Directory.CreateDirectory(paths.AutoBackupsDirectory);
+        var safeReason = string.Concat((reason ?? "manual").Where(char.IsLetterOrDigit));
+        if (string.IsNullOrWhiteSpace(safeReason)) safeReason = "manual";
+        var destination = Path.Combine(paths.AutoBackupsDirectory,
+            $"SwitchBoard-{safeReason}-{DateTimeOffset.UtcNow:yyyyMMdd-HHmmssfff}-{Guid.NewGuid():N}.sbbackup");
+        await ExportAsync(catalog, settings, destination, paths, cancellationToken);
+        return destination;
+    }
+
+    public IReadOnlyList<ManagedBackupFile> ListManagedBackups(AppDataPaths paths, int maximumCount = 12)
+    {
+        if (!Directory.Exists(paths.AutoBackupsDirectory)) return [];
+        return Directory.EnumerateFiles(paths.AutoBackupsDirectory, "SwitchBoard-*.sbbackup")
+            .Select(path => new FileInfo(path))
+            .OrderByDescending(file => file.LastWriteTimeUtc)
+            .ThenByDescending(file => file.Name, StringComparer.OrdinalIgnoreCase)
+            .Take(Math.Clamp(maximumCount, 1, 50))
+            .Select(file => new ManagedBackupFile(file.FullName,
+                new DateTimeOffset(file.LastWriteTimeUtc, TimeSpan.Zero), file.Length))
+            .ToList();
+    }
+
     /// <summary>Creates a non-rotated safety archive for destructive operations.</summary>
     public async Task<string> CreateSafetyBackupAsync(SwitchBoardCatalog catalog, UserSettings settings,
         AppDataPaths paths, string operation, CancellationToken cancellationToken = default)
@@ -308,7 +334,10 @@ public sealed class SwitchBoardBackupService
         NormalizeThemeReferences(settings, availableAssets);
         settings.CloseBehavior = string.Equals(settings.CloseBehavior, "tray", StringComparison.OrdinalIgnoreCase)
             ? "tray" : "close";
+        settings.BackgroundPerformanceMode = BackgroundPerformanceModes.Normalize(settings.BackgroundPerformanceMode);
+        settings.GifFrameRateLimit = GifFrameRateLimits.Normalize(settings.GifFrameRateLimit);
         settings.AutomaticBackupCount = Math.Clamp(settings.AutomaticBackupCount, 1, 50);
+        settings.HistoryRetentionDays = HistoryRetentionOptions.Normalize(settings.HistoryRetentionDays);
         settings.LastMainView = settings.LastMainView is "Home" or "Activity" or "Settings"
             ? settings.LastMainView : "Home";
         settings.InterfaceDensity = string.Equals(settings.InterfaceDensity, "compact", StringComparison.OrdinalIgnoreCase)
@@ -349,6 +378,11 @@ public sealed class SwitchBoardBackupDocument
 public sealed record SwitchBoardBackupPackage(
     SwitchBoardBackupDocument Document,
     IReadOnlyDictionary<string, byte[]> ThemeAssets);
+
+public sealed record ManagedBackupFile(string Path, DateTimeOffset CreatedAtUtc, long Length)
+{
+    public string FileName => System.IO.Path.GetFileName(Path);
+}
 
 /// <summary>Recoverable directory replacement used while importing or resetting configuration.</summary>
 public sealed class ThemeAssetStaging : IDisposable

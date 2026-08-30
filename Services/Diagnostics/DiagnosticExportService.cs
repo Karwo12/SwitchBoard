@@ -2,6 +2,7 @@ using System.IO.Compression;
 using System.IO;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using SwitchBoard.Data;
 using SwitchBoard.Services.Activity;
 
@@ -10,6 +11,11 @@ namespace SwitchBoard.Services.Diagnostics;
 /// <summary>Creates local, opt-in diagnostic archives without including profiles or settings.</summary>
 public sealed class DiagnosticExportService
 {
+    private const int DiagnosticHistoryRecordLimit = 200;
+    private const long DiagnosticLogByteLimit = 256 * 1024;
+    private static readonly Regex SensitiveLogValue = new(
+        @"(?im)(\b(?:password|passwd|token|api[_-]?key|authorization|cookie|secret)\b\s*[:=]\s*)[^\s,;]+",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private readonly AppDataPaths _paths;
     private readonly JsonSerializerOptions _json = new() { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
@@ -21,11 +27,21 @@ public sealed class DiagnosticExportService
         await WriteArchiveAsync(destination, archive =>
         {
             WriteText(archive, "diagnostics.txt", diagnostics);
-            WriteText(archive, "history.json", JsonSerializer.Serialize(records, _json));
+            var recentRecords = records.OrderByDescending(record => record.Timestamp)
+                .Take(DiagnosticHistoryRecordLimit)
+                .OrderBy(record => record.Timestamp)
+                .ToList();
+            WriteText(archive, "history.json", JsonSerializer.Serialize(recentRecords, _json));
             if (Directory.Exists(_paths.LogsDirectory))
             {
-                foreach (var file in Directory.EnumerateFiles(_paths.LogsDirectory, "switchboard.log*"))
-                    AddLog(archive, file);
+                var remainingBytes = DiagnosticLogByteLimit;
+                foreach (var file in Directory.EnumerateFiles(_paths.LogsDirectory, "switchboard.log*")
+                             .OrderByDescending(path => File.GetLastWriteTimeUtc(path)))
+                {
+                    if (remainingBytes <= 0) break;
+                    var addedBytes = AddLogTail(archive, file, remainingBytes);
+                    remainingBytes -= addedBytes;
+                }
             }
         }, cancellationToken);
     }
@@ -67,11 +83,18 @@ public sealed class DiagnosticExportService
         writer.Write(text);
     }
 
-    private static void AddLog(ZipArchive archive, string file)
+    private static long AddLogTail(ZipArchive archive, string file, long maximumBytes)
     {
-        var entry = archive.CreateEntry("logs/" + Path.GetFileName(file), CompressionLevel.Optimal);
-        using var target = entry.Open();
+        var length = new FileInfo(file).Length;
+        var bytesToCopy = Math.Min(length, maximumBytes);
+        if (bytesToCopy <= 0) return 0;
         using var source = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-        source.CopyTo(target);
+        if (source.Length > bytesToCopy) source.Seek(-bytesToCopy, SeekOrigin.End);
+        using var reader = new StreamReader(source, Encoding.UTF8, detectEncodingFromByteOrderMarks: true,
+            bufferSize: 81920, leaveOpen: false);
+        var tail = reader.ReadToEnd();
+        var sanitized = SensitiveLogValue.Replace(tail, "$1[redacted]");
+        WriteText(archive, "logs/" + Path.GetFileName(file), sanitized);
+        return bytesToCopy;
     }
 }

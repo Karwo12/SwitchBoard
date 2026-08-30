@@ -183,21 +183,86 @@ public sealed class ActivityHistoryTests
 
     [Fact]
     [Trait("Category", "Unit")]
-    public void ActivityView_UsesPhysicalScrollAndReservesScrollbarViewport()
+    public void ActivityView_VirtualizesLongListsAndReservesScrollbarViewport()
     {
         var path = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "Views", "MainWindow.xaml"));
         var xaml = File.ReadAllText(path);
-        var activityStart = xaml.IndexOf("x:Name=\"ActivityContent\"", StringComparison.Ordinal);
-        var settingsStart = xaml.IndexOf("x:Name=\"SettingsWorkspace\"", activityStart, StringComparison.Ordinal);
-        var activityXaml = xaml[activityStart..settingsStart];
+        var activityPath = Path.Combine(Path.GetDirectoryName(path)!, "Panels", "ActivityPanel.xaml");
+        var activityXaml = File.ReadAllText(activityPath);
 
+        Assert.Contains("<panels:ActivityPanel", xaml, StringComparison.Ordinal);
         Assert.Equal(2, activityXaml.Split("HorizontalScrollBarVisibility=\"Disabled\"", StringSplitOptions.None).Length - 1);
-        Assert.Equal(2, activityXaml.Split("CanContentScroll=\"False\"", StringSplitOptions.None).Length - 1);
+        Assert.Equal(2, activityXaml.Split("CanContentScroll=\"True\"", StringSplitOptions.None).Length - 1);
+        Assert.Equal(2, activityXaml.Split("VirtualizationMode=\"Recycling\"", StringSplitOptions.None).Length - 1);
+        Assert.Equal(2, activityXaml.Split("ScrollUnit=\"Pixel\"", StringSplitOptions.None).Length - 1);
         Assert.DoesNotContain("ActivityDisplayEntries", activityXaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("ActivityTab0ButtonStyle", xaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("CommandParameter=\"0\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("CommandParameter=\"1\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("CommandParameter=\"2\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("ActivityTab0ButtonStyle", activityXaml, StringComparison.Ordinal);
+        Assert.Contains("{DynamicResource ActivityTab1ButtonStyle}", activityXaml, StringComparison.Ordinal);
+        Assert.Contains("{DynamicResource ActivityTab2ButtonStyle}", activityXaml, StringComparison.Ordinal);
+        Assert.Contains("{DynamicResource ActivityRowSurfaceStyle}", activityXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("CommandParameter=\"0\"", activityXaml, StringComparison.Ordinal);
+        Assert.Contains("CommandParameter=\"1\"", activityXaml, StringComparison.Ordinal);
+        Assert.Contains("CommandParameter=\"2\"", activityXaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [Trait("Category", "Regression")]
+    public void Retention_RewritesMixedOldHistoryAndKeepsOnlyPendingSystemChange()
+    {
+        using var context = new RuntimeTestContext();
+        var paths = new AppDataPaths(Path.Combine(context.Root, "retention-mixed"));
+        var activity = new ActivityService(paths, retentionDays: HistoryRetentionOptions.Unlimited);
+        var old = DateTimeOffset.UtcNow.AddDays(-45);
+        activity.Record(new PersistentActivityRecord
+        {
+            Timestamp = old,
+            EventType = ActivityEventTypes.Activity, Level = ActivityLevel.Info, Message = "Old ordinary activity"
+        });
+        activity.Record(new PersistentActivityRecord
+        {
+            Timestamp = old,
+            SessionId = Guid.NewGuid(),
+            ActionId = Guid.NewGuid(),
+            ActionType = "test", FriendlyName = "Pending change",
+            EventType = ActivityEventTypes.Verify, Level = ActivityLevel.Warning,
+            RestoreStatus = SystemChangeStatuses.Pending, Message = "Old pending system change"
+        });
+        activity.Record(new PersistentActivityRecord
+        {
+            Timestamp = old,
+            EventType = ActivityEventTypes.Activity, Level = ActivityLevel.Info, Message = "Old resolved activity"
+        });
+
+        activity.SetRetentionDays(HistoryRetentionOptions.ThirtyDays);
+
+        Assert.Single(activity.Records);
+        Assert.Equal(SystemChangeStatuses.Pending, activity.Records[0].RestoreStatus);
+        var reloaded = new ActivityService(paths, retentionDays: HistoryRetentionOptions.ThirtyDays);
+        Assert.Single(reloaded.Records);
+        Assert.Equal(SystemChangeStatuses.Pending, reloaded.Records[0].RestoreStatus);
+    }
+
+    [Fact]
+    [Trait("Category", "Regression")]
+    public void ClearPersistentHistory_RemovesResolvedEntriesButKeepsPendingSystemChanges()
+    {
+        using var context = new RuntimeTestContext();
+        var paths = new AppDataPaths(Path.Combine(context.Root, "clear-history"));
+        var activity = new ActivityService(paths);
+        activity.Add(ActivityLevel.Success, "Completed profile");
+        activity.Record(new PersistentActivityRecord
+        {
+            SessionId = Guid.NewGuid(), ActionId = Guid.NewGuid(), ActionType = "test",
+            FriendlyName = "Pending change", EventType = ActivityEventTypes.Verify,
+            Level = ActivityLevel.Warning, RestoreStatus = SystemChangeStatuses.Pending,
+            Message = "Pending system change"
+        });
+
+        activity.ClearPersistentHistory();
+
+        Assert.Single(activity.Records);
+        Assert.Equal(SystemChangeStatuses.Pending, activity.Records[0].RestoreStatus);
+        Assert.Single(new ActivityService(paths).Records);
     }
 
     private static PersistentActivityRecord ActionRecord(Guid sessionId, Guid profileId, Guid actionId,

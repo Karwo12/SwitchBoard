@@ -13,7 +13,6 @@ namespace SwitchBoard.Services.Activity;
 
 public sealed class ActivityService : IActivityService
 {
-    private static readonly TimeSpan Retention = TimeSpan.FromDays(90);
     private readonly object _gate = new();
     private readonly Queue<ActivityEntry> _entries = new();
     private readonly List<PersistentActivityRecord> _records = [];
@@ -24,13 +23,16 @@ public sealed class ActivityService : IActivityService
     private readonly JsonSerializerOptions _options = CreateOptions();
     private IReadOnlyList<ActivityEntry> _historyEntries = [];
     private IReadOnlyList<SystemChangeEntry> _systemChanges = [];
+    private int _retentionDays;
 
     public ActivityService(int capacity = 300) : this(null, null, null, capacity) { }
 
     public ActivityService(AppDataPaths? paths, ILocalizationService? localization = null,
-        IAppLogger? logger = null, int capacity = 300)
+        IAppLogger? logger = null, int capacity = 300,
+        int retentionDays = HistoryRetentionOptions.DefaultDays)
     {
         _capacity = Math.Clamp(capacity, 200, 500);
+        _retentionDays = HistoryRetentionOptions.Normalize(retentionDays);
         _logsDirectory = paths?.LogsDirectory;
         _localization = localization;
         _logger = logger;
@@ -153,6 +155,35 @@ public sealed class ActivityService : IActivityService
         lock (_gate) _entries.Clear();
     }
 
+    public void SetRetentionDays(int retentionDays)
+    {
+        lock (_gate)
+        {
+            _retentionDays = HistoryRetentionOptions.Normalize(retentionDays);
+            if (_logsDirectory is null) return;
+            ApplyRetention();
+            RebuildPersistentViews();
+        }
+        PersistentViewsChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    public void ClearPersistentHistory()
+    {
+        lock (_gate)
+        {
+            var protectedKeys = GetProtectedSystemChangeKeys();
+            var retained = _records.Where(record => IsSystemChangeRecord(record) &&
+                    protectedKeys.Contains(ChangeKey(record)))
+                .Select(Clone)
+                .ToList();
+            if (_logsDirectory is not null) RewritePersistentRecords(retained);
+            _records.Clear();
+            _records.AddRange(retained);
+            RebuildPersistentViews();
+        }
+        PersistentViewsChanged?.Invoke(this, EventArgs.Empty);
+    }
+
     private void AppendWriteThrough(PersistentActivityRecord record)
     {
         var path = Path.Combine(_logsDirectory!, $"activity-{record.Timestamp.ToLocalTime():yyyy-MM-dd}.jsonl");
@@ -190,16 +221,10 @@ public sealed class ActivityService : IActivityService
 
     private void ApplyRetention()
     {
-        var latestStatuses = _records.Where(IsSystemChangeRecord)
-            .GroupBy(ChangeKey)
-            .ToDictionary(group => group.Key,
-                group => group.OrderBy(item => item.Timestamp).Last().RestoreStatus,
-                StringComparer.Ordinal);
-        var protectedKeys = latestStatuses.Where(item => item.Value is SystemChangeStatuses.Pending or
-                SystemChangeStatuses.Discarded or SystemChangeStatuses.LeftActive or
-                SystemChangeStatuses.RestoreFailed)
-            .Select(item => item.Key).ToHashSet(StringComparer.Ordinal);
-        var cutoff = DateTimeOffset.UtcNow - Retention;
+        if (_retentionDays == HistoryRetentionOptions.Unlimited) return;
+        var protectedKeys = GetProtectedSystemChangeKeys();
+        var cutoff = DateTimeOffset.UtcNow - TimeSpan.FromDays(_retentionDays);
+        var requiresRewrite = false;
         foreach (var path in Directory.EnumerateFiles(_logsDirectory!, "activity-*.jsonl").ToList())
         {
             var info = new FileInfo(path);
@@ -216,9 +241,74 @@ public sealed class ActivityService : IActivityService
                         $"Expired activity file '{Path.GetFileName(path)}' could not be removed.");
                 }
             }
+            else if (_records.Any(record => record.Timestamp < cutoff &&
+                                           (!IsSystemChangeRecord(record) ||
+                                            !protectedKeys.Contains(ChangeKey(record))) &&
+                                           RecordBelongsToFile(record, path)))
+            {
+                // Keep the unresolved change, but do not keep resolved history merely
+                // because it happened to share that JSONL file.
+                requiresRewrite = true;
+            }
         }
-        _records.RemoveAll(record => record.Timestamp < cutoff &&
+        var removed = _records.RemoveAll(record => record.Timestamp < cutoff &&
             (!IsSystemChangeRecord(record) || !protectedKeys.Contains(ChangeKey(record))));
+        if (removed > 0 && requiresRewrite) RewritePersistentRecords(_records);
+    }
+
+    private HashSet<string> GetProtectedSystemChangeKeys() => _records.Where(IsSystemChangeRecord)
+        .GroupBy(ChangeKey)
+        .Where(group => group.OrderBy(item => item.Timestamp).Last().RestoreStatus is SystemChangeStatuses.Pending or
+            SystemChangeStatuses.Discarded or SystemChangeStatuses.LeftActive or SystemChangeStatuses.RestoreFailed)
+        .Select(group => group.Key)
+        .ToHashSet(StringComparer.Ordinal);
+
+    private void RewritePersistentRecords(IReadOnlyList<PersistentActivityRecord> records)
+    {
+        Directory.CreateDirectory(_logsDirectory!);
+        var existing = Directory.EnumerateFiles(_logsDirectory!, "activity-*.jsonl").ToList();
+        var temporaryDirectory = Path.Combine(_logsDirectory!, $".activity-rewrite-{Guid.NewGuid():N}");
+        var backupSuffix = $".clear-backup-{Guid.NewGuid():N}";
+        var movedExisting = new List<(string Original, string Backup)>();
+        var movedReplacement = new List<string>();
+        Directory.CreateDirectory(temporaryDirectory);
+        try
+        {
+            foreach (var group in records.GroupBy(record => record.Timestamp.ToLocalTime().ToString("yyyy-MM-dd")))
+            {
+                var path = Path.Combine(temporaryDirectory, $"activity-{group.Key}.jsonl");
+                File.WriteAllLines(path, group.OrderBy(record => record.Timestamp)
+                    .Select(record => JsonSerializer.Serialize(record, _options)), new UTF8Encoding(false));
+            }
+
+            foreach (var source in existing)
+            {
+                var backup = source + backupSuffix;
+                File.Move(source, backup);
+                movedExisting.Add((source, backup));
+            }
+            foreach (var source in Directory.EnumerateFiles(temporaryDirectory, "activity-*.jsonl"))
+            {
+                var destination = Path.Combine(_logsDirectory!, Path.GetFileName(source));
+                File.Move(source, destination);
+                movedReplacement.Add(destination);
+            }
+            foreach (var (_, backup) in movedExisting) File.Delete(backup);
+        }
+        catch
+        {
+            foreach (var replacement in movedReplacement)
+                if (File.Exists(replacement)) File.Delete(replacement);
+            foreach (var (original, backup) in movedExisting)
+                if (File.Exists(backup) && !File.Exists(original)) File.Move(backup, original);
+            throw;
+        }
+        finally
+        {
+            if (Directory.Exists(temporaryDirectory)) Directory.Delete(temporaryDirectory, recursive: true);
+            foreach (var (_, backup) in movedExisting)
+                if (File.Exists(backup)) File.Delete(backup);
+        }
     }
 
     private static DateTimeOffset? TryGetActivityFileDate(string path)

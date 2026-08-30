@@ -11,4 +11,6 @@ public interface IActivityService
     void Add(ActivityLevel level, string message, Guid? profileId = null, Guid? actionId = null);
     void Record(PersistentActivityRecord record);
     void Clear();
+    void SetRetentionDays(int retentionDays);
+    void ClearPersistentHistory();
 }

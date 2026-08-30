@@ -133,6 +133,33 @@ public sealed class ConfigurationOperationsTests
 
     [Fact]
     [Trait("Category", "Integration")]
+    public async Task ManagedBackup_IsListedAndDoesNotChangeAutomaticBackupRetention()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"SwitchBoard-managed-backup-{Guid.NewGuid():N}");
+        try
+        {
+            var paths = new AppDataPaths(root);
+            var service = new SwitchBoardBackupService();
+            await service.CreateAutomaticBackupAsync(new SwitchBoardCatalog(), new UserSettings(), paths, 1);
+
+            var first = await service.CreateManagedBackupAsync(new SwitchBoardCatalog
+            {
+                Profiles = [new ProfileDefinition { Name = "Manual backup" }]
+            }, new UserSettings(), paths, "manual");
+            var second = await service.CreateManagedBackupAsync(new SwitchBoardCatalog(), new UserSettings(), paths, "exit");
+
+            var listed = service.ListManagedBackups(paths);
+            Assert.Equal(3, listed.Count);
+            Assert.Contains(listed, backup => backup.Path == first);
+            Assert.Contains(listed, backup => backup.Path == second);
+            Assert.Single(Directory.EnumerateFiles(paths.AutoBackupsDirectory, "SwitchBoard-auto-*.sbbackup"));
+            Assert.Equal("Manual backup", Assert.Single((await service.ImportPackageAsync(first)).Document.Catalog.Profiles).Name);
+        }
+        finally { try { Directory.Delete(root, recursive: true); } catch { } }
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
     public async Task ResetSettings_KeepsProfilesAndCategories()
     {
         using var context = new RuntimeTestContext();
@@ -188,6 +215,39 @@ public sealed class ConfigurationOperationsTests
 
             using (var history = System.IO.Compression.ZipFile.OpenRead(historyPath))
                 Assert.Equal(["history.json"], history.Entries.Select(entry => entry.FullName));
+        }
+        finally { try { Directory.Delete(root, recursive: true); } catch { } }
+    }
+
+    [Fact]
+    [Trait("Category", "Regression")]
+    public async Task DiagnosticExport_BoundsHistoryAndLogPayload()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"SwitchBoard-diagnostics-bound-{Guid.NewGuid():N}");
+        try
+        {
+            var paths = new AppDataPaths(root);
+            Directory.CreateDirectory(paths.LogsDirectory);
+            await File.WriteAllTextAsync(Path.Combine(paths.LogsDirectory, "switchboard.log"),
+                new string('x', 400 * 1024) + "\ntoken=very-secret-value");
+            var records = Enumerable.Range(0, 250).Select(index => new PersistentActivityRecord
+            {
+                Timestamp = DateTimeOffset.UtcNow.AddMinutes(-index), Message = $"record {index}"
+            }).ToList();
+            var destination = Path.Combine(root, "diagnostics.zip");
+
+            await new DiagnosticExportService(paths).ExportDiagnosticsAsync(destination, "SwitchBoard: test", records);
+
+            using var archive = System.IO.Compression.ZipFile.OpenRead(destination);
+            var history = archive.GetEntry("history.json")!;
+            using var reader = new StreamReader(history.Open());
+            var exportedRecords = JsonSerializer.Deserialize<List<PersistentActivityRecord>>(await reader.ReadToEndAsync())!;
+            Assert.Equal(200, exportedRecords.Count);
+            Assert.InRange(archive.GetEntry("logs/switchboard.log")!.Length, 1, 256 * 1024);
+            using var logReader = new StreamReader(archive.GetEntry("logs/switchboard.log")!.Open());
+            var log = await logReader.ReadToEndAsync();
+            Assert.DoesNotContain("very-secret-value", log, StringComparison.Ordinal);
+            Assert.Contains("token=[redacted]", log, StringComparison.Ordinal);
         }
         finally { try { Directory.Delete(root, recursive: true); } catch { } }
     }
@@ -295,6 +355,22 @@ public sealed class ConfigurationOperationsTests
         Assert.Equal(new[] { match.Id, other.Id }, main.Categories.Single().Profiles.Select(profile => profile.Id));
         Assert.Equal(new[] { match.Id }, main.Categories.Single().VisibleProfiles.Select(profile => profile.Id));
         Assert.Single(main.FilteredRootNavigationItems.OfType<CategoryItemViewModel>());
+    }
+
+    [Fact]
+    [Trait("Category", "Regression")]
+    public void AddCategory_ShowsEmptyCategoryInProfileNavigation()
+    {
+        using var context = new RuntimeTestContext();
+        var existing = new CategoryDefinition { Name = "Games" };
+        using var main = CreateMain(context, new SwitchBoardCatalog { Categories = [existing] }, new UserSettings(),
+            new AppDataPaths(Path.Combine(Path.GetTempPath(), $"SwitchBoard-add-category-{Guid.NewGuid():N}")));
+
+        var initialCount = main.Categories.Count;
+        main.AddCategoryCommand.Execute(null);
+
+        var added = Assert.Single(main.Categories.Skip(initialCount));
+        Assert.Contains(added, main.FilteredRootNavigationItems);
     }
 
     [Fact]

@@ -8,5 +8,7 @@ public static class SettingsSchema
     public const int SettingsWorkspaceVersion = 11;
     public const int OperationsVersion = 12;
     public const int BackgroundNativeWindowSizeVersion = 13;
-    public const int CurrentVersion = BackgroundNativeWindowSizeVersion;
+    public const int PerformanceRecoveryAndUpdatesVersion = 14;
+    public const int OptionalLibVlcRendererVersion = 15;
+    public const int CurrentVersion = OptionalLibVlcRendererVersion;
 }
