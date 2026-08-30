@@ -207,6 +207,33 @@ public sealed class ActionEditingRegressionTests : RuntimeTestBase
 
     [Fact]
     [Trait("Category", "Unit")]
+    public void DisplayCustomRestore_KeepsThePrimaryActionMonitorAvailable()
+    {
+        var primary = new DisplayCandidate("DISPLAY1", "MONITOR-PRIMARY", "PG27AQDP", 1,
+            1920, 1440, 480, true, [new DisplayModeCandidate(1920, 1440, 480, 32)]);
+        var other = new DisplayCandidate("DISPLAY2", "MONITOR-OTHER", "PL2771Q", 2,
+            2560, 1440, 144, false, [new DisplayModeCandidate(2560, 1440, 144, 32)]);
+        var editor = new ActionItemViewModel(Action(ActionTypeIds.DisplayConfigure, new JsonObject
+        {
+            [ActionParameterNames.DisplayDeviceName] = primary.DeviceName,
+            [ActionParameterNames.DisplayDeviceId] = primary.DeviceId,
+            [ActionParameterNames.RestoreDisplayDeviceName] = primary.DeviceName,
+            [ActionParameterNames.RestoreDisplayDeviceId] = primary.DeviceId,
+            [ActionParameterNames.RestoreDisplayWidth] = 1920,
+            [ActionParameterNames.RestoreDisplayHeight] = 1440,
+            [ActionParameterNames.RestoreDisplayRefreshRate] = 480
+        }), new TestLocalizationService());
+        editor.RestoreBehaviorId = "custom";
+
+        editor.ApplyAvailableRestoreDisplays([primary, other]);
+
+        Assert.Equal(2, editor.AvailableRestoreDisplays.Count);
+        Assert.Same(primary, editor.SelectedRestoreDisplay);
+        Assert.Equal(480, editor.RestoreDisplayRefreshRate);
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
     public void ProgramTargetType_UsesSafeLegacyInferenceAndSerializesExplicitly()
     {
         var legacyExe = new ActionItemViewModel(Action(ActionTypeIds.ProgramRun, new JsonObject

@@ -1,0 +1,286 @@
+<UserControl x:Class="SwitchBoard.Views.Panels.ActivityPanel"
+             HorizontalContentAlignment="Stretch"
+             VerticalContentAlignment="Stretch"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:SwitchBoard.Controls">
+    <UserControl.Resources>
+        <!-- ActivityPanel is hosted as a separate UserControl. Keep the
+             existing window-level tab appearance available in its resource
+             scope after the panel extraction. -->
+        <Style x:Key="ActivityTabButtonStyle" TargetType="Button">
+            <Setter Property="MinHeight" Value="36" />
+            <Setter Property="Padding" Value="10,6" />
+            <Setter Property="Margin" Value="0,0,4,0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Chrome" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="6">
+                            <Grid>
+                                <Border x:Name="HoverSurface" Background="Transparent" CornerRadius="6" IsHitTestVisible="False" />
+                                <ContentPresenter Margin="{TemplateBinding Padding}"
+                                                  HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                  VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="HoverSurface" Property="Background" Value="{DynamicResource InteractiveHoverBrush}" />
+                                <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True"><Setter TargetName="HoverSurface" Property="Background" Value="{DynamicResource PressedBrush}" /></Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource FocusBrush}" />
+                                <Setter TargetName="Chrome" Property="BorderThickness" Value="1" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="ActivityTab1ButtonStyle" TargetType="Button" BasedOn="{StaticResource ActivityTabButtonStyle}">
+            <Style.Triggers><DataTrigger Binding="{Binding ActivityTabIndex}" Value="1"><Setter Property="Background" Value="{DynamicResource SelectedBrush}" /><Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" /></DataTrigger></Style.Triggers>
+        </Style>
+        <Style x:Key="ActivityTab2ButtonStyle" TargetType="Button" BasedOn="{StaticResource ActivityTabButtonStyle}">
+            <Style.Triggers><DataTrigger Binding="{Binding ActivityTabIndex}" Value="2"><Setter Property="Background" Value="{DynamicResource SelectedBrush}" /><Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" /></DataTrigger></Style.Triggers>
+        </Style>
+    </UserControl.Resources>
+    <Border Margin="0" Padding="16"
+            Background="{DynamicResource ActivitySurfaceBrush}"
+            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="12">
+                <Grid>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+                    <Grid Grid.Row="0" Margin="2,0,2,10">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Style="{StaticResource SectionTitle}" Text="{DynamicResource Activity.Title}" />
+                                <TextBlock Margin="8,2,0,0" Foreground="{DynamicResource DangerBrush}" Text="{Binding ActivityAlertText}" />
+                            </StackPanel>
+                            <TextBlock Margin="0,3,0,0" Style="{StaticResource CaptionText}" Text="{Binding SystemChangeNoticeText}" />
+                        </StackPanel>
+                    </Grid>
+                    <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="2,0,2,0">
+                        <Button Style="{DynamicResource ActivityTab1ButtonStyle}" Command="{Binding SelectActivityTabCommand}" CommandParameter="1" Content="{Binding SystemChangeTabText}" />
+                        <Button Style="{DynamicResource ActivityTab2ButtonStyle}" Command="{Binding SelectActivityTabCommand}" CommandParameter="2" Content="{DynamicResource Activity.History}" />
+                    </StackPanel>
+
+                    <WrapPanel Grid.Row="2" Margin="2,10,2,0">
+                        <controls:SearchBoxControl Width="246"
+                                                   Margin="0,0,8,6"
+                                                   Text="{Binding ActivitySearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                        <ComboBox Width="130" Margin="0,0,8,6" ItemsSource="{Binding ActivityProfileOptions}"
+                                  DisplayMemberPath="DisplayName" SelectedValuePath="Id"
+                                  SelectedValue="{Binding ActivityProfileFilterId, Mode=TwoWay}" />
+                        <ComboBox Width="112" Margin="0,0,8,6" ItemsSource="{Binding ActivityStatusOptions}"
+                                  DisplayMemberPath="DisplayName" SelectedValuePath="Value"
+                                  SelectedValue="{Binding ActivityStatusFilter, Mode=TwoWay}" />
+                        <ComboBox Width="118" Margin="0,0,8,6" ItemsSource="{Binding ActivityTimeRangeOptions}"
+                                  DisplayMemberPath="DisplayName" SelectedValuePath="Value"
+                                  SelectedValue="{Binding ActivityTimeRange, Mode=TwoWay}" />
+                        <Button Margin="0,0,0,6" Command="{Binding ClearActivityFiltersCommand}"
+                                Content="{DynamicResource Activity.Filter.Clear}" />
+                    </WrapPanel>
+
+                    <ListBox Grid.Row="3" Margin="2,8,2,0"
+                             ItemsSource="{Binding SystemChangeEntries}"
+                             Background="Transparent" BorderThickness="0" Padding="0"
+                             HorizontalContentAlignment="Stretch"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                             ScrollViewer.VerticalScrollBarVisibility="Auto"
+                             ScrollViewer.CanContentScroll="True"
+                             VirtualizingPanel.IsVirtualizing="True"
+                             VirtualizingPanel.VirtualizationMode="Recycling"
+                             VirtualizingPanel.ScrollUnit="Pixel">
+                        <ListBox.Style><Style TargetType="ListBox">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers><DataTrigger Binding="{Binding ActivityTabIndex}" Value="1"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers>
+                        </Style></ListBox.Style>
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem">
+                                <Setter Property="Padding" Value="0" />
+                                <Setter Property="Margin" Value="0" />
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                <Setter Property="Focusable" Value="False" />
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="ListBoxItem">
+                                            <ContentPresenter />
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </ListBox.ItemContainerStyle>
+                            <ListBox.ItemTemplate><DataTemplate>
+                                <controls:CardSurfaceControl Style="{DynamicResource ActivityRowSurfaceStyle}" Margin="0,0,0,5">
+                                    <Grid HorizontalAlignment="Stretch" MouseLeftButtonDown="SystemChangeEntry_OnMouseDoubleClick">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="58" /><ColumnDefinition Width="170" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                        <TextBlock Style="{StaticResource CaptionText}" Text="{Binding Timestamp, StringFormat={}{0:HH:mm:ss}}" />
+                                        <TextBlock Grid.Column="1" FontWeight="SemiBold" Text="{Binding FriendlyName}" Cursor="Hand" TextDecorations="Underline" TextTrimming="CharacterEllipsis" ToolTip="{Binding FriendlyName}" MouseLeftButtonDown="SystemChangeTarget_OnMouseLeftButtonDown">
+                                            <TextBlock.Style><Style TargetType="TextBlock">
+                                                <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsNavigable}" Value="False"><Setter Property="TextDecorations" Value="{x:Null}" /><Setter Property="Cursor" Value="Arrow" /></DataTrigger>
+                                                    <Trigger Property="IsMouseOver" Value="True"><Setter Property="Foreground" Value="{DynamicResource AccentBrush}" /></Trigger>
+                                                </Style.Triggers>
+                                            </Style></TextBlock.Style>
+                                        </TextBlock>
+                                        <TextBlock Grid.Column="2" Margin="12,0,12,0" Text="{Binding Details}" TextWrapping="Wrap" ToolTip="{Binding Details}" />
+                                        <TextBlock Grid.Column="3" VerticalAlignment="Center" FontWeight="SemiBold" Text="{Binding StatusText}">
+                                            <TextBlock.Style><Style TargetType="TextBlock">
+                                                <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding Status}" Value="restored"><Setter Property="Foreground" Value="{DynamicResource SuccessBrush}" /></DataTrigger>
+                                                    <DataTrigger Binding="{Binding Status}" Value="pending"><Setter Property="Foreground" Value="{DynamicResource WarningBrush}" /></DataTrigger>
+                                                    <DataTrigger Binding="{Binding Status}" Value="external-change"><Setter Property="Foreground" Value="{DynamicResource WarningBrush}" /></DataTrigger>
+                                                    <DataTrigger Binding="{Binding Status}" Value="left-active"><Setter Property="Foreground" Value="{DynamicResource WarningBrush}" /></DataTrigger>
+                                                    <DataTrigger Binding="{Binding Status}" Value="restore-failed"><Setter Property="Foreground" Value="{DynamicResource DangerBrush}" /></DataTrigger>
+                                                </Style.Triggers>
+                                            </Style></TextBlock.Style>
+                                        </TextBlock>
+                                    </Grid>
+                                </controls:CardSurfaceControl>
+                            </DataTemplate></ListBox.ItemTemplate>
+                    </ListBox>
+
+                    <ListBox Grid.Row="3" Margin="2,8,2,0"
+                             ItemsSource="{Binding HistoryEntries}"
+                             Background="Transparent" BorderThickness="0" Padding="0"
+                             HorizontalContentAlignment="Stretch"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                             ScrollViewer.VerticalScrollBarVisibility="Auto"
+                             ScrollViewer.CanContentScroll="True"
+                             VirtualizingPanel.IsVirtualizing="True"
+                             VirtualizingPanel.VirtualizationMode="Recycling"
+                             VirtualizingPanel.ScrollUnit="Pixel">
+                        <ListBox.Style><Style TargetType="ListBox">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers><DataTrigger Binding="{Binding ActivityTabIndex}" Value="2"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers>
+                        </Style></ListBox.Style>
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem">
+                                <Setter Property="Padding" Value="0" />
+                                <Setter Property="Margin" Value="0" />
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                <Setter Property="Focusable" Value="False" />
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="ListBoxItem">
+                                            <ContentPresenter />
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </ListBox.ItemContainerStyle>
+                            <ListBox.ItemTemplate><DataTemplate>
+                                <controls:CardSurfaceControl Style="{DynamicResource ActivityHistoryRowSurfaceStyle}" Margin="0,0,0,5">
+                                    <Grid HorizontalAlignment="Stretch">
+                                        <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="30" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                        <Button Grid.Row="0" Grid.ColumnSpan="4"
+                                                AutomationProperties.Name="{Binding ProfileName}"
+                                                AutomationProperties.ItemStatus="{Binding IsExpanded}"
+                                                Command="{Binding ToggleExpandedCommand}"
+                                                Style="{DynamicResource ActivityHistoryHeaderButtonStyle}"
+                                                ToolTip="{Binding ProfileName}">
+                                            <Grid>
+                                                <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                                                <Grid.ColumnDefinitions><ColumnDefinition Width="30" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                                <Path Grid.RowSpan="2" Grid.Column="0"
+                                                      Width="10" Height="10" Margin="0,1,0,0"
+                                                      HorizontalAlignment="Center" VerticalAlignment="Top"
+                                                      Data="M2,1 L7,5 L2,9"
+                                                      Fill="Transparent"
+                                                      Stroke="{DynamicResource TextSecondaryBrush}"
+                                                      StrokeStartLineCap="Round"
+                                                      StrokeEndLineCap="Round"
+                                                      StrokeLineJoin="Round"
+                                                      StrokeThickness="1.3">
+                                                    <Path.Style>
+                                                        <Style TargetType="Path">
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsExpanded}" Value="True">
+                                                                    <Setter Property="RenderTransform">
+                                                                        <Setter.Value><RotateTransform Angle="90" CenterX="4.5" CenterY="5" /></Setter.Value>
+                                                                    </Setter>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Path.Style>
+                                                </Path>
+                                                <TextBlock Grid.Column="1" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}"
+                                                           Text="{Binding ProfileName}" TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Grid.Column="2" Margin="12,0,16,0" Style="{StaticResource CaptionText}"
+                                                           Text="{Binding Timestamp, StringFormat={}{0:dd.MM.yyyy HH:mm:ss}}" />
+                                                <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <Ellipse Margin="0,0,6,0" VerticalAlignment="Center" Style="{DynamicResource ProfileResultStatusDotStyle}" />
+                                                    <TextBlock FontWeight="SemiBold" Text="{Binding StatusText}">
+                                                        <TextBlock.Style><Style TargetType="TextBlock">
+                                                            <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding Result}" Value="Success"><Setter Property="Foreground" Value="{DynamicResource SuccessBrush}" /></DataTrigger>
+                                                                <DataTrigger Binding="{Binding Result}" Value="Warning"><Setter Property="Foreground" Value="{DynamicResource WarningBrush}" /></DataTrigger>
+                                                                <DataTrigger Binding="{Binding Result}" Value="Cancelled"><Setter Property="Foreground" Value="{DynamicResource WarningBrush}" /></DataTrigger>
+                                                                <DataTrigger Binding="{Binding Result}" Value="Error"><Setter Property="Foreground" Value="{DynamicResource DangerBrush}" /></DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style></TextBlock.Style>
+                                                    </TextBlock>
+                                                </StackPanel>
+                                                <StackPanel Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="3" Margin="0,5,0,0">
+                                                    <TextBlock Style="{StaticResource CaptionText}" Text="{Binding ActionSummaryText}" />
+                                                    <TextBlock Margin="0,2,0,0" Foreground="{DynamicResource DangerBrush}" Text="{Binding ProgressText}" />
+                                                    <TextBlock Margin="0,2,0,0" Foreground="{DynamicResource AccentBrush}" Text="{Binding RestoreText}" />
+                                                </StackPanel>
+                                            </Grid>
+                                        </Button>
+                                        <StackPanel Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="3" Margin="0,8,0,0">
+                                            <StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed" /><Style.Triggers><DataTrigger Binding="{Binding IsExpanded}" Value="True"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers></Style></StackPanel.Style>
+                                            <ItemsControl ItemsSource="{Binding Actions}" HorizontalContentAlignment="Stretch">
+                                                <ItemsControl.ItemTemplate><DataTemplate>
+                                                    <Grid Margin="0,2" Cursor="Hand" MouseLeftButtonDown="HistoryAction_OnMouseLeftButtonDown">
+                                                        <Grid.ColumnDefinitions><ColumnDefinition Width="170" /><ColumnDefinition Width="64" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                                        <TextBlock FontWeight="SemiBold" Text="{Binding Name}" TextDecorations="Underline" Cursor="Hand" TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}">
+                                                            <TextBlock.Style><Style TargetType="TextBlock">
+                                                                <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+                                                                <Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Foreground" Value="{DynamicResource AccentBrush}" /><Setter Property="Opacity" Value="0.86" /></Trigger></Style.Triggers>
+                                                            </Style></TextBlock.Style>
+                                                        </TextBlock>
+                                                        <TextBlock Grid.Column="1" HorizontalAlignment="Left" Style="{StaticResource CaptionText}" Text="{Binding DurationText}" ToolTip="{Binding DurationText}" />
+                                                        <TextBlock Grid.Column="2" Margin="12,0,12,0" Style="{StaticResource CaptionText}" Text="{Binding Description}" TextWrapping="Wrap" ToolTip="{Binding Description}" />
+                                                        <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
+                                                            <Ellipse Margin="0,0,6,0" VerticalAlignment="Center" Style="{DynamicResource ActionResultStatusDotStyle}" />
+                                                            <TextBlock FontWeight="SemiBold" Text="{Binding StatusText}">
+                                                                <TextBlock.Style><Style TargetType="TextBlock">
+                                                                    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding Result}" Value="success"><Setter Property="Foreground" Value="{DynamicResource SuccessBrush}" /></DataTrigger>
+                                                                        <DataTrigger Binding="{Binding Result}" Value="skipped"><Setter Property="Foreground" Value="{DynamicResource WarningBrush}" /></DataTrigger>
+                                                                        <DataTrigger Binding="{Binding Result}" Value="cancelled"><Setter Property="Foreground" Value="{DynamicResource WarningBrush}" /></DataTrigger>
+                                                                        <DataTrigger Binding="{Binding Level}" Value="Warning"><Setter Property="Foreground" Value="{DynamicResource WarningBrush}" /></DataTrigger>
+                                                                        <DataTrigger Binding="{Binding Level}" Value="Error"><Setter Property="Foreground" Value="{DynamicResource DangerBrush}" /></DataTrigger>
+                                                                        <DataTrigger Binding="{Binding Result}" Value="failed"><Setter Property="Foreground" Value="{DynamicResource DangerBrush}" /></DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style></TextBlock.Style>
+                                                            </TextBlock>
+                                                        </StackPanel>
+                                                    </Grid>
+                                                </DataTemplate></ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
+                                    </Grid>
+                                </controls:CardSurfaceControl>
+                            </DataTemplate></ListBox.ItemTemplate>
+                    </ListBox>
+                </Grid>
+            </Border>
+</UserControl>

@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -9,9 +10,51 @@ namespace SwitchBoard.Controls;
 
 public partial class ActionEditorControl : UserControl
 {
+    private MainWindowViewModel? _observedViewModel;
+    private bool _profileScrollResetQueued;
+
     public ActionEditorControl()
     {
         InitializeComponent();
+        DataContextChanged += ActionEditorControl_OnDataContextChanged;
+        Loaded += ActionEditorControl_OnLoaded;
+        Unloaded += ActionEditorControl_OnUnloaded;
+    }
+
+    private void ActionEditorControl_OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e) =>
+        ObserveViewModel(e.NewValue as MainWindowViewModel);
+
+    private void ActionEditorControl_OnLoaded(object sender, RoutedEventArgs e) =>
+        ObserveViewModel(DataContext as MainWindowViewModel);
+
+    private void ActionEditorControl_OnUnloaded(object sender, RoutedEventArgs e) => ObserveViewModel(null);
+
+    private void ObserveViewModel(MainWindowViewModel? viewModel)
+    {
+        if (ReferenceEquals(_observedViewModel, viewModel)) return;
+        if (_observedViewModel is not null) _observedViewModel.PropertyChanged -= ViewModel_OnPropertyChanged;
+        _observedViewModel = viewModel;
+        if (_observedViewModel is not null) _observedViewModel.PropertyChanged += ViewModel_OnPropertyChanged;
+    }
+
+    private void ViewModel_OnPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(MainWindowViewModel.SelectedProfile)) ResetActionListScrollForProfileChange();
+    }
+
+    private void ResetActionListScrollForProfileChange()
+    {
+        if (_profileScrollResetQueued) return;
+        _profileScrollResetQueued = true;
+        // The ListBox binding and its recycling panel update after the property
+        // notification. Run once the dispatcher has drained that work, otherwise
+        // a later layout pass can restore the old offset.
+        Dispatcher.BeginInvoke(DispatcherPriority.ContextIdle, () =>
+        {
+            _profileScrollResetQueued = false;
+            ActionList.UpdateLayout();
+            FindDescendant<ScrollViewer>(ActionList)?.ScrollToTop();
+        });
     }
 
     private void RunProfile_OnClick(object sender, RoutedEventArgs e)
@@ -81,6 +124,15 @@ public partial class ActionEditorControl : UserControl
             viewModel.IsActionPickerOpen = false;
             e.Handled = true;
         }
+    }
+
+    private void ActionEditor_OnPreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter || Keyboard.FocusedElement is not TextBox textBox) return;
+
+        textBox.GetBindingExpression(TextBox.TextProperty)?.UpdateSource();
+        Keyboard.ClearFocus();
+        e.Handled = true;
     }
 
     private void ActionList_OnPreviewKeyDown(object sender, KeyEventArgs e)
