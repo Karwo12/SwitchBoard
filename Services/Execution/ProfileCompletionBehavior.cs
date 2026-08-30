@@ -15,4 +15,10 @@ public sealed class ProfileCompletionBehavior(
             applicationLifetime.Shutdown();
         }
     }
+
+    public void HandleSuccessfulRestore(ProfileDefinition profile)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+        if (profile.CloseSwitchBoardAfterSuccessfulRestore) applicationLifetime.Shutdown();
+    }
 }

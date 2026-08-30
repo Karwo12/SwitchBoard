@@ -7,6 +7,28 @@ namespace SwitchBoard.RuntimeTests.Execution;
 public sealed class ProfileCompletionBehaviorTests
 {
     [Fact]
+    public void SuccessfulRestore_UsesItsOwnProfileSetting()
+    {
+        var lifetime = new TestApplicationLifetime();
+        var behavior = new ProfileCompletionBehavior(lifetime);
+
+        behavior.HandleSuccessfulRestore(new ProfileDefinition
+        {
+            CloseSwitchBoardAfterSuccessfulCompletion = true,
+            CloseSwitchBoardAfterSuccessfulRestore = false
+        });
+
+        Assert.Equal(0, lifetime.ShutdownCount);
+
+        behavior.HandleSuccessfulRestore(new ProfileDefinition
+        {
+            CloseSwitchBoardAfterSuccessfulCompletion = false,
+            CloseSwitchBoardAfterSuccessfulRestore = true
+        });
+
+        Assert.Equal(1, lifetime.ShutdownCount);
+    }
+    [Fact]
     public void SuccessfulCompletion_DoesNotShutdownWhenProfileOptionIsDisabled()
     {
         var lifetime = new TestApplicationLifetime();

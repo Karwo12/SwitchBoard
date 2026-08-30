@@ -25,16 +25,22 @@ using Microsoft.Win32;
 using System.Collections.ObjectModel;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Security.Principal;
 using SwitchBoard.Services.Logging;
 using SwitchBoard.Services.Diagnostics;
 using SwitchBoard.Services.Updates;
+using SwitchBoard.Services.Media;
 using SwitchBoard.Services.Tray;
+using SwitchBoard.ViewModels.Panels;
+using SwitchBoard.Controls;
 
 namespace SwitchBoard.ViewModels;
 
 public enum MainViewMode
 {
     Home,
+    System,
+    Performance,
     Activity,
     Settings
 }
@@ -202,6 +208,14 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
             .OrderBy(profile => profile.SortOrder)
             .Select(profile => new ProfileItemViewModel(profile, localizationService))
             .ToList();
+
+        SystemPanel = new SystemPanelViewModel(_statusMonitoring,
+            () => _allProfiles.SelectMany(profile => profile.Actions), localizationService, logger);
+        PerformancePanel = new PerformancePanelViewModel(
+            performanceMonitoring ?? new PerformanceMonitoringService(),
+            () => _allProfiles.SelectMany(profile => EnumerateActions(profile.Actions)),
+            GetBackgroundPerformanceState, localizationService, logger,
+            Application.Current?.Dispatcher ?? Dispatcher.CurrentDispatcher);
 
         Profiles = [];
         RootProfiles = [];
@@ -391,9 +405,14 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         OpenThemeFolderCommand = new RelayCommand(() => OpenDirectory(_appDataPaths.CustomThemeDirectory));
         ExportBackupCommand = new AsyncRelayCommand(ExportBackupAsync, () => !HasCriticalOperation);
         ImportBackupCommand = new AsyncRelayCommand(ImportBackupAsync, () => !HasCriticalOperation);
+        CreateManagedBackupCommand = new AsyncRelayCommand(CreateManagedBackupAsync, () => !HasCriticalOperation);
+        RestoreManagedBackupCommand = new AsyncRelayCommand(RestoreManagedBackupAsync,
+            () => SelectedManagedBackup is not null && !HasCriticalOperation);
+        OpenBackupsFolderCommand = new RelayCommand(() => OpenDirectory(_appDataPaths.AutoBackupsDirectory));
         OpenDataFolderCommand = new RelayCommand(() => OpenDirectory(_appDataPaths.RootDirectory));
         OpenLogsFolderCommand = new RelayCommand(() => OpenDirectory(_appDataPaths.LogsDirectory));
         ClearLogsCommand = new RelayCommand(ClearLogs);
+        ClearPersistentHistoryCommand = new RelayCommand(ClearPersistentHistory);
         CopyDiagnosticsCommand = new RelayCommand(CopyDiagnostics);
         ExportDiagnosticsCommand = new AsyncRelayCommand(ExportDiagnosticsAsync);
         ExportHistoryCommand = new AsyncRelayCommand(ExportHistoryAsync);
@@ -525,6 +544,9 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
     public ObservableCollection<ActivityEntryViewModel> ActivityDisplayEntries { get; }
     public ObservableCollection<ProfileExecutionViewModel> HistoryEntries { get; }
     public ObservableCollection<SystemChangeItemViewModel> SystemChangeEntries { get; }
+    public ObservableCollection<ManagedBackupFile> ManagedBackups { get; }
+    public SystemPanelViewModel SystemPanel { get; }
+    public PerformancePanelViewModel PerformancePanel { get; }
     public IReadOnlyList<ProfileItemViewModel> AllProfiles => _allProfiles;
 
     public string ActivitySearchText
@@ -564,12 +586,32 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
     }
 
     public bool HasLatestRelease => _latestReleaseUri is not null;
+    public string LatestDetectedVersion => _userSettings.LastKnownLatestVersion ??
+        _localizationService.GetString("Settings.UpdateNeverChecked");
+    public string LastUpdateCheckText => _userSettings.LastUpdateCheckUtc is { } checkedAt
+        ? checkedAt.ToLocalTime().ToString("g")
+        : _localizationService.GetString("Settings.UpdateNeverChecked");
+    public string LastSuccessfulBackupText => ManagedBackups.FirstOrDefault() is { } backup
+        ? backup.CreatedAtUtc.ToLocalTime().ToString("g")
+        : _localizationService.GetString("Settings.BackupNeverCreated");
+    public ManagedBackupFile? SelectedManagedBackup
+    {
+        get => _selectedManagedBackup;
+        set
+        {
+            if (!SetProperty(ref _selectedManagedBackup, value)) return;
+            RestoreManagedBackupCommand.NotifyCanExecuteChanged();
+        }
+    }
     public MainViewMode ActiveMainView
     {
         get => _activeMainView;
         set
         {
             if (!SetProperty(ref _activeMainView, value)) return;
+            if (value == MainViewMode.System) _ = SystemPanel.RefreshAsync();
+            if (value == MainViewMode.Performance) PerformancePanel.Start();
+            else PerformancePanel.Stop();
             if (_userSettings.RememberLastView)
             {
                 _userSettings.LastMainView = value.ToString();
@@ -623,6 +665,18 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
             }
 
             _userSettings.LaunchAtStartup = value;
+            OnPropertyChanged();
+            ScheduleSettingsSave();
+        }
+    }
+
+    public bool StartMinimizedToTray
+    {
+        get => _userSettings.StartMinimizedToTray;
+        set
+        {
+            if (_userSettings.StartMinimizedToTray == value) return;
+            _userSettings.StartMinimizedToTray = value;
             OnPropertyChanged();
             ScheduleSettingsSave();
         }
@@ -800,6 +854,44 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
             var normalized = Math.Clamp(value, 1, 50);
             if (_userSettings.AutomaticBackupCount == normalized) return;
             _userSettings.AutomaticBackupCount = normalized;
+            OnPropertyChanged();
+            ScheduleSettingsSave();
+        }
+    }
+
+    public bool CreateBackupOnExit
+    {
+        get => _userSettings.CreateBackupOnExit;
+        set
+        {
+            if (_userSettings.CreateBackupOnExit == value) return;
+            _userSettings.CreateBackupOnExit = value;
+            OnPropertyChanged();
+            ScheduleSettingsSave();
+        }
+    }
+
+    public int HistoryRetentionDays
+    {
+        get => HistoryRetentionOptions.Normalize(_userSettings.HistoryRetentionDays);
+        set
+        {
+            var normalized = HistoryRetentionOptions.Normalize(value);
+            if (_userSettings.HistoryRetentionDays == normalized) return;
+            _userSettings.HistoryRetentionDays = normalized;
+            _activityService?.SetRetentionDays(normalized);
+            OnPropertyChanged();
+            ScheduleSettingsSave();
+        }
+    }
+
+    public bool CheckForUpdatesAtStartup
+    {
+        get => _userSettings.CheckForUpdatesAtStartup;
+        set
+        {
+            if (_userSettings.CheckForUpdatesAtStartup == value) return;
+            _userSettings.CheckForUpdatesAtStartup = value;
             OnPropertyChanged();
             ScheduleSettingsSave();
         }
@@ -983,6 +1075,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
             if (SetProperty(ref _selectedProfile, value))
             {
                 SynchronizeSelectedCategory(value);
+                OnPropertyChanged(nameof(SelectedProfileBreadcrumb));
                 var rootNavigationSelection = value is not null && value.CategoryId == Guid.Empty ? value : null;
                 if (!ReferenceEquals(_selectedRootNavigationItem, rootNavigationSelection))
                 {
@@ -1011,6 +1104,20 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
                 _ = RefreshCurrentStatesAsync();
                 NotifyActionCommandStates();
             }
+        }
+    }
+
+    /// <summary>Presentation-only path of the profile currently shown in the editor.</summary>
+    public string SelectedProfileBreadcrumb
+    {
+        get
+        {
+            if (SelectedProfile is null) return string.Empty;
+
+            var categoryName = FindCategory(SelectedProfile.CategoryId)?.Name;
+            return string.IsNullOrWhiteSpace(categoryName)
+                ? SelectedProfile.Name
+                : $"{categoryName} > {SelectedProfile.Name}";
         }
     }
 
@@ -1316,9 +1423,13 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
     public RelayCommand OpenThemeFolderCommand { get; }
     public AsyncRelayCommand ExportBackupCommand { get; }
     public AsyncRelayCommand ImportBackupCommand { get; }
+    public AsyncRelayCommand CreateManagedBackupCommand { get; }
+    public AsyncRelayCommand RestoreManagedBackupCommand { get; }
+    public RelayCommand OpenBackupsFolderCommand { get; }
     public RelayCommand OpenDataFolderCommand { get; }
     public RelayCommand OpenLogsFolderCommand { get; }
     public RelayCommand ClearLogsCommand { get; }
+    public RelayCommand ClearPersistentHistoryCommand { get; }
     public RelayCommand CopyDiagnosticsCommand { get; }
     public AsyncRelayCommand ExportDiagnosticsCommand { get; }
     public AsyncRelayCommand ExportHistoryCommand { get; }
@@ -2359,10 +2470,60 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         };
         if (dialog.ShowDialog() != true) return;
 
+        await RestoreBackupAsync(dialog.FileName);
+    }
+
+    private async Task CreateManagedBackupAsync()
+    {
+        if (HasCriticalOperation) return;
+        try
+        {
+            await FlushPendingSettingsSaveAsync();
+            var path = await _backupService.CreateManagedBackupAsync(BuildCatalogSnapshot(),
+                SwitchBoardBackupService.CloneSettings(_userSettings), _appDataPaths, "manual");
+            RefreshManagedBackups();
+            StatusMessage = _localizationService.Format("Status.ManagedBackupCreated", Path.GetFileName(path));
+        }
+        catch (Exception exception)
+        {
+            _logger?.Error("Backup", exception, "Creating a managed backup failed.");
+            StatusMessage = _localizationService.Format("Status.ManagedBackupFailed", exception.Message);
+        }
+    }
+
+    public async Task CreateBackupForShutdownAsync()
+    {
+        if (!CreateBackupOnExit) return;
+        try
+        {
+            await FlushPendingSettingsSaveAsync();
+            await _backupService.CreateManagedBackupAsync(BuildCatalogSnapshot(),
+                SwitchBoardBackupService.CloneSettings(_userSettings), _appDataPaths, "exit");
+        }
+        catch (Exception exception)
+        {
+            // A best-effort exit backup must never prevent a real application exit.
+            _logger?.Error("Backup", exception, "Creating the exit backup failed.");
+            _activityService?.Add(ActivityLevel.Warning, $"Exit backup failed: {exception.Message}");
+        }
+    }
+
+    private async Task RestoreManagedBackupAsync()
+    {
+        var backup = SelectedManagedBackup;
+        if (backup is null || !File.Exists(backup.Path) || HasCriticalOperation) return;
+        await RestoreBackupAsync(backup.Path);
+    }
+
+    private async Task RestoreBackupAsync(string source)
+    {
+        if (HasCriticalOperation) return;
+
         SwitchBoardBackupPackage imported;
         try
         {
-            imported = await _backupService.ImportPackageAsync(dialog.FileName);
+            // Validation happens before a safety archive or any persistence change.
+            imported = await _backupService.ImportPackageAsync(source);
         }
         catch (Exception exception)
         {
@@ -2666,6 +2827,23 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         }
     }
 
+    private void ClearPersistentHistory()
+    {
+        if (!_dialogService.Confirm(_localizationService.GetString("Settings.ClearHistoryConfirmTitle"),
+                _localizationService.GetString("Settings.ClearHistoryConfirmMessage"))) return;
+        try
+        {
+            _activityService?.ClearPersistentHistory();
+            RefreshPersistentActivityViews();
+            StatusMessage = _localizationService.GetString("Status.HistoryCleared");
+        }
+        catch (Exception exception)
+        {
+            _logger?.Error("Activity", exception, "Clearing persistent history failed.");
+            StatusMessage = _localizationService.Format("Status.ClearHistoryFailed", exception.Message);
+        }
+    }
+
     private void CopyDiagnostics()
     {
         try
@@ -2682,10 +2860,16 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
     private string BuildDiagnosticsText() => string.Join(Environment.NewLine,
         $"SwitchBoard: {ApplicationVersion}",
         $"Windows: {Environment.OSVersion}",
+        $".NET: {RuntimeInformation.FrameworkDescription}",
         $"Process architecture: {RuntimeInformation.ProcessArchitecture}",
+        $"Administrator: {IsRunningAsAdministrator()}",
         $"Data folder: {DataDirectoryPath}",
+        $"Logs folder: {LogsDirectoryPath}",
+        $"Backups folder: {_appDataPaths.AutoBackupsDirectory}",
         $"Profiles: {_allProfiles.Count}",
         $"Theme: {ActiveThemeDisplayName}");
+
+    private static bool IsRunningAsAdministrator() => WindowsElevation.IsProcessElevated();
 
     private async Task ExportDiagnosticsAsync()
     {
@@ -2823,6 +3007,12 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         LanguageId = _localizationService.DetectSystemLanguage()
     };
 
+    public void CheckUpdatesAfterStartup()
+    {
+        if (_userSettings.CheckForUpdatesAtStartup && _updateService is not null)
+            _ = CheckUpdatesAsync();
+    }
+
     private async Task CheckUpdatesAsync()
     {
         if (_updateService is null) return;
@@ -2830,8 +3020,17 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         try
         {
             var result = await _updateService.CheckAsync(GetCurrentVersion());
-            _latestReleaseUri = result.ReleaseUrl;
+            _userSettings.LastUpdateCheckUtc = DateTimeOffset.UtcNow;
+            _userSettings.LastUpdateCheckStatus = result.Status.ToString();
+            if (result.Status is UpdateCheckStatus.UpdateAvailable or UpdateCheckStatus.UpToDate)
+            {
+                _userSettings.LastKnownLatestVersion = result.LatestVersion?.ToString();
+                _userSettings.LastKnownReleaseUrl = result.ReleaseUrl?.AbsoluteUri;
+                _latestReleaseUri = result.ReleaseUrl;
+            }
             OnPropertyChanged(nameof(HasLatestRelease));
+            OnPropertyChanged(nameof(LatestDetectedVersion));
+            OnPropertyChanged(nameof(LastUpdateCheckText));
             OpenLatestReleaseCommand.NotifyCanExecuteChanged();
             UpdateStatusText = result.Status switch
             {
@@ -2840,11 +3039,38 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
                 UpdateCheckStatus.UpToDate => _localizationService.Format("Status.UpToDate", result.CurrentVersion),
                 _ => _localizationService.Format("Status.UpdateCheckFailed", result.Message ?? string.Empty)
             };
+            ScheduleSettingsSave();
         }
         catch (Exception exception)
         {
+            _userSettings.LastUpdateCheckUtc = DateTimeOffset.UtcNow;
+            _userSettings.LastUpdateCheckStatus = UpdateCheckStatus.Failed.ToString();
+            OnPropertyChanged(nameof(LastUpdateCheckText));
+            ScheduleSettingsSave();
             UpdateStatusText = _localizationService.Format("Status.UpdateCheckFailed", exception.Message);
         }
+    }
+
+    private void RestorePersistedUpdateState()
+    {
+        _latestReleaseUri = Uri.TryCreate(_userSettings.LastKnownReleaseUrl, UriKind.Absolute, out var uri) &&
+                            (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps)
+            ? uri
+            : null;
+        UpdateStatusText = _userSettings.LastUpdateCheckStatus switch
+        {
+            nameof(UpdateCheckStatus.UpToDate) =>
+                _localizationService.Format("Status.UpToDate", GetCurrentVersion()),
+            nameof(UpdateCheckStatus.UpdateAvailable) when !string.IsNullOrWhiteSpace(_userSettings.LastKnownLatestVersion) =>
+                _localizationService.Format("Status.UpdateAvailable", GetCurrentVersion(),
+                    _userSettings.LastKnownLatestVersion),
+            nameof(UpdateCheckStatus.Failed) => _localizationService.GetString("Settings.UpdateLastCheckFailed"),
+            _ => string.Empty
+        };
+        OnPropertyChanged(nameof(HasLatestRelease));
+        OnPropertyChanged(nameof(LatestDetectedVersion));
+        OnPropertyChanged(nameof(LastUpdateCheckText));
+        OpenLatestReleaseCommand.NotifyCanExecuteChanged();
     }
 
     private Version GetCurrentVersion()
@@ -2928,6 +3154,8 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
 
         _statusMonitorTimer?.Stop();
         _statusMonitorTimer = null;
+        SystemPanel.Dispose();
+        PerformancePanel.Dispose();
         _profileExecutionCancellation?.Cancel();
         lock (_settingsSaveSync) _settingsSaveDebounce?.Cancel();
         if (_activityService is not null)
@@ -3048,7 +3276,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
                     $"Reason=Preflight Errors={preflight?.ErrorCount.ToString() ?? "unknown"}");
                 return;
             }
-            if (preflight.RequiresAdministrator && !_dialogService.Confirm(
+            if (preflight.RequiresAdministrator && !WindowsElevation.IsProcessElevated() && !_dialogService.Confirm(
                     _localizationService.GetString("Dialog.AdminRequiredTitle"),
                     _localizationService.Format("Dialog.AdminRequiredMessage",
                         Environment.NewLine,
@@ -3327,6 +3555,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         if (_pendingRestoreSession is null || _pendingRestoreSession.PendingRestoreCount <= 0)
             await RefreshPendingRestoreAsync();
         if (_pendingRestoreSession is null || _pendingRestoreSession.PendingRestoreCount <= 0 || !CanRestoreProfile()) return;
+        var profileToRestore = _allProfiles.FirstOrDefault(profile => profile.Id == _pendingRestoreSession.ProfileId);
         SetRestoreCount(_pendingRestoreSession.PendingRestoreCount);
         IsRestoreRunning = true;
         SetProfileExecutionState(SelectedProfile, ProfileExecutionState.Restoring);
@@ -3351,6 +3580,12 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
                     ? _localizationService.GetString("Restore.PreviousPending")
                     : _localizationService.GetString("Restore.Completed");
             SetExecutionStatus(result.PendingRestoreCount == 0 ? "Execution.Status.Success" : "Execution.Status.CompletedWithErrors");
+            if (result.Status == PersistentSessionStatus.Restored && result.PendingRestoreCount == 0 &&
+                profileToRestore is not null && profileToRestore.CloseSwitchBoardAfterSuccessfulRestore)
+            {
+                _allowCloseWithoutConfirmation = true;
+                _profileCompletionBehavior.HandleSuccessfulRestore(profileToRestore.ToModel());
+            }
         }
         catch (OperationCanceledException)
         {
@@ -4282,7 +4517,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         {
             switch (item)
             {
-                case CategoryItemViewModel category when category.VisibleProfiles.Count > 0:
+                case CategoryItemViewModel category when !hasQuery || category.VisibleProfiles.Count > 0:
                     if (hasQuery) category.IsExpanded = true;
                     FilteredRootNavigationItems.Add(category);
                     break;
@@ -4418,6 +4653,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
             (sender is ProfileItemViewModel &&
              (e.PropertyName is nameof(ProfileItemViewModel.Name) or nameof(ProfileItemViewModel.CategoryId))))
         {
+            OnPropertyChanged(nameof(SelectedProfileBreadcrumb));
             RefreshProfileSelectionDisplayNames();
             RefreshProfileSearchPresentation();
             RefreshActivityProfileOptions();

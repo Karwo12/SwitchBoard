@@ -10,6 +10,7 @@ using SwitchBoard.Models.Profiles;
 using SwitchBoard.Services.Execution;
 using SwitchBoard.Services.Execution.Handlers;
 using SwitchBoard.Services.Profiles;
+using SwitchBoard.Services.Windows;
 using SwitchBoard.RuntimeTests.TestInfrastructure;
 using SwitchBoard.ViewModels;
 
@@ -108,10 +109,17 @@ public sealed class ProfileRunRegressionTests
 
         await viewModel.RunProfileFromTrayAsync(profile.Id);
 
-        var confirmation = Assert.Single(dialogs.Confirmations);
-        Assert.Equal("Administrator permissions may be required", confirmation.Title);
-        Assert.Equal("The following actions may require administrator permissions:" + Environment.NewLine +
-                     "\u2022 Windows service", confirmation.Message);
+        if (WindowsElevation.IsProcessElevated())
+        {
+            Assert.Empty(dialogs.Confirmations);
+        }
+        else
+        {
+            var confirmation = Assert.Single(dialogs.Confirmations);
+            Assert.Equal("Administrator permissions may be required", confirmation.Title);
+            Assert.Equal("The following actions may require administrator permissions:" + Environment.NewLine +
+                         "\u2022 Windows service", confirmation.Message);
+        }
         Assert.Equal(1, handler.ExecutionCount);
         Assert.Equal(ExecutionSessionStatus.Completed, viewModel.LastExecutionSession!.Status);
     }

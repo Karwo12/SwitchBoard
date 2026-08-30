@@ -98,6 +98,7 @@ sealed class TestCustomThemeEditorService : ICustomThemeEditorService
 sealed class TestCompletionBehavior : IProfileCompletionBehavior
 {
     public void HandleSuccessfulCompletion(ProfileDefinition profile) { }
+    public void HandleSuccessfulRestore(ProfileDefinition profile) { }
 }
 
 sealed class TestDialogService : IUserDialogService

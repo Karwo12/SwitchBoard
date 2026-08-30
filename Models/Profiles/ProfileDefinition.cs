@@ -14,6 +14,8 @@ public sealed class ProfileDefinition
 
     public bool CloseSwitchBoardAfterSuccessfulCompletion { get; set; }
 
+    public bool CloseSwitchBoardAfterSuccessfulRestore { get; set; }
+
     /// <summary>Optional visual marker only; it never affects profile execution.</summary>
     public string? Color { get; set; }
 

@@ -5,4 +5,5 @@ namespace SwitchBoard.Services.Execution;
 public interface IProfileCompletionBehavior
 {
     void HandleSuccessfulCompletion(ProfileDefinition profile);
+    void HandleSuccessfulRestore(ProfileDefinition profile);
 }
