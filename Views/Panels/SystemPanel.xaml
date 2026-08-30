@@ -1,0 +1,124 @@
+<UserControl x:Class="SwitchBoard.Views.Panels.SystemPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:SwitchBoard.Controls">
+    <UserControl.Resources>
+        <Style x:Key="SystemPanelSectionStyle" TargetType="{x:Type controls:CardSurfaceControl}" BasedOn="{StaticResource CardSurfaceStyle}">
+            <Setter Property="Background" Value="{DynamicResource SettingsRowBackgroundBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderHighlightBrush}" />
+            <Setter Property="SurfaceOpacity" Value="0.72" />
+        </Style>
+        <Style x:Key="SystemPanelRowStyle" TargetType="{x:Type controls:CardSurfaceControl}" BasedOn="{StaticResource CardSurfaceStyle}">
+            <Setter Property="Background" Value="{DynamicResource SettingsRowBackgroundBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderHighlightBrush}" />
+            <Setter Property="SurfaceOpacity" Value="0.58" />
+            <Setter Property="CornerRadius" Value="7" />
+            <Setter Property="MinHeight" Value="34" />
+            <Setter Property="Padding" Value="9,5" />
+            <Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="HoverSurfaceBrush" Value="{DynamicResource InteractiveHoverBrush}" /></Trigger></Style.Triggers>
+        </Style>
+        <Style x:Key="SystemPanelDisplayRowStyle" TargetType="{x:Type controls:CardSurfaceControl}" BasedOn="{StaticResource SystemPanelRowStyle}">
+            <Setter Property="MinHeight" Value="28" />
+            <Setter Property="Padding" Value="8,3" />
+            <Setter Property="CornerRadius" Value="6" />
+        </Style>
+    </UserControl.Resources>
+    <Border Padding="16"
+            Background="{DynamicResource ActivitySurfaceBrush}"
+            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="12">
+        <Grid>
+            <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+            <Grid Grid.Row="0" Margin="2,0,2,10">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Style="{StaticResource SectionTitle}" Text="{DynamicResource System.Title}" />
+                    <TextBlock Margin="0,3,0,0" Style="{StaticResource CaptionText}" Text="{DynamicResource System.Subtitle}" />
+                </StackPanel>
+                <Button Grid.Column="1" VerticalAlignment="Center" Command="{Binding RefreshSystemSummaryCommand}"
+                        Content="{DynamicResource System.Refresh}" />
+            </Grid>
+            <ScrollViewer x:Name="ContentScrollViewer" Grid.Row="1" Margin="2,0,2,0"
+                          HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto"
+                          CanContentScroll="False">
+                <StackPanel>
+                    <WrapPanel>
+                        <controls:CardSurfaceControl Style="{StaticResource SystemPanelSectionStyle}" Width="310" Margin="0,0,10,10" Padding="14">
+                            <StackPanel>
+                                <TextBlock FontWeight="SemiBold" Text="{DynamicResource System.Overview}" />
+                                <Separator />
+                                <Grid Margin="0,10,0,0">
+                                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="128" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                    <TextBlock Style="{StaticResource CaptionText}" Text="{DynamicResource System.Administrator}" />
+                                    <TextBlock Grid.Column="1" FontWeight="SemiBold" Text="{Binding SystemAdministratorText}" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Grid.Row="1" Style="{StaticResource CaptionText}" Text="{DynamicResource System.Uptime}" />
+                                    <TextBlock Grid.Row="1" Grid.Column="1" FontWeight="SemiBold" Text="{Binding SystemUptimeText}" />
+                                    <TextBlock Grid.Row="2" Style="{StaticResource CaptionText}" Text="{DynamicResource System.PowerPlan}" />
+                                    <TextBlock Grid.Row="2" Grid.Column="1" FontWeight="SemiBold" Text="{Binding SystemActivePowerPlanText}" TextTrimming="CharacterEllipsis" ToolTip="{Binding SystemActivePowerPlanText}" />
+                                </Grid>
+                            </StackPanel>
+                        </controls:CardSurfaceControl>
+                        <controls:CardSurfaceControl Style="{StaticResource SystemPanelSectionStyle}" Width="310" Margin="0,0,10,10" Padding="14">
+                            <StackPanel>
+                                <TextBlock FontWeight="SemiBold" Text="{DynamicResource System.Audio}" />
+                                <Separator />
+                                <Grid Margin="0,10,0,0">
+                                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="128" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                    <TextBlock Style="{StaticResource CaptionText}" Text="{DynamicResource System.DefaultOutput}" />
+                                    <TextBlock Grid.Column="1" FontWeight="SemiBold" Text="{Binding SystemDefaultOutputText}" TextTrimming="CharacterEllipsis" ToolTip="{Binding SystemDefaultOutputText}" />
+                                    <TextBlock Grid.Row="1" Style="{StaticResource CaptionText}" Text="{DynamicResource System.DefaultInput}" />
+                                    <TextBlock Grid.Row="1" Grid.Column="1" FontWeight="SemiBold" Text="{Binding SystemDefaultInputText}" TextTrimming="CharacterEllipsis" ToolTip="{Binding SystemDefaultInputText}" />
+                                </Grid>
+                            </StackPanel>
+                        </controls:CardSurfaceControl>
+                    </WrapPanel>
+
+                    <controls:CardSurfaceControl Style="{StaticResource SystemPanelSectionStyle}" Margin="0,0,0,10" Padding="10">
+                        <StackPanel>
+                            <TextBlock FontWeight="SemiBold" Text="{DynamicResource System.Displays}" />
+                            <Separator Margin="0,4,0,4" />
+                            <ItemsControl ItemsSource="{Binding SystemDisplays}">
+                                <ItemsControl.ItemTemplate><DataTemplate>
+                                    <controls:CardSurfaceControl Style="{StaticResource SystemPanelDisplayRowStyle}" Margin="0,0,0,3">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="120" /></Grid.ColumnDefinitions>
+                                            <TextBlock FontWeight="SemiBold" Text="{Binding Name}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}" />
+                                            <TextBlock Grid.Column="1" Margin="12,0" Style="{StaticResource CaptionText}" Text="{Binding ResolutionText}" />
+                                            <TextBlock Grid.Column="2" HorizontalAlignment="Right" FontWeight="SemiBold" Foreground="{DynamicResource SuccessBrush}" Text="{DynamicResource System.Display.Active}" />
+                                        </Grid>
+                                    </controls:CardSurfaceControl>
+                                </DataTemplate></ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock Text="{DynamicResource System.NoDisplays}">
+                                <TextBlock.Style><Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}"><Setter Property="Visibility" Value="Collapsed" /><Style.Triggers><DataTrigger Binding="{Binding HasSystemDisplays}" Value="False"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers></Style></TextBlock.Style>
+                            </TextBlock>
+                        </StackPanel>
+                    </controls:CardSurfaceControl>
+
+                    <controls:CardSurfaceControl Style="{StaticResource SystemPanelSectionStyle}" Margin="0,0,0,4" Padding="14">
+                        <StackPanel>
+                            <TextBlock FontWeight="SemiBold" Text="{DynamicResource System.ManagedTargets}" />
+                            <Separator Margin="0,8,0,0" />
+                            <ItemsControl Margin="0,10,0,0" ItemsSource="{Binding ManagedSystemTargets}">
+                                <ItemsControl.ItemTemplate><DataTemplate>
+                                    <controls:CardSurfaceControl Style="{StaticResource SystemPanelRowStyle}" Margin="0,0,0,5">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="190" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                            <TextBlock FontWeight="SemiBold" Text="{Binding Name}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}" />
+                                            <TextBlock Grid.Column="1" Margin="12,0" Style="{StaticResource CaptionText}" Text="{Binding Target}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Target}" />
+                                            <TextBlock Grid.Column="2" FontWeight="SemiBold" Text="{Binding Status}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Status}" />
+                                        </Grid>
+                                    </controls:CardSurfaceControl>
+                                </DataTemplate></ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock Text="{DynamicResource System.NoManagedTargets}">
+                                <TextBlock.Style><Style TargetType="TextBlock" BasedOn="{StaticResource CaptionText}"><Setter Property="Visibility" Value="Collapsed" /><Style.Triggers><DataTrigger Binding="{Binding HasManagedSystemTargets}" Value="False"><Setter Property="Visibility" Value="Visible" /></DataTrigger></Style.Triggers></Style></TextBlock.Style>
+                            </TextBlock>
+                        </StackPanel>
+                    </controls:CardSurfaceControl>
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+    </Border>
+</UserControl>

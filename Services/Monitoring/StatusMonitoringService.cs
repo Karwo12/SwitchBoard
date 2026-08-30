@@ -1,4 +1,5 @@
 using System.IO;
+using System.Security.Principal;
 using SwitchBoard.Models.Actions;
 using SwitchBoard.Localization;
 using SwitchBoard.Services.Discovery;
@@ -19,8 +20,71 @@ public sealed class StatusMonitoringService(
 {
     private int _running;
     private int _refreshAgain;
+    private readonly SemaphoreSlim _systemCaptureGate = new(1, 1);
 
     public bool IsRunning => Volatile.Read(ref _running) != 0;
+
+    /// <summary>
+    /// Reuses the same Windows managers that power profile-action status cards to
+    /// build a bounded overview for the System panel. Individual provider failures
+    /// intentionally become unavailable fields instead of failing the whole view.
+    /// </summary>
+    public async Task<SystemStatusSnapshot> CaptureSystemSummaryAsync(
+        IEnumerable<ActionItemViewModel> actions,
+        CancellationToken cancellationToken = default)
+    {
+        await _systemCaptureGate.WaitAsync(cancellationToken);
+        try
+        {
+            var activePlanName = await TryReadAsync(async () =>
+            {
+                var activeId = await powerPlanManager.GetActivePlanAsync(cancellationToken);
+                var plans = await powerPlanManager.GetPlansAsync(cancellationToken);
+                return plans.FirstOrDefault(plan => plan.Id == activeId)?.DisplayName;
+            });
+
+            var displays = await TryReadAsync(() => displayManager.GetDisplaysAsync(cancellationToken)) ?? [];
+            var displayStatuses = displays.Select(display => new SystemDisplayStatus(
+                display.DisplayName,
+                true,
+                display.CurrentWidth,
+                display.CurrentHeight,
+                display.CurrentRefreshRate,
+                display.IsPrimary)).ToList();
+
+            // Reading the current endpoint directly remains reliable on machines where endpoint
+            // enumeration is restricted by a remote/virtual audio driver.
+            var defaultOutputDevice = await TryReadAsync(() =>
+                audioManager.GetDefaultDeviceAsync(false, false, cancellationToken));
+            var defaultInputDevice = await TryReadAsync(() =>
+                audioManager.GetDefaultDeviceAsync(true, false, cancellationToken));
+            var audioDevices = await TryReadAsync(() => audioManager.GetDevicesAsync(cancellationToken)) ?? [];
+            var defaultOutputId = await TryReadAsync(() =>
+                audioManager.GetDefaultDeviceIdAsync(false, false, cancellationToken));
+            var defaultInputId = await TryReadAsync(() =>
+                audioManager.GetDefaultDeviceIdAsync(true, false, cancellationToken));
+            var defaultOutput = defaultOutputDevice?.FriendlyName ?? audioDevices.FirstOrDefault(device =>
+                string.Equals(device.Id, defaultOutputId, StringComparison.OrdinalIgnoreCase) ||
+                (!device.IsInput && device.IsDefaultMultimedia))?.FriendlyName;
+            var defaultInput = defaultInputDevice?.FriendlyName ?? audioDevices.FirstOrDefault(device =>
+                string.Equals(device.Id, defaultInputId, StringComparison.OrdinalIgnoreCase) ||
+                (device.IsInput && device.IsDefaultMultimedia))?.FriendlyName;
+
+            var managedTargets = await CaptureManagedTargetsAsync(actions, cancellationToken);
+            return new SystemStatusSnapshot(
+                WindowsElevation.IsProcessElevated(),
+                TimeSpan.FromMilliseconds(Math.Max(0, Environment.TickCount64)),
+                activePlanName,
+                displayStatuses,
+                defaultOutput,
+                defaultInput,
+                managedTargets);
+        }
+        finally
+        {
+            _systemCaptureGate.Release();
+        }
+    }
 
     public async Task RefreshSelectedProfileAsync(
         IEnumerable<ActionItemViewModel> actions,
@@ -163,6 +227,88 @@ public sealed class StatusMonitoringService(
         foreach (var nested in action.ElseActions.SelectMany(Flatten)) yield return nested;
     }
 
+    private async Task<IReadOnlyList<ManagedTargetStatus>> CaptureManagedTargetsAsync(
+        IEnumerable<ActionItemViewModel> actions, CancellationToken cancellationToken)
+    {
+        var targets = actions.SelectMany(Flatten)
+            .Where(action => action.IsEnabled && action.ShouldMonitorCurrentStatus && IsManagedTarget(action))
+            .GroupBy(action => $"{action.Type}:{TargetKey(action)}", StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .Take(16)
+            .ToList();
+        if (targets.Count == 0) return [];
+
+        var snapshots = new List<(ActionItemViewModel Action, StatusSnapshot Snapshot)>();
+        foreach (var action in targets)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            try { snapshots.Add((action, await RefreshActionAsync(action, null, cancellationToken))); }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+            catch { snapshots.Add((action, new StatusSnapshot(null, null))); }
+        }
+
+        IReadOnlyList<ProcessCandidate>? processes = null;
+        if (snapshots.Any(item => item.Snapshot.RequiresProcessScan))
+        {
+            try { processes = await processDiscoveryService.GetProcessesAsync(cancellationToken, includeIcons: false); }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+            catch { processes = []; }
+        }
+
+        var result = new List<ManagedTargetStatus>();
+        foreach (var (action, initial) in snapshots)
+        {
+            var snapshot = initial;
+            if (snapshot.RequiresProcessScan && snapshot.Deferred is not null)
+                snapshot = await snapshot.Deferred(processes ?? [], cancellationToken);
+            result.Add(new ManagedTargetStatus(action.DisplayName, TargetDisplayName(action),
+                snapshot.Text ?? localization.GetString("ActionStatus.Unavailable")));
+        }
+        return result;
+    }
+
+    private static bool IsManagedTarget(ActionItemViewModel action) => action.Type is
+        ActionTypeIds.ServiceSetState or ActionTypeIds.PowerSetPlan or ActionTypeIds.DisplayConfigure or
+        ActionTypeIds.AudioConfigure or ActionTypeIds.DeviceSetState or ActionTypeIds.ProgramRun or
+        ActionTypeIds.ProcessSetState or ActionTypeIds.ProcessConfigure or ActionTypeIds.WaitProcessStart or
+        ActionTypeIds.WaitProcessExit or ActionTypeIds.WaitWindow;
+
+    private static string TargetKey(ActionItemViewModel action) => action.Type switch
+    {
+        ActionTypeIds.ServiceSetState => action.ServiceName,
+        ActionTypeIds.PowerSetPlan => action.PowerPlanGuid,
+        ActionTypeIds.DisplayConfigure => action.DisplayDeviceId,
+        ActionTypeIds.AudioConfigure => action.AudioOutputDeviceId,
+        ActionTypeIds.DeviceSetState => action.DeviceInstanceId,
+        ActionTypeIds.ProgramRun => action.Target,
+        _ => action.ProcessName
+    };
+
+    private static string TargetDisplayName(ActionItemViewModel action)
+    {
+        var target = action.Type switch
+        {
+            ActionTypeIds.ServiceSetState => FirstNonEmpty(action.ServiceDisplayName, action.ServiceName),
+            ActionTypeIds.PowerSetPlan => FirstNonEmpty(action.PowerPlanName, action.PowerPlanGuid),
+            ActionTypeIds.DisplayConfigure => FirstNonEmpty(action.DisplayMonitorName, action.DisplayDeviceName),
+            ActionTypeIds.AudioConfigure => FirstNonEmpty(action.AudioOutputDeviceName, action.AudioInputDeviceName),
+            ActionTypeIds.DeviceSetState => FirstNonEmpty(action.DeviceFriendlyName, action.DeviceInstanceId),
+            ActionTypeIds.ProgramRun => FirstNonEmpty(action.Target, action.ProcessName),
+            _ => FirstNonEmpty(action.ProcessName, action.ExecutablePath)
+        };
+        return string.IsNullOrWhiteSpace(target) ? action.DisplayName : target;
+    }
+
+    private static string FirstNonEmpty(params string?[] values) =>
+        values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim() ?? string.Empty;
+
+    private static async Task<T?> TryReadAsync<T>(Func<Task<T>> read)
+    {
+        try { return await read(); }
+        catch (OperationCanceledException) { throw; }
+        catch { return default; }
+    }
+
     private string LocalizeRuntime(string value) => value switch
     {
         "Running" => localization.GetString("ServiceState.Running"),
@@ -182,3 +328,20 @@ public sealed class StatusMonitoringService(
     private sealed record StatusSnapshot(string? Text, string? TechnicalDetails, bool RequiresProcessScan = false,
         Func<IReadOnlyList<ProcessCandidate>, CancellationToken, Task<StatusSnapshot>>? Deferred = null);
 }
+
+public sealed record SystemStatusSnapshot(
+    bool IsAdministrator,
+    TimeSpan Uptime,
+    string? ActivePowerPlanName,
+    IReadOnlyList<SystemDisplayStatus> Displays,
+    string? DefaultOutputDevice,
+    string? DefaultInputDevice,
+    IReadOnlyList<ManagedTargetStatus> ManagedTargets);
+
+public sealed record SystemDisplayStatus(string Name, bool IsActive, int Width, int Height, int RefreshRate,
+    bool IsPrimary)
+{
+    public string ResolutionText => $"{Width} × {Height} @ {RefreshRate} Hz";
+}
+
+public sealed record ManagedTargetStatus(string Name, string Target, string Status);

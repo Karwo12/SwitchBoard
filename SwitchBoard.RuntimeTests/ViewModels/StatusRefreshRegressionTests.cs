@@ -8,6 +8,40 @@ public sealed class StatusRefreshRegressionTests
 {
     [Fact]
     [Trait("Category", "Regression")]
+    public async Task SystemSummary_UsesExistingProvidersAndKeepsUnavailableDataIsolated()
+    {
+        var monitoring = new StatusMonitoringService(new BlockingServiceManager(), new NoopPowerPlanManager(),
+            new TestDisplayManager(new("", "", "", 1, 1, 1, 32, 0, 0, 0, 0)), new NoopAudioManager(),
+            new NoopDeviceManager(), new NoopProcessDiscoveryService(), new TestLocalizationService());
+
+        var summary = await monitoring.CaptureSystemSummaryAsync([]);
+
+        Assert.Empty(summary.Displays);
+        Assert.Empty(summary.ManagedTargets);
+        Assert.True(summary.Uptime >= TimeSpan.Zero);
+    }
+
+    [Fact]
+    [Trait("Category", "Regression")]
+    public async Task SystemSummary_UsesDirectDefaultAudioEndpointsWhenEnumerationIsEmpty()
+    {
+        var audio = new NoopAudioManager
+        {
+            DefaultOutput = new AudioDeviceCandidate("render", "Test speakers", false, true, false),
+            DefaultInput = new AudioDeviceCandidate("capture", "Test microphone", true, true, false)
+        };
+        var monitoring = new StatusMonitoringService(new BlockingServiceManager(), new NoopPowerPlanManager(),
+            new TestDisplayManager(new("", "", "", 1, 1, 1, 32, 0, 0, 0, 0)), audio,
+            new NoopDeviceManager(), new NoopProcessDiscoveryService(), new TestLocalizationService());
+
+        var summary = await monitoring.CaptureSystemSummaryAsync([]);
+
+        Assert.Equal("Test speakers", summary.DefaultOutputDevice);
+        Assert.Equal("Test microphone", summary.DefaultInputDevice);
+    }
+
+    [Fact]
+    [Trait("Category", "Regression")]
     public async Task ChangingProfileDuringRefresh_RefreshesTheNewlySelectedProfile()
     {
         using var fixture = new StatusRefreshFixture();
@@ -121,8 +155,12 @@ public sealed class StatusRefreshRegressionTests
 
     private sealed class NoopAudioManager : IAudioManager
     {
+        public AudioDeviceCandidate? DefaultOutput { get; init; }
+        public AudioDeviceCandidate? DefaultInput { get; init; }
         public Task<IReadOnlyList<AudioDeviceCandidate>> GetDevicesAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<AudioDeviceCandidate>>([]);
+        public Task<AudioDeviceCandidate?> GetDefaultDeviceAsync(bool input, bool communications,
+            CancellationToken cancellationToken = default) => Task.FromResult(input ? DefaultInput : DefaultOutput);
         public Task<string?> GetDefaultDeviceIdAsync(bool input, bool communications,
             CancellationToken cancellationToken = default) => Task.FromResult<string?>(null);
         public Task SetDefaultDeviceAsync(string deviceId, bool multimedia, bool communications,

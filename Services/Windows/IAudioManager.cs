@@ -5,6 +5,8 @@ namespace SwitchBoard.Services.Windows;
 public interface IAudioManager
 {
     Task<IReadOnlyList<AudioDeviceCandidate>> GetDevicesAsync(CancellationToken cancellationToken = default);
+    Task<AudioDeviceCandidate?> GetDefaultDeviceAsync(bool input, bool communications,
+        CancellationToken cancellationToken = default);
     Task<string?> GetDefaultDeviceIdAsync(bool input, bool communications, CancellationToken cancellationToken = default);
     Task SetDefaultDeviceAsync(string deviceId, bool multimedia, bool communications,
         CancellationToken cancellationToken = default);

@@ -130,7 +130,19 @@ public sealed class WindowsDisplayManager : IDisplayManager
             });
         }
 
-        return results;
+        // Friendly monitor names are not unique (two physical monitors can share a
+        // model name). Keep their technical identity untouched and disambiguate only
+        // the label presented in pickers and persisted as the friendly fallback.
+        return results
+            .GroupBy(display => display.DisplayName, StringComparer.CurrentCultureIgnoreCase)
+            .SelectMany(group => group.Count() == 1
+                ? group
+                : group.OrderBy(display => display.MonitorNumber).Select(display => display with
+                {
+                    DisplayName = $"{display.DisplayName} — {display.MonitorNumber}"
+                }))
+            .OrderBy(display => display.MonitorNumber)
+            .ToList();
     }
 
     private static IReadOnlyList<DisplayModeCandidate> EnumerateModes(
@@ -203,7 +215,11 @@ public sealed class WindowsDisplayManager : IDisplayManager
         var monitorDevicePath = FirstNonEmpty(config?.MonitorDevicePath,
             hasMonitorInterface ? monitorInterface.DeviceId : null,
             hasMonitor ? monitor.DeviceId : null);
-        var deviceId = FirstNonEmpty(hasMonitorInterface ? monitorInterface.DeviceId : null,
+        // The active DisplayConfig target path contains adapter/output identity and
+        // remains distinct for identical monitor models. Prefer it over friendly
+        // metadata or the less specific EnumDisplayDevices fallback.
+        var deviceId = FirstNonEmpty(config?.MonitorDevicePath,
+            hasMonitorInterface ? monitorInterface.DeviceId : null,
             hasMonitor ? monitor.DeviceId : null,
             adapter.DeviceKey, adapter.DeviceName);
         var metadata = ReadMonitorMetadata(monitorDevicePath);

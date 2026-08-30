@@ -16,6 +16,27 @@ public sealed class WindowsAudioManager : IAudioManager
             }
         }, cancellationToken);
 
+    public Task<AudioDeviceCandidate?> GetDefaultDeviceAsync(bool input, bool communications,
+        CancellationToken cancellationToken = default) => Task.Run(() =>
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var flow = input ? EDataFlow.Capture : EDataFlow.Render;
+        var role = communications ? ERole.Communications : ERole.Multimedia;
+        var enumerator = (IMMDeviceEnumerator)(object)new MMDeviceEnumerator();
+        try
+        {
+            var hr = enumerator.GetDefaultAudioEndpoint(flow, role, out var device);
+            if (hr < 0 || device is null) return null;
+            try
+            {
+                return new AudioDeviceCandidate(ReadId(device), ReadFriendlyName(device), input,
+                    !communications, communications);
+            }
+            finally { Marshal.FinalReleaseComObject(device); }
+        }
+        finally { Marshal.FinalReleaseComObject(enumerator); }
+    }, cancellationToken);
+
     public Task<string?> GetDefaultDeviceIdAsync(bool input, bool communications,
         CancellationToken cancellationToken = default) => Task.Run(() =>
     {
