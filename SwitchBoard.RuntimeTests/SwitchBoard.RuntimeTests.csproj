@@ -6,6 +6,7 @@
     <UseWPF>true</UseWPF>
     <IsTestProject>true</IsTestProject>
     <IsPackable>false</IsPackable>
+    <DefaultItemExcludes>$(DefaultItemExcludes);obj\**;bin\**</DefaultItemExcludes>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\SwitchBoard.csproj" />

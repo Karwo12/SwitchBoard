@@ -449,6 +449,22 @@ public sealed class ThemePersistenceTests : RuntimeTestBase
         Assert.True(video.IsPlaybackRequested);
         Assert.Equal(opensAfterInitialLoad, BackgroundMediaDiagnostics.Snapshot.VideoOpenCount);
 
+        // Profile-run pauses use the existing player and must resume it instead of
+        // opening a replacement player or attaching new lifecycle handlers.
+        background.PauseDuringProfileExecution = true;
+        background.IsProfileExecutionActive = true;
+        DrainDispatcher();
+        Assert.False(video.IsPlaybackRequested);
+        Assert.Same(video, background.ActiveVideoRenderer);
+        Assert.Equal(opensAfterInitialLoad, BackgroundMediaDiagnostics.Snapshot.VideoOpenCount);
+        background.IsProfileExecutionActive = false;
+        DrainDispatcher();
+        Assert.True(video.IsPlaybackRequested);
+        Assert.Same(video, background.ActiveVideoRenderer);
+        background.PerformanceMode = BackgroundPerformanceModes.Economy;
+        DrainDispatcher();
+        Assert.Same(video, background.ActiveVideoRenderer);
+
         var wheel = new System.Windows.Input.MouseWheelEventArgs(
             System.Windows.Input.Mouse.PrimaryDevice, Environment.TickCount, -120)
         {
@@ -534,6 +550,19 @@ public sealed class ThemePersistenceTests : RuntimeTestBase
         Assert.False(gif.IsInteractionSuspended);
         Assert.True(gif.IsAnimationRunning);
 
+        background.PauseDuringProfileExecution = true;
+        background.IsProfileExecutionActive = true;
+        DrainDispatcher();
+        Assert.False(gif.IsAnimationRunning);
+        Assert.Same(gif, background.ActiveImageRenderer);
+        Assert.Equal(gifDecodes, BackgroundMediaDiagnostics.Snapshot.GifDecodeCount);
+        background.IsProfileExecutionActive = false;
+        background.GifFrameRateLimit = GifFrameRateLimits.FramesPerSecond30;
+        DrainDispatcher();
+        Assert.True(gif.IsAnimationRunning);
+        Assert.Same(gif, background.ActiveImageRenderer);
+        Assert.Equal(gifDecodes, BackgroundMediaDiagnostics.Snapshot.GifDecodeCount);
+
         background.ImageOpacity = 0;
         DrainDispatcher();
         Assert.False(gif.IsAnimationRunning);
@@ -598,10 +627,24 @@ public sealed class ThemePersistenceTests : RuntimeTestBase
 
     private static void DrainDispatcher()
     {
+        var dispatcher = System.Windows.Threading.Dispatcher.CurrentDispatcher;
         var frame = new System.Windows.Threading.DispatcherFrame();
-        _ = System.Windows.Threading.Dispatcher.CurrentDispatcher.BeginInvoke(
-            System.Windows.Threading.DispatcherPriority.Background,
+        _ = dispatcher.BeginInvoke(
+            System.Windows.Threading.DispatcherPriority.Loaded,
             new Action(() => frame.Continue = false));
+        using var watchdog = new Timer(_ =>
+        {
+            if (dispatcher.HasShutdownStarted || dispatcher.HasShutdownFinished) return;
+            try
+            {
+                _ = dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Send,
+                    new Action(() => frame.Continue = false));
+            }
+            catch (InvalidOperationException)
+            {
+                // A concurrent test shutdown already makes the nested frame irrelevant.
+            }
+        }, null, TimeSpan.FromMilliseconds(500), Timeout.InfiniteTimeSpan);
         System.Windows.Threading.Dispatcher.PushFrame(frame);
     }
 
@@ -867,6 +910,11 @@ public sealed class ThemePersistenceTests : RuntimeTestBase
                 action();
             }
             catch (Exception exception) { error = exception; }
+            finally
+            {
+                var dispatcher = System.Windows.Threading.Dispatcher.FromThread(Thread.CurrentThread);
+                if (dispatcher is { HasShutdownStarted: false }) dispatcher.InvokeShutdown();
+            }
         });
         thread.SetApartmentState(ApartmentState.STA);
         thread.Start();
@@ -900,11 +948,16 @@ public sealed class ThemePersistenceTests : RuntimeTestBase
                 scenario(app, manager, paths);
             }
             catch (Exception exception) { error = exception; }
-            finally { app.Shutdown(); }
+            finally
+            {
+                app.Shutdown();
+            }
         });
         thread.SetApartmentState(ApartmentState.STA);
+        thread.IsBackground = true;
         thread.Start();
-        thread.Join();
+        if (!thread.Join(TimeSpan.FromSeconds(10)))
+            throw new TimeoutException("STA theme scenario did not complete within 10 seconds.");
         if (error is not null) throw new InvalidOperationException("STA theme scenario failed.", error);
     }
 }

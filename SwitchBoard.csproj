@@ -7,11 +7,21 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <ApplicationIcon>Assets\switchboard.ico</ApplicationIcon>
+    <!-- MarkupCompilePass2 builds a short-lived project with a different
+         intermediate path. Keep stale generated sources excluded there too. -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);obj\**;bin\**</DefaultItemExcludes>
   </PropertyGroup>
 
   <ItemGroup>
     <FrameworkReference Include="Microsoft.WindowsDesktop.App.WindowsForms" />
+    <!-- WPF creates short-lived *_wpftmp projects during XAML compilation. Explicitly
+         keep generated/intermediate sources out of their default Compile globs, even
+         when stale temporary artifacts remain after an interrupted build. -->
+    <Compile Remove="obj\**\*.cs;bin\**\*.cs" />
     <Compile Remove="SwitchBoard.RuntimeTests\**\*.cs" />
+    <!-- The optional LibVLC implementation is built as an isolated plugin.  It must
+         never become a compile-time or publish-time dependency of the base app. -->
+    <Compile Remove="SwitchBoard.LibVlcPlugin\**\*.cs" />
     <Compile Remove="build-temp-tests\**\*.cs" />
     <Resource Include="Assets\switchboard.ico" />
   </ItemGroup>
