@@ -48,6 +48,8 @@ jobs:
             "RELEASE_TAG=$tag"
             "ZIP_NAME=SwitchBoard-$tag-win-x64.zip"
             "CHECKSUM_NAME=SwitchBoard-$tag-win-x64.sha256.txt"
+            "LIBVLC_ZIP_NAME=SwitchBoard-LibVLC-3.0.23.1-3.10.1-win-x64.zip"
+            "LIBVLC_CHECKSUM_NAME=SwitchBoard-LibVLC-3.0.23.1-3.10.1-win-x64.sha256.txt"
           ) | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Setup .NET 10
@@ -91,6 +93,42 @@ jobs:
             }
           }
 
+          $forbiddenFiles = Get-ChildItem -LiteralPath $publishDirectory -Recurse -File |
+            Where-Object { $_.Name -in @('libvlc.dll', 'libvlccore.dll', 'LibVLCSharp.dll', 'LibVLCSharp.WPF.dll') }
+          if ($forbiddenFiles) {
+            throw "The base SwitchBoard publish contains optional LibVLC files: $($forbiddenFiles.FullName -join ', ')"
+          }
+          $forbiddenDirectories = Get-ChildItem -LiteralPath $publishDirectory -Recurse -Directory |
+            Where-Object { $_.Name -eq 'plugins' }
+          if ($forbiddenDirectories) {
+            throw "The base SwitchBoard publish contains an unexpected VLC plugins directory."
+          }
+
+      - name: Publish optional LibVLC component
+        shell: pwsh
+        run: |
+          $pluginPublishDirectory = Join-Path $env:GITHUB_WORKSPACE 'artifacts\libvlc-plugin'
+          $packageDirectory = Join-Path $env:GITHUB_WORKSPACE 'artifacts\release'
+          dotnet publish .\SwitchBoard.LibVlcPlugin\SwitchBoard.LibVlcPlugin.csproj `
+            -c Release `
+            -r win-x64 `
+            --self-contained false `
+            -o $pluginPublishDirectory `
+            --no-restore `
+            -p:Version=$env:RELEASE_VERSION
+          if ($LASTEXITCODE -ne 0) { throw 'Optional LibVLC plugin publish failed.' }
+
+          & .\build\New-LibVlcComponentPackage.ps1 `
+            -InputDirectory $pluginPublishDirectory `
+            -OutputDirectory $packageDirectory
+          if ($LASTEXITCODE -ne 0) { throw 'Optional LibVLC component packaging failed.' }
+
+          foreach ($asset in @($env:LIBVLC_ZIP_NAME, $env:LIBVLC_CHECKSUM_NAME)) {
+            if (-not (Test-Path (Join-Path $packageDirectory $asset))) {
+              throw "Optional LibVLC release asset was not created: $asset"
+            }
+          }
+
       - name: Package and checksum
         shell: pwsh
         run: |
@@ -116,10 +154,14 @@ jobs:
           $packageDirectory = Join-Path $env:GITHUB_WORKSPACE 'artifacts\release'
           $zipPath = Join-Path $packageDirectory $env:ZIP_NAME
           $checksumPath = Join-Path $packageDirectory $env:CHECKSUM_NAME
+          $libVlcZipPath = Join-Path $packageDirectory $env:LIBVLC_ZIP_NAME
+          $libVlcChecksumPath = Join-Path $packageDirectory $env:LIBVLC_CHECKSUM_NAME
           $arguments = @(
             'release', 'create', $env:RELEASE_TAG,
             $zipPath,
             $checksumPath,
+            $libVlcZipPath,
+            $libVlcChecksumPath,
             '--title', "SwitchBoard $env:RELEASE_TAG",
             '--generate-notes',
             '--verify-tag'

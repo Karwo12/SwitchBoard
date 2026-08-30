@@ -107,6 +107,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
     private readonly ProfilePreflightService _preflightService = new();
     private readonly DiagnosticExportService _diagnosticExportService;
     private readonly IUpdateService? _updateService;
+    private readonly ILibVlcComponentService? _libVlcComponentService;
     private readonly LogMaintenanceService _logMaintenanceService;
     private readonly ActionPickerCatalog _actionPickerCatalog;
     private readonly ProfileExchangeService _profileExchangeService = new();
@@ -114,6 +115,9 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
     private bool _statusRefreshQueued;
     private string _statusRefreshText = string.Empty;
     private DispatcherTimer? _statusMonitorTimer;
+    private bool _backgroundWindowVisible = true;
+    private bool _backgroundWindowActive = true;
+    private bool _backgroundWindowMinimized;
     private bool _isRestoringSelection;
     private CancellationTokenSource? _settingsSaveDebounce;
     private Task? _settingsSaveTask;
@@ -128,6 +132,9 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
     private string _updateStatusText = string.Empty;
     private Uri? _latestReleaseUri;
     private string? _lastRunCanExecuteDiagnostic;
+    private ManagedBackupFile? _selectedManagedBackup;
+    private LibVlcComponentStatus _libVlcComponentStatus = new(LibVlcComponentState.NotInstalled, string.Empty);
+    private string _libVlcOperationStatusText = string.Empty;
 
     public MainWindowViewModel(
         IProfileCatalogService catalogService,
@@ -149,7 +156,9 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         AppDataPaths? appDataPaths = null,
         IStartupRegistrationService? startupRegistrationService = null,
         IUpdateService? updateService = null,
-        IAppLogger? logger = null)
+        IAppLogger? logger = null,
+        PerformanceMonitoringService? performanceMonitoring = null,
+        ILibVlcComponentService? libVlcComponentService = null)
     {
         _catalogService = catalogService;
         _dialogService = dialogService;
@@ -170,9 +179,14 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         _appDataPaths = appDataPaths ?? new AppDataPaths();
         _startupRegistrationService = startupRegistrationService;
         _updateService = updateService;
+        _libVlcComponentService = libVlcComponentService;
         _diagnosticExportService = new DiagnosticExportService(_appDataPaths);
         _logMaintenanceService = new LogMaintenanceService(_appDataPaths);
         _actionPickerCatalog = new ActionPickerCatalog(localizationService);
+        _userSettings.BackgroundPerformanceMode = BackgroundPerformanceModes.Normalize(userSettings.BackgroundPerformanceMode);
+        _userSettings.GifFrameRateLimit = GifFrameRateLimits.Normalize(userSettings.GifFrameRateLimit);
+        _userSettings.Mp4RendererPreference = Mp4RendererPreferences.Normalize(userSettings.Mp4RendererPreference);
+        _userSettings.HistoryRetentionDays = HistoryRetentionOptions.Normalize(userSettings.HistoryRetentionDays);
         _activityPanelHeightRatio = Math.Clamp(userSettings.ActivityPanelHeightRatio, 0.2, 0.8);
         _isActivityExpanded = userSettings.IsActivityExpanded;
         _activityTabIndex = NormalizeActivityTabIndex(userSettings.LastActivityTabIndex);
@@ -251,6 +265,42 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         [
             new SettingsOptionViewModel("standard", localizationService.GetString("Settings.Density.Standard")),
             new SettingsOptionViewModel("compact", localizationService.GetString("Settings.Density.Compact"))
+        ];
+        BackgroundPerformanceModeOptions =
+        [
+            new SettingsOptionViewModel(BackgroundPerformanceModes.FullQuality,
+                localizationService.GetString("Settings.BackgroundPerformance.FullQuality")),
+            new SettingsOptionViewModel(BackgroundPerformanceModes.Economy,
+                localizationService.GetString("Settings.BackgroundPerformance.Economy"))
+        ];
+        GifFrameRateLimitOptions =
+        [
+            new SettingsOptionViewModel(GifFrameRateLimits.Native,
+                localizationService.GetString("Settings.GifFrameRate.Native")),
+            new SettingsOptionViewModel(GifFrameRateLimits.FramesPerSecond60,
+                localizationService.GetString("Settings.GifFrameRate.60")),
+            new SettingsOptionViewModel(GifFrameRateLimits.FramesPerSecond30,
+                localizationService.GetString("Settings.GifFrameRate.30"))
+        ];
+        Mp4RendererPreferenceOptions =
+        [
+            new SettingsOptionViewModel(Mp4RendererPreferences.Automatic,
+                localizationService.GetString("Settings.Mp4Renderer.Automatic")),
+            new SettingsOptionViewModel(Mp4RendererPreferences.WindowsMediaPlayer,
+                localizationService.GetString("Settings.Mp4Renderer.WindowsMediaPlayer")),
+            new SettingsOptionViewModel(Mp4RendererPreferences.LibVlc,
+                localizationService.GetString("Settings.Mp4Renderer.LibVlc"))
+        ];
+        ActivityHistoryRetentionOptions =
+        [
+            new SettingsOptionViewModel(HistoryRetentionOptions.ThirtyDays.ToString(),
+                localizationService.GetString("Settings.HistoryRetention.30")),
+            new SettingsOptionViewModel(HistoryRetentionOptions.NinetyDays.ToString(),
+                localizationService.GetString("Settings.HistoryRetention.90")),
+            new SettingsOptionViewModel(HistoryRetentionOptions.ThreeHundredSixtyFiveDays.ToString(),
+                localizationService.GetString("Settings.HistoryRetention.365")),
+            new SettingsOptionViewModel(HistoryRetentionOptions.Unlimited.ToString(),
+                localizationService.GetString("Settings.HistoryRetention.Unlimited"))
         ];
         ApplyInterfaceDensityResources();
 
@@ -353,12 +403,18 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         OpenLatestReleaseCommand = new RelayCommand(OpenLatestRelease, () => _latestReleaseUri is not null);
         OpenRepositoryCommand = new RelayCommand(OpenRepository);
         ClearActivityFiltersCommand = new RelayCommand(ClearActivityFilters);
+        InstallLibVlcCommand = new AsyncRelayCommand(InstallLibVlcAsync, CanInstallLibVlc);
+        RemoveLibVlcCommand = new AsyncRelayCommand(RemoveLibVlcAsync, CanRemoveLibVlc);
 
         ActivityEntries = new ObservableCollection<ActivityEntry>(activityService?.Entries ?? []);
         ActivityDisplayEntries = new ObservableCollection<ActivityEntryViewModel>();
         RefreshActivityDisplayEntries();
         HistoryEntries = [];
         SystemChangeEntries = [];
+        ManagedBackups = new ObservableCollection<ManagedBackupFile>();
+        RefreshManagedBackups();
+        RefreshLibVlcComponentStatus();
+        RestorePersistedUpdateState();
         if (activityService is not null)
         {
             activityService.EntryAdded += ActivityServiceOnEntryAdded;
@@ -456,6 +512,10 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
     public ObservableCollection<LanguageOptionViewModel> LanguageOptions { get; }
     public IReadOnlyList<SettingsOptionViewModel> CloseBehaviorOptions { get; }
     public IReadOnlyList<SettingsOptionViewModel> InterfaceDensityOptions { get; }
+    public IReadOnlyList<SettingsOptionViewModel> BackgroundPerformanceModeOptions { get; }
+    public IReadOnlyList<SettingsOptionViewModel> GifFrameRateLimitOptions { get; }
+    public IReadOnlyList<SettingsOptionViewModel> Mp4RendererPreferenceOptions { get; }
+    public IReadOnlyList<SettingsOptionViewModel> ActivityHistoryRetentionOptions { get; }
     public IReadOnlyList<ProfileAppearanceOption> ProfileColorOptions { get; }
     public IReadOnlyList<ProfileAppearanceOption> ProfileIconOptions { get; }
     public IReadOnlyList<SettingsOptionViewModel> ActivityStatusOptions { get; }
@@ -580,6 +640,107 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
             ScheduleSettingsSave();
         }
     }
+
+    public bool PauseAnimatedBackgroundWhenMinimized
+    {
+        get => _userSettings.PauseAnimatedBackgroundWhenMinimized;
+        set
+        {
+            if (_userSettings.PauseAnimatedBackgroundWhenMinimized == value) return;
+            _userSettings.PauseAnimatedBackgroundWhenMinimized = value;
+            OnPropertyChanged();
+            PerformancePanel.NotifyBackgroundStateChanged();
+            ScheduleSettingsSave();
+        }
+    }
+
+    public bool PauseAnimatedBackgroundWhenInactive
+    {
+        get => _userSettings.PauseAnimatedBackgroundWhenInactive;
+        set
+        {
+            if (_userSettings.PauseAnimatedBackgroundWhenInactive == value) return;
+            _userSettings.PauseAnimatedBackgroundWhenInactive = value;
+            OnPropertyChanged();
+            PerformancePanel.NotifyBackgroundStateChanged();
+            ScheduleSettingsSave();
+        }
+    }
+
+    public bool PauseAnimatedBackgroundDuringProfileExecution
+    {
+        get => _userSettings.PauseAnimatedBackgroundDuringProfileExecution;
+        set
+        {
+            if (_userSettings.PauseAnimatedBackgroundDuringProfileExecution == value) return;
+            _userSettings.PauseAnimatedBackgroundDuringProfileExecution = value;
+            OnPropertyChanged();
+            PerformancePanel.NotifyBackgroundStateChanged();
+            ScheduleSettingsSave();
+        }
+    }
+
+    public string BackgroundPerformanceMode
+    {
+        get => BackgroundPerformanceModes.Normalize(_userSettings.BackgroundPerformanceMode);
+        set
+        {
+            var normalized = BackgroundPerformanceModes.Normalize(value);
+            if (string.Equals(_userSettings.BackgroundPerformanceMode, normalized, StringComparison.Ordinal)) return;
+            _userSettings.BackgroundPerformanceMode = normalized;
+            OnPropertyChanged();
+            PerformancePanel.NotifyBackgroundStateChanged();
+            ScheduleSettingsSave();
+        }
+    }
+
+    public string GifFrameRateLimit
+    {
+        get => GifFrameRateLimits.Normalize(_userSettings.GifFrameRateLimit);
+        set
+        {
+            var normalized = GifFrameRateLimits.Normalize(value);
+            if (string.Equals(_userSettings.GifFrameRateLimit, normalized, StringComparison.Ordinal)) return;
+            _userSettings.GifFrameRateLimit = normalized;
+            OnPropertyChanged();
+            ScheduleSettingsSave();
+        }
+    }
+
+    public string Mp4RendererPreference
+    {
+        get => Mp4RendererPreferences.Normalize(_userSettings.Mp4RendererPreference);
+        set
+        {
+            var normalized = Mp4RendererPreferences.Normalize(value);
+            if (string.Equals(_userSettings.Mp4RendererPreference, normalized, StringComparison.Ordinal)) return;
+            _userSettings.Mp4RendererPreference = normalized;
+            OnPropertyChanged();
+            ScheduleSettingsSave();
+        }
+    }
+
+    public string LibVlcComponentStatusText => _libVlcComponentStatus.State switch
+    {
+        LibVlcComponentState.Installed => _localizationService.GetString("Settings.LibVlcStatus.Installed"),
+        LibVlcComponentState.RemovalPending => _localizationService.GetString("Settings.LibVlcStatus.RemovalPending"),
+        LibVlcComponentState.Invalid => _localizationService.GetString("Settings.LibVlcStatus.Invalid"),
+        _ => _localizationService.GetString("Settings.LibVlcStatus.NotInstalled")
+    };
+
+    public string LibVlcDownloadSizeText => _libVlcComponentService is null
+        ? _localizationService.GetString("Common.NotAvailable")
+        : _localizationService.Format("Settings.LibVlcDownloadSize", FormatBytes(_libVlcComponentService.Descriptor.ApproximateDownloadBytes));
+
+    public string LibVlcOperationStatusText
+    {
+        get => _libVlcOperationStatusText;
+        private set => SetProperty(ref _libVlcOperationStatusText, value);
+    }
+
+    public bool IsLibVlcInstalled => _libVlcComponentStatus.IsInstalled;
+    public bool IsLibVlcRemovalPending => _libVlcComponentStatus.State == LibVlcComponentState.RemovalPending;
+    public bool CanInstallOptionalLibVlc => CanInstallLibVlc();
 
     public string InterfaceDensity
     {
@@ -928,7 +1089,9 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
                 UndoCommand.NotifyCanExecuteChanged();
                 TestActionCommand.NotifyCanExecuteChanged();
                 OnPropertyChanged(nameof(IsCancellationAvailable));
+                OnPropertyChanged(nameof(IsProfileExecutionActive));
                 OnPropertyChanged(nameof(RunAvailabilityMessage));
+                PerformancePanel.NotifyBackgroundStateChanged();
             }
         }
     }
@@ -940,6 +1103,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
     }
 
     public bool IsCancellationAvailable => IsProfileRunning || IsRestoreRunning;
+    public bool IsProfileExecutionActive => IsProfileRunning || IsRestoreRunning;
 
     public int CurrentExecutionActionNumber
     {
@@ -993,8 +1157,10 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
             AddActionCommand.NotifyCanExecuteChanged();
             SaveCommand.NotifyCanExecuteChanged();
             OnPropertyChanged(nameof(IsCancellationAvailable));
+            OnPropertyChanged(nameof(IsProfileExecutionActive));
             OnPropertyChanged(nameof(RunAvailabilityMessage));
             OnPropertyChanged(nameof(HasRunValidationIssue));
+            PerformancePanel.NotifyBackgroundStateChanged();
         }
     }
 
@@ -1162,6 +1328,8 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
     public RelayCommand OpenLatestReleaseCommand { get; }
     public RelayCommand OpenRepositoryCommand { get; }
     public RelayCommand ClearActivityFiltersCommand { get; }
+    public AsyncRelayCommand InstallLibVlcCommand { get; }
+    public AsyncRelayCommand RemoveLibVlcCommand { get; }
 
     public ProfileDefinition? ResolveProfileDefinition(Guid id) =>
         _allProfiles.FirstOrDefault(item => item.Id == id)?.ToModel();
@@ -2242,6 +2410,133 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         finally { stagedAssets?.Dispose(); }
 
         StatusMessage = _localizationService.GetString("Status.BackupImported");
+        RefreshManagedBackups();
+    }
+
+    private void RefreshManagedBackups()
+    {
+        var previouslySelectedPath = SelectedManagedBackup?.Path;
+        ManagedBackups.Clear();
+        foreach (var backup in _backupService.ListManagedBackups(_appDataPaths))
+            ManagedBackups.Add(backup);
+        SelectedManagedBackup = ManagedBackups.FirstOrDefault(backup =>
+                                    string.Equals(backup.Path, previouslySelectedPath,
+                                        StringComparison.OrdinalIgnoreCase))
+                                ?? ManagedBackups.FirstOrDefault();
+        OnPropertyChanged(nameof(LastSuccessfulBackupText));
+    }
+
+    private void RefreshLibVlcComponentStatus()
+    {
+        if (_libVlcComponentService is null)
+        {
+            _libVlcComponentStatus = new LibVlcComponentStatus(LibVlcComponentState.NotInstalled, string.Empty);
+        }
+        else
+        {
+            try
+            {
+                _libVlcComponentStatus = _libVlcComponentService.GetStatus();
+            }
+            catch (Exception exception)
+            {
+                _logger?.Error("LibVLC", exception, "Reading the optional LibVLC component status failed.");
+                _libVlcComponentStatus = new LibVlcComponentStatus(LibVlcComponentState.Invalid, string.Empty,
+                    exception.Message);
+            }
+        }
+
+        OnPropertyChanged(nameof(LibVlcComponentStatusText));
+        OnPropertyChanged(nameof(LibVlcDownloadSizeText));
+        OnPropertyChanged(nameof(IsLibVlcInstalled));
+        OnPropertyChanged(nameof(IsLibVlcRemovalPending));
+        OnPropertyChanged(nameof(CanInstallOptionalLibVlc));
+        InstallLibVlcCommand.NotifyCanExecuteChanged();
+        RemoveLibVlcCommand.NotifyCanExecuteChanged();
+    }
+
+    private bool CanInstallLibVlc() => _libVlcComponentService is not null &&
+        !_libVlcComponentStatus.IsInstalled && _libVlcComponentStatus.State != LibVlcComponentState.RemovalPending;
+
+    private bool CanRemoveLibVlc() => _libVlcComponentService is not null &&
+        _libVlcComponentStatus.State is LibVlcComponentState.Installed or LibVlcComponentState.Invalid;
+
+    private async Task InstallLibVlcAsync()
+    {
+        if (_libVlcComponentService is null || !CanInstallLibVlc()) return;
+        LibVlcOperationStatusText = _localizationService.GetString("Status.LibVlcPreparingDownload");
+        try
+        {
+            var progress = new Progress<LibVlcInstallProgress>(UpdateLibVlcInstallProgress);
+            await _libVlcComponentService.InstallAsync(progress);
+            RefreshLibVlcComponentStatus();
+            LibVlcOperationStatusText = _libVlcComponentStatus.IsInstalled
+                ? _localizationService.GetString("Status.LibVlcInstalled")
+                : _localizationService.GetString("Status.LibVlcInstallFailed");
+        }
+        catch (Exception exception)
+        {
+            _logger?.Error("LibVLC", exception, "Installing the optional LibVLC component failed.");
+            RefreshLibVlcComponentStatus();
+            LibVlcOperationStatusText = _localizationService.Format("Status.LibVlcInstallFailedDetail", exception.Message);
+        }
+    }
+
+    private async Task RemoveLibVlcAsync()
+    {
+        if (_libVlcComponentService is null || !CanRemoveLibVlc()) return;
+        if (!_dialogService.Confirm(_localizationService.GetString("Settings.LibVlcRemoveConfirmTitle"),
+                _localizationService.GetString("Settings.LibVlcRemoveConfirmMessage"))) return;
+
+        try
+        {
+            var status = await _libVlcComponentService.RemoveAsync();
+            RefreshLibVlcComponentStatus();
+            LibVlcOperationStatusText = status.State == LibVlcComponentState.RemovalPending
+                ? _localizationService.GetString("Status.LibVlcRemovalPending")
+                : _localizationService.GetString("Status.LibVlcRemoved");
+        }
+        catch (Exception exception)
+        {
+            _logger?.Error("LibVLC", exception, "Removing the optional LibVLC component failed.");
+            LibVlcOperationStatusText = _localizationService.Format("Status.LibVlcRemoveFailed", exception.Message);
+        }
+    }
+
+    private void UpdateLibVlcInstallProgress(LibVlcInstallProgress progress)
+    {
+        LibVlcOperationStatusText = progress.Stage switch
+        {
+            "checksum" => _localizationService.GetString("Status.LibVlcCheckingPackage"),
+            "extract" => _localizationService.GetString("Status.LibVlcExtracting"),
+            "complete" => _localizationService.GetString("Status.LibVlcInstalled"),
+            _ => progress.TotalBytes is > 0
+                ? _localizationService.Format("Status.LibVlcDownloading", Math.Clamp(
+                    (int)Math.Round(progress.BytesReceived * 100d / progress.TotalBytes.Value), 0, 100))
+                : _localizationService.GetString("Status.LibVlcDownloadingUnknown")
+        };
+    }
+
+    public string GetVideoBackendProblemText(VideoBackendProblemEventArgs problem) => problem.Kind switch
+    {
+        VideoBackendProblemKind.LibVlcNotInstalled => _localizationService.GetString("Status.Mp4LibVlcNotInstalled"),
+        VideoBackendProblemKind.LibVlcUnavailable => _localizationService.GetString("Status.Mp4LibVlcUnavailable"),
+        _ => _localizationService.GetString("Status.Mp4WindowsMediaPlayerUnavailable")
+    };
+
+    public void ReportVideoBackendProblem(VideoBackendProblemEventArgs problem)
+    {
+        if (problem.Exception is not null)
+            _logger?.Error("ThemeBackground", problem.Exception, $"MP4 renderer problem: {problem.Kind}.");
+        else
+            _logger?.Warning("ThemeBackground", $"MP4 renderer problem: {problem.Kind}.");
+        StatusMessage = GetVideoBackendProblemText(problem);
+    }
+
+    private static string FormatBytes(long bytes)
+    {
+        var mebibytes = bytes / 1024d / 1024d;
+        return $"{mebibytes:0.#} MiB";
     }
 
     private void ApplyRuntimeSettings(UserSettings source)
@@ -2259,10 +2554,24 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         _userSettings.ActivityPanelHeightRatio = source.ActivityPanelHeightRatio;
         _userSettings.ShowCurrentActionState = source.ShowCurrentActionState;
         _userSettings.LaunchAtStartup = source.LaunchAtStartup;
+        _userSettings.StartMinimizedToTray = source.StartMinimizedToTray;
         _userSettings.CloseBehavior = string.Equals(source.CloseBehavior, "tray", StringComparison.OrdinalIgnoreCase)
             ? "tray" : "close";
+        _userSettings.PauseAnimatedBackgroundWhenMinimized = source.PauseAnimatedBackgroundWhenMinimized;
+        _userSettings.PauseAnimatedBackgroundWhenInactive = source.PauseAnimatedBackgroundWhenInactive;
+        _userSettings.PauseAnimatedBackgroundDuringProfileExecution = source.PauseAnimatedBackgroundDuringProfileExecution;
+        _userSettings.BackgroundPerformanceMode = BackgroundPerformanceModes.Normalize(source.BackgroundPerformanceMode);
+        _userSettings.GifFrameRateLimit = GifFrameRateLimits.Normalize(source.GifFrameRateLimit);
+        _userSettings.Mp4RendererPreference = Mp4RendererPreferences.Normalize(source.Mp4RendererPreference);
         _userSettings.AutomaticBackupEnabled = source.AutomaticBackupEnabled;
         _userSettings.AutomaticBackupCount = Math.Clamp(source.AutomaticBackupCount, 1, 50);
+        _userSettings.CreateBackupOnExit = source.CreateBackupOnExit;
+        _userSettings.HistoryRetentionDays = HistoryRetentionOptions.Normalize(source.HistoryRetentionDays);
+        _userSettings.CheckForUpdatesAtStartup = source.CheckForUpdatesAtStartup;
+        _userSettings.LastKnownLatestVersion = source.LastKnownLatestVersion;
+        _userSettings.LastKnownReleaseUrl = source.LastKnownReleaseUrl;
+        _userSettings.LastUpdateCheckUtc = source.LastUpdateCheckUtc;
+        _userSettings.LastUpdateCheckStatus = source.LastUpdateCheckStatus;
         _userSettings.RememberLastView = source.RememberLastView;
         _userSettings.LastMainView = source.LastMainView;
         _userSettings.WarnBeforeClosingWithUnsavedChanges = source.WarnBeforeClosingWithUnsavedChanges;
@@ -2319,12 +2628,24 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(InitialMainView));
         OnPropertyChanged(nameof(WarnBeforeClosingWithUnsavedChanges));
         OnPropertyChanged(nameof(IsLaunchAtStartup));
+        OnPropertyChanged(nameof(StartMinimizedToTray));
         OnPropertyChanged(nameof(CloseBehavior));
+        OnPropertyChanged(nameof(PauseAnimatedBackgroundWhenMinimized));
+        OnPropertyChanged(nameof(PauseAnimatedBackgroundWhenInactive));
+        OnPropertyChanged(nameof(PauseAnimatedBackgroundDuringProfileExecution));
+        OnPropertyChanged(nameof(BackgroundPerformanceMode));
+        OnPropertyChanged(nameof(GifFrameRateLimit));
+        OnPropertyChanged(nameof(Mp4RendererPreference));
         OnPropertyChanged(nameof(InterfaceDensity));
         OnPropertyChanged(nameof(ShowCardDetails));
         OnPropertyChanged(nameof(AutoFitWindowToBackground));
         OnPropertyChanged(nameof(AutomaticBackupEnabled));
         OnPropertyChanged(nameof(AutomaticBackupCount));
+        OnPropertyChanged(nameof(CreateBackupOnExit));
+        OnPropertyChanged(nameof(HistoryRetentionDays));
+        OnPropertyChanged(nameof(CheckForUpdatesAtStartup));
+        _activityService?.SetRetentionDays(_userSettings.HistoryRetentionDays);
+        RestorePersistedUpdateState();
         ApplyInterfaceDensityResources();
         RefreshExecutionDisplay();
         RefreshPersistentActivityViews();
@@ -2575,6 +2896,29 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
     {
         await SaveAsync();
         return !HasUnsavedChanges;
+    }
+
+    /// <summary>Receives the window lifecycle once and only exposes it as diagnostic state.</summary>
+    public void UpdateBackgroundRuntimeState(bool isVisible, bool isActive, bool isMinimized)
+    {
+        if (_backgroundWindowVisible == isVisible && _backgroundWindowActive == isActive &&
+            _backgroundWindowMinimized == isMinimized) return;
+        _backgroundWindowVisible = isVisible;
+        _backgroundWindowActive = isActive;
+        _backgroundWindowMinimized = isMinimized;
+        PerformancePanel.NotifyBackgroundStateChanged();
+    }
+
+    private BackgroundPerformanceState GetBackgroundPerformanceState()
+    {
+        var colors = FindCustomTheme(_userSettings.ThemeId)?.Colors;
+        var sourcePath = colors?.PreviewBackgroundPath;
+        if (string.IsNullOrWhiteSpace(sourcePath) && !string.IsNullOrWhiteSpace(colors?.BackgroundAssetFileName))
+            sourcePath = Path.Combine(_appDataPaths.CustomThemeDirectory, colors.BackgroundAssetFileName);
+        return new BackgroundPerformanceState(sourcePath, _backgroundWindowVisible, _backgroundWindowActive,
+            _backgroundWindowMinimized, PauseAnimatedBackgroundWhenMinimized,
+            PauseAnimatedBackgroundWhenInactive, PauseAnimatedBackgroundDuringProfileExecution,
+            IsProfileExecutionActive, BackgroundPerformanceMode);
     }
 
     public void Dispose()
@@ -3447,6 +3791,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         _userSettings.SchemaVersion = SettingsSchema.CurrentVersion;
         _userSettings.ThemeId = appliedThemeId;
         UpdateActiveThemeMarker();
+        PerformancePanel.NotifyBackgroundStateChanged();
 
         try
         {
@@ -3626,6 +3971,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
             _themeManager.ApplyTheme(fallback.Id);
             _userSettings.ThemeId = fallback.Id;
             UpdateActiveThemeMarker();
+            PerformancePanel.NotifyBackgroundStateChanged();
         }
         await SaveThemeCollectionAsync("CustomTheme.DeletedStatus");
         _themeExchangeService?.DeleteOwnedAssets(custom.Id);
@@ -3638,6 +3984,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         var custom = FindCustomTheme(option.Id);
         _userSettings.ThemeId = _themeManager.ApplyTheme(option.Id, custom?.Colors);
         UpdateActiveThemeMarker();
+        PerformancePanel.NotifyBackgroundStateChanged();
         await SaveThemeCollectionAsync(statusKey);
     }
 
@@ -3773,6 +4120,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
             OnPropertyChanged(nameof(SelectedThemeOption));
         }
         UpdateActiveThemeMarker();
+        PerformancePanel.NotifyBackgroundStateChanged();
     }
 
     private sealed record AppliedThemeSnapshot(string ThemeId, CustomThemeSettings? Colors);
@@ -3807,9 +4155,34 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         CloseBehaviorOptions[1].RefreshDisplayName(_localizationService.GetString("Settings.MinimizeToTray"));
         InterfaceDensityOptions[0].RefreshDisplayName(_localizationService.GetString("Settings.Density.Standard"));
         InterfaceDensityOptions[1].RefreshDisplayName(_localizationService.GetString("Settings.Density.Compact"));
-
+        BackgroundPerformanceModeOptions[0].RefreshDisplayName(
+            _localizationService.GetString("Settings.BackgroundPerformance.FullQuality"));
+        BackgroundPerformanceModeOptions[1].RefreshDisplayName(
+            _localizationService.GetString("Settings.BackgroundPerformance.Economy"));
+        GifFrameRateLimitOptions[0].RefreshDisplayName(_localizationService.GetString("Settings.GifFrameRate.Native"));
+        GifFrameRateLimitOptions[1].RefreshDisplayName(_localizationService.GetString("Settings.GifFrameRate.60"));
+        GifFrameRateLimitOptions[2].RefreshDisplayName(_localizationService.GetString("Settings.GifFrameRate.30"));
+        Mp4RendererPreferenceOptions[0].RefreshDisplayName(_localizationService.GetString("Settings.Mp4Renderer.Automatic"));
+        Mp4RendererPreferenceOptions[1].RefreshDisplayName(_localizationService.GetString("Settings.Mp4Renderer.WindowsMediaPlayer"));
+        Mp4RendererPreferenceOptions[2].RefreshDisplayName(_localizationService.GetString("Settings.Mp4Renderer.LibVlc"));
+        ActivityHistoryRetentionOptions[0].RefreshDisplayName(
+            _localizationService.GetString("Settings.HistoryRetention.30"));
+        ActivityHistoryRetentionOptions[1].RefreshDisplayName(
+            _localizationService.GetString("Settings.HistoryRetention.90"));
+        ActivityHistoryRetentionOptions[2].RefreshDisplayName(
+            _localizationService.GetString("Settings.HistoryRetention.365"));
+        ActivityHistoryRetentionOptions[3].RefreshDisplayName(
+            _localizationService.GetString("Settings.HistoryRetention.Unlimited"));
         RefreshExecutionDisplay();
         RefreshPersistentActivityViews();
+        OnPropertyChanged(nameof(LatestDetectedVersion));
+        OnPropertyChanged(nameof(LastUpdateCheckText));
+        OnPropertyChanged(nameof(LastSuccessfulBackupText));
+        OnPropertyChanged(nameof(LibVlcComponentStatusText));
+        OnPropertyChanged(nameof(LibVlcDownloadSizeText));
+        OnPropertyChanged(nameof(LibVlcOperationStatusText));
+        SystemPanel.NotifyLocalizationChanged();
+        PerformancePanel.NotifyLocalizationChanged();
         OnPropertyChanged(nameof(RestoreButtonText));
         if (RestoreChangeCount > 0) RestoreNoticeText = _localizationService.GetString("Restore.PreviousPending");
 

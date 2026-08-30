@@ -1,9 +1,9 @@
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using System.Windows.Media;
+using SwitchBoard.Data;
 using SwitchBoard.Themes;
 
 namespace SwitchBoard.Controls;
@@ -31,11 +31,28 @@ public partial class AnimatedBackground : UserControl, IDisposable
     public static readonly DependencyProperty ImageFlipVerticalProperty = DependencyProperty.Register(
         nameof(ImageFlipVertical), typeof(bool), typeof(AnimatedBackground),
         new PropertyMetadata(false, OnVisualPropertyChanged));
+    public static readonly DependencyProperty PauseWhenWindowMinimizedProperty = DependencyProperty.Register(
+        nameof(PauseWhenWindowMinimized), typeof(bool), typeof(AnimatedBackground),
+        new PropertyMetadata(true, OnPlaybackPropertyChanged));
+    public static readonly DependencyProperty PauseWhenWindowInactiveProperty = DependencyProperty.Register(
+        nameof(PauseWhenWindowInactive), typeof(bool), typeof(AnimatedBackground),
+        new PropertyMetadata(false, OnPlaybackPropertyChanged));
+    public static readonly DependencyProperty PauseDuringProfileExecutionProperty = DependencyProperty.Register(
+        nameof(PauseDuringProfileExecution), typeof(bool), typeof(AnimatedBackground),
+        new PropertyMetadata(false, OnPlaybackPropertyChanged));
+    public static readonly DependencyProperty IsProfileExecutionActiveProperty = DependencyProperty.Register(
+        nameof(IsProfileExecutionActive), typeof(bool), typeof(AnimatedBackground),
+        new PropertyMetadata(false, OnPlaybackPropertyChanged));
+    public static readonly DependencyProperty PerformanceModeProperty = DependencyProperty.Register(
+        nameof(PerformanceMode), typeof(string), typeof(AnimatedBackground),
+        new PropertyMetadata(BackgroundPerformanceModes.FullQuality, OnVisualPropertyChanged));
+    public static readonly DependencyProperty GifFrameRateLimitProperty = DependencyProperty.Register(
+        nameof(GifFrameRateLimit), typeof(string), typeof(AnimatedBackground),
+        new PropertyMetadata(GifFrameRateLimits.Native, OnPlaybackPropertyChanged));
 
     private readonly DispatcherTimer _timer;
     private readonly DispatcherTimer _interactionResumeTimer;
-    private readonly List<BitmapSource> _frames = [];
-    private readonly List<TimeSpan> _delays = [];
+    private ThemeImageSequence? _frames;
     private readonly ScaleTransform _flipTransform = new();
     private GifFrameSequencer? _sequencer;
     private Window? _window;
@@ -71,13 +88,24 @@ public partial class AnimatedBackground : UserControl, IDisposable
     public double GifAnimationSpeed { get => (double)GetValue(GifAnimationSpeedProperty); set => SetValue(GifAnimationSpeedProperty, value); }
     public bool ImageFlipHorizontal { get => (bool)GetValue(ImageFlipHorizontalProperty); set => SetValue(ImageFlipHorizontalProperty, value); }
     public bool ImageFlipVertical { get => (bool)GetValue(ImageFlipVerticalProperty); set => SetValue(ImageFlipVerticalProperty, value); }
+    public bool PauseWhenWindowMinimized { get => (bool)GetValue(PauseWhenWindowMinimizedProperty); set => SetValue(PauseWhenWindowMinimizedProperty, value); }
+    public bool PauseWhenWindowInactive { get => (bool)GetValue(PauseWhenWindowInactiveProperty); set => SetValue(PauseWhenWindowInactiveProperty, value); }
+    public bool PauseDuringProfileExecution { get => (bool)GetValue(PauseDuringProfileExecutionProperty); set => SetValue(PauseDuringProfileExecutionProperty, value); }
+    public bool IsProfileExecutionActive { get => (bool)GetValue(IsProfileExecutionActiveProperty); set => SetValue(IsProfileExecutionActiveProperty, value); }
+    public string PerformanceMode { get => (string)GetValue(PerformanceModeProperty); set => SetValue(PerformanceModeProperty, value); }
+    public string GifFrameRateLimit { get => (string)GetValue(GifFrameRateLimitProperty); set => SetValue(GifFrameRateLimitProperty, value); }
 
     public event EventHandler<BackgroundNativeSizeChangedEventArgs>? NativeSizeAvailable;
 
-    internal int DecodedFrameCount => _frames.Count;
+    internal int DecodedFrameCount => _frames?.Count ?? 0;
     internal bool IsAnimationRunning => _isAnimationRunning;
     internal bool IsInteractionSuspended => _isInteractionSuspended;
-    internal bool AreDecodedFramesFrozen => _frames.All(frame => frame.IsFrozen);
+    internal bool IsExternalPauseRequested =>
+        (PauseDuringProfileExecution && IsProfileExecutionActive) ||
+        (_window is not null && ((PauseWhenWindowMinimized && _window.WindowState == WindowState.Minimized) ||
+                                 (PauseWhenWindowInactive && !_window.IsActive)));
+    internal bool AreDecodedFramesFrozen => _frames?.AreMaterializedFramesFrozen ?? true;
+    internal bool UsesStreamingFrameStorage => _frames?.UsesStreamingStorage ?? false;
 
     private static void OnImagePropertyChanged(DependencyObject value, DependencyPropertyChangedEventArgs args)
     {
@@ -106,6 +134,8 @@ public partial class AnimatedBackground : UserControl, IDisposable
         if (_window is not null)
         {
             _window.StateChanged += WindowOnStateChanged;
+            _window.Activated += WindowOnActivationChanged;
+            _window.Deactivated += WindowOnActivationChanged;
             _window.PreviewMouseWheel += WindowOnPreviewMouseWheel;
             _window.SizeChanged += WindowOnSizeChanged;
         }
@@ -122,12 +152,13 @@ public partial class AnimatedBackground : UserControl, IDisposable
 
     private void OnIsVisibleChanged(object sender, DependencyPropertyChangedEventArgs e) => UpdateAnimationState();
     private void WindowOnStateChanged(object? sender, EventArgs e) => UpdateAnimationState();
+    private void WindowOnActivationChanged(object? sender, EventArgs e) => UpdateAnimationState();
 
     private void Reload()
     {
         if (!IsLoaded || _disposed) return;
         var sourcePath = BackgroundSourcePath.NormalizeExisting(SourcePath);
-        if (_frames.Count > 0 && BackgroundSourcePath.Equals(sourcePath, _loadedSourcePath))
+        if ((_frames?.Count ?? 0) > 0 && BackgroundSourcePath.Equals(sourcePath, _loadedSourcePath))
         {
             ApplyVisualSettings();
             UpdateAnimationState();
@@ -140,17 +171,12 @@ public partial class AnimatedBackground : UserControl, IDisposable
         if (sourcePath is null) return;
         try
         {
-            foreach (var frame in ThemeImageLoader.Load(sourcePath))
-            {
-                _frames.Add(frame.Source);
-                _delays.Add(frame.Delay);
-            }
+            _frames = ThemeImageLoader.Load(sourcePath);
             _loadedSourcePath = sourcePath;
             if (_frames.Count > 0)
             {
-                var frame = _frames[0];
                 NativeSizeAvailable?.Invoke(this, new BackgroundNativeSizeChangedEventArgs(
-                    new BackgroundNativeSize(sourcePath, frame.PixelWidth, frame.PixelHeight)));
+                    new BackgroundNativeSize(sourcePath, _frames.PixelWidth, _frames.PixelHeight)));
             }
             RestartPlayback();
         }
@@ -165,6 +191,9 @@ public partial class AnimatedBackground : UserControl, IDisposable
     {
         FrameBrush.Stretch = ImageStretch;
         ImageElement.Opacity = Math.Clamp(ImageOpacity, 0, 1);
+        RenderOptions.SetBitmapScalingMode(ImageElement,
+            BackgroundPerformanceModes.Normalize(PerformanceMode) == BackgroundPerformanceModes.Economy
+                ? BitmapScalingMode.LowQuality : BitmapScalingMode.HighQuality);
         _flipTransform.ScaleX = ImageFlipHorizontal ? -1 : 1;
         _flipTransform.ScaleY = ImageFlipVertical ? -1 : 1;
         UpdateAnimationState();
@@ -172,18 +201,30 @@ public partial class AnimatedBackground : UserControl, IDisposable
 
     private void TimerOnTick(object? sender, EventArgs e)
     {
-        if (_frames.Count <= 1 || _sequencer is null) { StopAnimation(); return; }
-        FrameBrush.ImageSource = _frames[_sequencer.MoveNext()];
-        _timer.Interval = _sequencer.GetCurrentDelay(_delays, GifAnimationSpeed);
+        var frames = _frames;
+        if (frames is null || frames.Count <= 1 || _sequencer is null) { StopAnimation(); return; }
+        try
+        {
+            FrameBrush.ImageSource = frames[_sequencer.MoveNext()].Source;
+            _timer.Interval = GetFrameDelay();
+        }
+        catch (Exception exception) when (exception is IOException or NotSupportedException or InvalidOperationException)
+        {
+            StopAnimation();
+            ClearFrames();
+        }
     }
 
     private void UpdateAnimationState()
     {
-        var shouldRun = _frames.Count > 1 && ImageOpacity > 0 && IsVisible && !_isInteractionSuspended &&
-                        (_window is null || _window.IsVisible && _window.WindowState != WindowState.Minimized);
+        var shouldRun = (_frames?.Count ?? 0) > 1 && ImageOpacity > 0 && IsVisible && !_isInteractionSuspended &&
+                        (!PauseDuringProfileExecution || !IsProfileExecutionActive) &&
+                        (_window is null || (_window.IsVisible &&
+                            (!PauseWhenWindowMinimized || _window.WindowState != WindowState.Minimized) &&
+                            (!PauseWhenWindowInactive || _window.IsActive)));
         if (shouldRun)
         {
-            _timer.Interval = _sequencer?.GetCurrentDelay(_delays, GifAnimationSpeed) ?? TimeSpan.FromMilliseconds(100);
+            _timer.Interval = GetFrameDelay();
             StartAnimation();
         }
         else StopAnimation();
@@ -192,16 +233,17 @@ public partial class AnimatedBackground : UserControl, IDisposable
     private void RestartPlayback()
     {
         StopAnimation();
-        _sequencer = new GifFrameSequencer(_frames.Count, GifAnimationDirection);
-        if (_frames.Count > 0) FrameBrush.ImageSource = _frames[_sequencer.CurrentIndex];
+        var frameCount = _frames?.Count ?? 0;
+        _sequencer = new GifFrameSequencer(frameCount, GifAnimationDirection);
+        if (frameCount > 0) FrameBrush.ImageSource = _frames![_sequencer.CurrentIndex].Source;
         UpdateAnimationState();
     }
 
     private void ClearFrames()
     {
         FrameBrush.ImageSource = null;
-        _frames.Clear();
-        _delays.Clear();
+        _frames?.Dispose();
+        _frames = null;
         _sequencer = null;
         _loadedSourcePath = null;
     }
@@ -231,11 +273,20 @@ public partial class AnimatedBackground : UserControl, IDisposable
         if (_window is not null)
         {
             _window.StateChanged -= WindowOnStateChanged;
+            _window.Activated -= WindowOnActivationChanged;
+            _window.Deactivated -= WindowOnActivationChanged;
             _window.PreviewMouseWheel -= WindowOnPreviewMouseWheel;
             _window.SizeChanged -= WindowOnSizeChanged;
         }
         _window = null;
     }
+
+    private TimeSpan GetFrameDelay() => _sequencer is null || _frames is null || _frames.Count == 0
+        ? TimeSpan.FromMilliseconds(100)
+        : GifFrameRateLimits.Apply(GifFrameRateLimit,
+            GifAnimationTiming.ScaleDelay(
+                _frames[Math.Clamp(_sequencer.CurrentIndex, 0, _frames.Count - 1)].Delay,
+                GifAnimationSpeed));
 
     private void WindowOnPreviewMouseWheel(object sender, System.Windows.Input.MouseWheelEventArgs e) =>
         SuspendForInteraction();
@@ -244,7 +295,7 @@ public partial class AnimatedBackground : UserControl, IDisposable
 
     internal void SuspendForInteraction()
     {
-        if (_disposed || !IsLoaded || _frames.Count <= 1) return;
+        if (_disposed || !IsLoaded || (_frames?.Count ?? 0) <= 1) return;
         _isInteractionSuspended = true;
         StopAnimation();
         _interactionResumeTimer.Stop();

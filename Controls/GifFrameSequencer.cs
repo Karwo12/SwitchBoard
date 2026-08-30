@@ -3,7 +3,7 @@ using SwitchBoard.Themes;
 namespace SwitchBoard.Controls;
 
 /// <summary>
-/// Selects the next already-decoded GIF frame without allocating or copying frames.
+/// Selects the next GIF frame index without owning media, timers or decoder state.
 /// </summary>
 internal sealed class GifFrameSequencer
 {

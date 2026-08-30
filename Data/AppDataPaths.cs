@@ -32,4 +32,14 @@ public sealed class AppDataPaths
     public string AutoBackupsDirectory => Path.Combine(RootDirectory, "backups", "automatic");
 
     public string LogsDirectory => Path.Combine(RootDirectory, "logs");
+
+    /// <summary>
+    /// Components deliberately installed by the user. They are outside the
+    /// application publish directory so the portable base package stays small.
+    /// </summary>
+    public string OptionalComponentsDirectory => Path.Combine(RootDirectory, "components");
+
+    public string LibVlcComponentDirectory => Path.Combine(OptionalComponentsDirectory, "libvlc");
+
+    public string LibVlcRemovalMarkerPath => Path.Combine(OptionalComponentsDirectory, "libvlc.remove-on-next-startup");
 }

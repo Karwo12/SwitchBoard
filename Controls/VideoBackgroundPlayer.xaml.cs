@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
+using SwitchBoard.Data;
 using SwitchBoard.Themes;
 
 namespace SwitchBoard.Controls;
@@ -12,7 +13,7 @@ namespace SwitchBoard.Controls;
 /// Renders an MP4 through WPF's native MediaPlayer. The player is closed whenever
 /// its source changes or the control unloads, so it does not retain media handles.
 /// </summary>
-public partial class VideoBackgroundPlayer : UserControl, IDisposable
+public partial class VideoBackgroundPlayer : UserControl, IVideoBackgroundRenderer
 {
     public static readonly DependencyProperty SourcePathProperty = DependencyProperty.Register(
         nameof(SourcePath), typeof(string), typeof(VideoBackgroundPlayer),
@@ -35,6 +36,21 @@ public partial class VideoBackgroundPlayer : UserControl, IDisposable
     public static readonly DependencyProperty ImageFlipVerticalProperty = DependencyProperty.Register(
         nameof(ImageFlipVertical), typeof(bool), typeof(VideoBackgroundPlayer),
         new PropertyMetadata(false, OnVisualChanged));
+    public static readonly DependencyProperty PauseWhenWindowMinimizedProperty = DependencyProperty.Register(
+        nameof(PauseWhenWindowMinimized), typeof(bool), typeof(VideoBackgroundPlayer),
+        new PropertyMetadata(true, OnPlaybackChanged));
+    public static readonly DependencyProperty PauseWhenWindowInactiveProperty = DependencyProperty.Register(
+        nameof(PauseWhenWindowInactive), typeof(bool), typeof(VideoBackgroundPlayer),
+        new PropertyMetadata(false, OnPlaybackChanged));
+    public static readonly DependencyProperty PauseDuringProfileExecutionProperty = DependencyProperty.Register(
+        nameof(PauseDuringProfileExecution), typeof(bool), typeof(VideoBackgroundPlayer),
+        new PropertyMetadata(false, OnPlaybackChanged));
+    public static readonly DependencyProperty IsProfileExecutionActiveProperty = DependencyProperty.Register(
+        nameof(IsProfileExecutionActive), typeof(bool), typeof(VideoBackgroundPlayer),
+        new PropertyMetadata(false, OnPlaybackChanged));
+    public static readonly DependencyProperty PerformanceModeProperty = DependencyProperty.Register(
+        nameof(PerformanceMode), typeof(string), typeof(VideoBackgroundPlayer),
+        new PropertyMetadata(BackgroundPerformanceModes.FullQuality, OnVisualChanged));
 
     private MediaPlayer? _player;
     private readonly DispatcherTimer _interactionResumeTimer;
@@ -71,12 +87,24 @@ public partial class VideoBackgroundPlayer : UserControl, IDisposable
     public bool AudioEnabled { get => (bool)GetValue(AudioEnabledProperty); set => SetValue(AudioEnabledProperty, value); }
     public bool ImageFlipHorizontal { get => (bool)GetValue(ImageFlipHorizontalProperty); set => SetValue(ImageFlipHorizontalProperty, value); }
     public bool ImageFlipVertical { get => (bool)GetValue(ImageFlipVerticalProperty); set => SetValue(ImageFlipVerticalProperty, value); }
+    public bool PauseWhenWindowMinimized { get => (bool)GetValue(PauseWhenWindowMinimizedProperty); set => SetValue(PauseWhenWindowMinimizedProperty, value); }
+    public bool PauseWhenWindowInactive { get => (bool)GetValue(PauseWhenWindowInactiveProperty); set => SetValue(PauseWhenWindowInactiveProperty, value); }
+    public bool PauseDuringProfileExecution { get => (bool)GetValue(PauseDuringProfileExecutionProperty); set => SetValue(PauseDuringProfileExecutionProperty, value); }
+    public bool IsProfileExecutionActive { get => (bool)GetValue(IsProfileExecutionActiveProperty); set => SetValue(IsProfileExecutionActiveProperty, value); }
+    public string PerformanceMode { get => (string)GetValue(PerformanceModeProperty); set => SetValue(PerformanceModeProperty, value); }
 
     public event EventHandler<BackgroundNativeSizeChangedEventArgs>? NativeSizeAvailable;
+    public event EventHandler<VideoPlaybackFailedEventArgs>? PlaybackFailed;
+
+    public FrameworkElement View => this;
 
     internal bool IsPlaybackRequested => _playbackRequested;
     internal bool IsPlaying => _isPlaying;
     internal bool IsInteractionSuspended => _isInteractionSuspended;
+    internal bool IsExternalPauseRequested =>
+        (PauseDuringProfileExecution && IsProfileExecutionActive) ||
+        (_window is not null && ((PauseWhenWindowMinimized && _window.WindowState == WindowState.Minimized) ||
+                                 (PauseWhenWindowInactive && !_window.IsActive)));
 
     private static void OnSourceChanged(DependencyObject value, DependencyPropertyChangedEventArgs args)
     {
@@ -105,6 +133,8 @@ public partial class VideoBackgroundPlayer : UserControl, IDisposable
         if (_window is not null)
         {
             _window.StateChanged += WindowOnStateChanged;
+            _window.Activated += WindowOnActivationChanged;
+            _window.Deactivated += WindowOnActivationChanged;
             _window.PreviewMouseWheel += WindowOnPreviewMouseWheel;
             _window.SizeChanged += WindowOnSizeChanged;
         }
@@ -120,6 +150,7 @@ public partial class VideoBackgroundPlayer : UserControl, IDisposable
 
     private void OnIsVisibleChanged(object sender, DependencyPropertyChangedEventArgs e) => UpdatePlaybackState();
     private void WindowOnStateChanged(object? sender, EventArgs e) => UpdatePlaybackState();
+    private void WindowOnActivationChanged(object? sender, EventArgs e) => UpdatePlaybackState();
 
     private void Reload()
     {
@@ -156,6 +187,7 @@ public partial class VideoBackgroundPlayer : UserControl, IDisposable
         {
             App.Logger?.Error("ThemeBackground", exception,
                 $"MP4 background '{Path.GetFileName(sourcePath)}' could not be opened.");
+            PlaybackFailed?.Invoke(this, new VideoPlaybackFailedEventArgs(sourcePath, exception));
             ReleasePlayer();
         }
     }
@@ -205,6 +237,7 @@ public partial class VideoBackgroundPlayer : UserControl, IDisposable
         if (!ReferenceEquals(sender, _player)) return;
         App.Logger?.Error("ThemeBackground", e.ErrorException,
             $"MP4 background '{Path.GetFileName(SourcePath)}' could not be decoded or played.");
+        PlaybackFailed?.Invoke(this, new VideoPlaybackFailedEventArgs(_openedSourcePath ?? SourcePath, e.ErrorException));
         ReleasePlayer();
     }
 
@@ -212,6 +245,9 @@ public partial class VideoBackgroundPlayer : UserControl, IDisposable
     {
         ImageElement.Stretch = ImageStretch;
         ImageElement.Opacity = Math.Clamp(ImageOpacity, 0, 1);
+        RenderOptions.SetBitmapScalingMode(ImageElement,
+            BackgroundPerformanceModes.Normalize(PerformanceMode) == BackgroundPerformanceModes.Economy
+                ? BitmapScalingMode.LowQuality : BitmapScalingMode.HighQuality);
         ImageElement.HorizontalAlignment = ImageStretch == Stretch.None ? HorizontalAlignment.Center : HorizontalAlignment.Stretch;
         ImageElement.VerticalAlignment = ImageStretch == Stretch.None ? VerticalAlignment.Center : VerticalAlignment.Stretch;
         _flipTransform.ScaleX = ImageFlipHorizontal ? -1 : 1;
@@ -228,7 +264,10 @@ public partial class VideoBackgroundPlayer : UserControl, IDisposable
     private void UpdatePlaybackState()
     {
         var shouldPlay = IsLoaded && ImageOpacity > 0 && IsVisible && !_isInteractionSuspended &&
-                         (_window is null || _window.IsVisible && _window.WindowState != WindowState.Minimized);
+                         (!PauseDuringProfileExecution || !IsProfileExecutionActive) &&
+                         (_window is null || (_window.IsVisible &&
+                             (!PauseWhenWindowMinimized || _window.WindowState != WindowState.Minimized) &&
+                             (!PauseWhenWindowInactive || _window.IsActive)));
         _playbackRequested = shouldPlay;
         if (_player is null || !_mediaOpened) return;
         if (shouldPlay == _isPlaying) return;
@@ -277,6 +316,8 @@ public partial class VideoBackgroundPlayer : UserControl, IDisposable
         if (_window is not null)
         {
             _window.StateChanged -= WindowOnStateChanged;
+            _window.Activated -= WindowOnActivationChanged;
+            _window.Deactivated -= WindowOnActivationChanged;
             _window.PreviewMouseWheel -= WindowOnPreviewMouseWheel;
             _window.SizeChanged -= WindowOnSizeChanged;
         }
@@ -289,7 +330,7 @@ public partial class VideoBackgroundPlayer : UserControl, IDisposable
 
     internal void SuspendForInteraction()
     {
-        if (_disposed || !IsLoaded || _player is null) return;
+        if (_disposed || !IsLoaded) return;
         _isInteractionSuspended = true;
         UpdatePlaybackState();
         _interactionResumeTimer.Stop();
@@ -306,6 +347,16 @@ public partial class VideoBackgroundPlayer : UserControl, IDisposable
         _interactionResumeTimer.Stop();
         _isInteractionSuspended = false;
         UpdatePlaybackState();
+    }
+
+    public void Refresh() => Reload();
+
+    public bool TryAttachOverlay(UIElement overlay) => false;
+
+    public void DetachOverlay(UIElement overlay)
+    {
+        // The WPF MediaPlayer is drawn through an Image and has no HWND airspace
+        // limitation, so ThemeBackground keeps its normal overlay in place.
     }
 
     private void CancelInteractionSuspension()

@@ -3,6 +3,7 @@ using SwitchBoard.Controls;
 
 namespace SwitchBoard.RuntimeTests.Themes;
 
+[Collection("Windows runtime")]
 public sealed class NativeBackgroundDimensionTests
 {
     [Fact]
@@ -59,6 +60,11 @@ public sealed class NativeBackgroundDimensionTests
         {
             try { action(); }
             catch (Exception exception) { error = exception; }
+            finally
+            {
+                var dispatcher = System.Windows.Threading.Dispatcher.FromThread(Thread.CurrentThread);
+                if (dispatcher is { HasShutdownStarted: false }) dispatcher.InvokeShutdown();
+            }
         });
         thread.SetApartmentState(ApartmentState.STA);
         thread.Start();

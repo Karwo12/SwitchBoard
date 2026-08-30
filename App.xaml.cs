@@ -20,7 +20,9 @@ using SwitchBoard.Services.Activity;
 using SwitchBoard.Services.Monitoring;
 using SwitchBoard.Models.Actions;
 using SwitchBoard.Services.Updates;
+using SwitchBoard.Services.Media;
 using System.Net.Http;
+using System.Reflection;
 
 namespace SwitchBoard;
 
@@ -35,9 +37,11 @@ public partial class App : Application
     private LocalizationService? _localizationService;
     private IAppLogger? _logger;
     private HttpClient? _httpClient;
+    private HttpClient? _libVlcHttpClient;
     private SingleInstanceCoordinator? _singleInstance;
 
     internal static IAppLogger? Logger { get; private set; }
+    internal static LibVlcPluginLoader? LibVlcPluginLoader { get; private set; }
 
     protected override async void OnStartup(StartupEventArgs e)
     {
@@ -65,6 +69,7 @@ public partial class App : Application
 
             var paths = new AppDataPaths();
             _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+            _libVlcHttpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(30) };
             _logger = new RollingFileLogger(paths);
             Logger = _logger;
             _logger.Info("Startup", "SwitchBoard startup began.");
@@ -163,6 +168,10 @@ public partial class App : Application
             var programDiscoveryService = new WindowsProgramDiscoveryService();
             var statusMonitoring = new StatusMonitoringService(windowsServiceManager, powerPlanManager, displayManager,
                 audioManager, deviceManager, processDiscoveryService, _localizationService);
+            var appVersion = Assembly.GetExecutingAssembly().GetName().Version ?? new Version(0, 0, 0);
+            var libVlcComponentService = new LibVlcComponentService(paths, _libVlcHttpClient,
+                LibVlcComponentDescriptor.ForApplicationVersion(appVersion));
+            LibVlcPluginLoader = new LibVlcPluginLoader(libVlcComponentService);
             viewModel = new MainWindowViewModel(
                 catalogService,
                 new WpfUserDialogService(
@@ -186,7 +195,8 @@ public partial class App : Application
                 displayManager,
                 new WpfCustomThemeEditorService(paths, _localizationService),
                 activityService, statusMonitoring, new ThemeExchangeService(paths), paths, startupRegistrationService,
-                new GitHubReleaseUpdateService(_httpClient), _logger);
+                new GitHubReleaseUpdateService(_httpClient), _logger, new PerformanceMonitoringService(),
+                libVlcComponentService);
 
             var window = new MainWindow(viewModel);
             MainWindow = window;
@@ -212,8 +222,10 @@ public partial class App : Application
         _settingsRepository?.Dispose();
         _sessionRepository?.Dispose();
         _httpClient?.Dispose();
+        _libVlcHttpClient?.Dispose();
         _singleInstance?.Dispose();
         _singleInstance = null;
+        LibVlcPluginLoader = null;
         Logger = null;
         base.OnExit(e);
     }
