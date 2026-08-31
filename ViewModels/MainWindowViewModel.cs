@@ -121,9 +121,6 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
     private bool _statusRefreshQueued;
     private string _statusRefreshText = string.Empty;
     private DispatcherTimer? _statusMonitorTimer;
-    private bool _backgroundWindowVisible = true;
-    private bool _backgroundWindowActive = true;
-    private bool _backgroundWindowMinimized;
     private bool _isRestoringSelection;
     private CancellationTokenSource? _settingsSaveDebounce;
     private Task? _settingsSaveTask;
@@ -214,7 +211,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         PerformancePanel = new PerformancePanelViewModel(
             performanceMonitoring ?? new PerformanceMonitoringService(),
             () => _allProfiles.SelectMany(profile => EnumerateActions(profile.Actions)),
-            GetBackgroundPerformanceState, localizationService, logger,
+            localizationService, logger,
             Application.Current?.Dispatcher ?? Dispatcher.CurrentDispatcher);
 
         Profiles = [];
@@ -703,7 +700,6 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
             if (_userSettings.PauseAnimatedBackgroundWhenMinimized == value) return;
             _userSettings.PauseAnimatedBackgroundWhenMinimized = value;
             OnPropertyChanged();
-            PerformancePanel.NotifyBackgroundStateChanged();
             ScheduleSettingsSave();
         }
     }
@@ -716,7 +712,6 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
             if (_userSettings.PauseAnimatedBackgroundWhenInactive == value) return;
             _userSettings.PauseAnimatedBackgroundWhenInactive = value;
             OnPropertyChanged();
-            PerformancePanel.NotifyBackgroundStateChanged();
             ScheduleSettingsSave();
         }
     }
@@ -729,7 +724,6 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
             if (_userSettings.PauseAnimatedBackgroundDuringProfileExecution == value) return;
             _userSettings.PauseAnimatedBackgroundDuringProfileExecution = value;
             OnPropertyChanged();
-            PerformancePanel.NotifyBackgroundStateChanged();
             ScheduleSettingsSave();
         }
     }
@@ -743,7 +737,6 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
             if (string.Equals(_userSettings.BackgroundPerformanceMode, normalized, StringComparison.Ordinal)) return;
             _userSettings.BackgroundPerformanceMode = normalized;
             OnPropertyChanged();
-            PerformancePanel.NotifyBackgroundStateChanged();
             ScheduleSettingsSave();
         }
     }
@@ -1198,7 +1191,6 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
                 OnPropertyChanged(nameof(IsCancellationAvailable));
                 OnPropertyChanged(nameof(IsProfileExecutionActive));
                 OnPropertyChanged(nameof(RunAvailabilityMessage));
-                PerformancePanel.NotifyBackgroundStateChanged();
             }
         }
     }
@@ -1267,7 +1259,6 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
             OnPropertyChanged(nameof(IsProfileExecutionActive));
             OnPropertyChanged(nameof(RunAvailabilityMessage));
             OnPropertyChanged(nameof(HasRunValidationIssue));
-            PerformancePanel.NotifyBackgroundStateChanged();
         }
     }
 
@@ -3124,29 +3115,6 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         return !HasUnsavedChanges;
     }
 
-    /// <summary>Receives the window lifecycle once and only exposes it as diagnostic state.</summary>
-    public void UpdateBackgroundRuntimeState(bool isVisible, bool isActive, bool isMinimized)
-    {
-        if (_backgroundWindowVisible == isVisible && _backgroundWindowActive == isActive &&
-            _backgroundWindowMinimized == isMinimized) return;
-        _backgroundWindowVisible = isVisible;
-        _backgroundWindowActive = isActive;
-        _backgroundWindowMinimized = isMinimized;
-        PerformancePanel.NotifyBackgroundStateChanged();
-    }
-
-    private BackgroundPerformanceState GetBackgroundPerformanceState()
-    {
-        var colors = FindCustomTheme(_userSettings.ThemeId)?.Colors;
-        var sourcePath = colors?.PreviewBackgroundPath;
-        if (string.IsNullOrWhiteSpace(sourcePath) && !string.IsNullOrWhiteSpace(colors?.BackgroundAssetFileName))
-            sourcePath = Path.Combine(_appDataPaths.CustomThemeDirectory, colors.BackgroundAssetFileName);
-        return new BackgroundPerformanceState(sourcePath, _backgroundWindowVisible, _backgroundWindowActive,
-            _backgroundWindowMinimized, PauseAnimatedBackgroundWhenMinimized,
-            PauseAnimatedBackgroundWhenInactive, PauseAnimatedBackgroundDuringProfileExecution,
-            IsProfileExecutionActive, BackgroundPerformanceMode);
-    }
-
     public void Dispose()
     {
         if (_disposed) return;
@@ -4026,7 +3994,6 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         _userSettings.SchemaVersion = SettingsSchema.CurrentVersion;
         _userSettings.ThemeId = appliedThemeId;
         UpdateActiveThemeMarker();
-        PerformancePanel.NotifyBackgroundStateChanged();
 
         try
         {
@@ -4206,7 +4173,6 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
             _themeManager.ApplyTheme(fallback.Id);
             _userSettings.ThemeId = fallback.Id;
             UpdateActiveThemeMarker();
-            PerformancePanel.NotifyBackgroundStateChanged();
         }
         await SaveThemeCollectionAsync("CustomTheme.DeletedStatus");
         _themeExchangeService?.DeleteOwnedAssets(custom.Id);
@@ -4219,7 +4185,6 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         var custom = FindCustomTheme(option.Id);
         _userSettings.ThemeId = _themeManager.ApplyTheme(option.Id, custom?.Colors);
         UpdateActiveThemeMarker();
-        PerformancePanel.NotifyBackgroundStateChanged();
         await SaveThemeCollectionAsync(statusKey);
     }
 
@@ -4355,7 +4320,6 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
             OnPropertyChanged(nameof(SelectedThemeOption));
         }
         UpdateActiveThemeMarker();
-        PerformancePanel.NotifyBackgroundStateChanged();
     }
 
     private sealed record AppliedThemeSnapshot(string ThemeId, CustomThemeSettings? Colors);

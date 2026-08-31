@@ -38,6 +38,9 @@ public sealed class PerformancePanelLifecycleTests
         var source = File.ReadAllText(FindSourceFile("ViewModels", "Panels", "PerformancePanelViewModel.cs"));
 
         Assert.Contains("BuildDisplaySnapshots(children)", source, StringComparison.Ordinal);
+        Assert.Contains("BuildGroupProcessCounts(children)", source, StringComparison.Ordinal);
+        Assert.Contains("CountGroupProcesses", source, StringComparison.Ordinal);
+        Assert.Contains("DisplayName => IsGroup && _groupProcessCount > 1", source, StringComparison.Ordinal);
         Assert.Contains("CompareMetric", source, StringComparison.Ordinal);
         Assert.Contains("ResolveIconPath", source, StringComparison.Ordinal);
         Assert.DoesNotContain("Take(MaximumVisibleRows)", source, StringComparison.Ordinal);
@@ -46,14 +49,39 @@ public sealed class PerformancePanelLifecycleTests
 
     [Fact]
     [Trait("Category", "Regression")]
-    public void PerformancePanel_ReattachesProcessVisualsAfterThePanelIsLoadedAgain()
+    public void PerformancePanel_MeasurementUsesTheCurrentSortAndTracksVram()
+    {
+        var source = File.ReadAllText(FindSourceFile("ViewModels", "Panels", "PerformancePanelViewModel.cs"));
+
+        Assert.Contains("results.Sort(CompareMeasurement);", source, StringComparison.Ordinal);
+        Assert.Contains("PeakVramBytes", source, StringComparison.Ordinal);
+        Assert.Contains("VramBytes", source, StringComparison.Ordinal);
+        Assert.Contains("MeasurementSortText", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [Trait("Category", "Regression")]
+    public void PerformancePanel_UsesDeclarativeProcessVisualsWithoutVisualTreeMutation()
     {
         var source = File.ReadAllText(FindSourceFile("Views", "Panels", "PerformancePanel.xaml.cs"));
 
-        Assert.Contains("AttachProcessItemsHandlers();", source, StringComparison.Ordinal);
-        Assert.Contains("DetachProcessItemsHandlers();", source, StringComparison.Ordinal);
-        Assert.Contains("new Binding(\"IsGroup\")", source, StringComparison.Ordinal);
-        Assert.Contains("ProcessIconTag", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("VisualTreeHelper", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("ItemContainerGenerator", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("ProcessIconTag", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public void ProcessGroup_DisplayNameIncludesItsRecursiveProcessCountOnlyForGroups()
+    {
+        var snapshot = new SwitchBoard.Services.Monitoring.PerformanceProcessSnapshot(42, null, "chrome", null,
+            null, null, null, null, false);
+
+        var group = new SwitchBoard.ViewModels.Panels.PerformanceProcessRowViewModel(snapshot, 0, 3, 15, true, false);
+        var single = new SwitchBoard.ViewModels.Panels.PerformanceProcessRowViewModel(snapshot, 0, 0, 1, false, false);
+
+        Assert.Equal("chrome (15)", group.DisplayName);
+        Assert.Equal("chrome", single.DisplayName);
     }
 
     private static string FindSourceFile(params string[] relativePath)

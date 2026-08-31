@@ -16,7 +16,6 @@ public sealed class PerformancePanelViewModel : ObservableObject, IDisposable
 {
     private readonly PerformanceMonitoringService _monitoring;
     private readonly Func<IEnumerable<ActionItemViewModel>> _actions;
-    private readonly Func<BackgroundPerformanceState> _backgroundState;
     private readonly ILocalizationService _localization;
     private readonly IAppLogger? _logger;
     private readonly DispatcherTimer _timer;
@@ -37,9 +36,9 @@ public sealed class PerformancePanelViewModel : ObservableObject, IDisposable
     private DateTimeOffset? _lastMeasurementSampleAt;
 
     public PerformancePanelViewModel(PerformanceMonitoringService monitoring, Func<IEnumerable<ActionItemViewModel>> actions,
-        Func<BackgroundPerformanceState> backgroundState, ILocalizationService localization, IAppLogger? logger, Dispatcher dispatcher)
+        ILocalizationService localization, IAppLogger? logger, Dispatcher dispatcher)
     {
-        _monitoring = monitoring; _actions = actions; _backgroundState = backgroundState; _localization = localization; _logger = logger;
+        _monitoring = monitoring; _actions = actions; _localization = localization; _logger = logger;
         PerformanceProcesses = []; MeasurementResults = [];
         _timer = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background, PerformanceTimerOnTick, dispatcher);
         _timer.Stop();
@@ -75,19 +74,16 @@ public sealed class PerformancePanelViewModel : ObservableObject, IDisposable
     public string PerformanceUploadText => PerformanceFormatting.Rate(_snapshot?.UploadBytesPerSecond);
     public string PerformanceGpuText => PerformanceFormatting.Percent(_snapshot?.GpuPercent);
     public string PerformanceVramText => FormatUsage(_snapshot?.VramUsedBytes, _snapshot?.VramTotalBytes);
-    public string SwitchBoardCpuText => PerformanceFormatting.Percent(_snapshot?.SwitchBoardProcess?.CpuPercent);
-    public string SwitchBoardMemoryText => PerformanceFormatting.Bytes(_snapshot?.SwitchBoardProcess?.WorkingSetBytes);
-    public string SwitchBoardGpuText => PerformanceFormatting.Percent(_snapshot?.SwitchBoardProcess?.GpuPercent);
-    public string CurrentBackgroundKindText => BackgroundAssetKinds.Detect(_backgroundState().SourcePath) switch { BackgroundAssetKind.Gif => _localization.GetString("Performance.Background.Gif"), BackgroundAssetKind.Video => _localization.GetString("Performance.Background.Mp4"), _ => _localization.GetString("Performance.Background.Static") };
-    public string BackgroundPlaybackStateText { get { var state = _backgroundState(); var kind = BackgroundAssetKinds.Detect(state.SourcePath); var paused = !state.WindowVisible || (state.PauseWhenMinimized && state.WindowMinimized) || (state.PauseWhenInactive && !state.WindowActive) || (state.PauseDuringProfileExecution && state.ProfileExecutionActive); return kind is not (BackgroundAssetKind.Gif or BackgroundAssetKind.Video) ? _localization.GetString("Performance.Background.NotAnimated") : _localization.GetString(paused ? "Performance.Background.Paused" : "Performance.Background.Active"); } }
-    public string BackgroundQualityText => string.Equals(_backgroundState().PerformanceMode, BackgroundPerformanceModes.Economy, StringComparison.OrdinalIgnoreCase) ? _localization.GetString("Settings.BackgroundPerformance.Economy") : _localization.GetString("Settings.BackgroundPerformance.FullQuality");
-    public string SortNameIndicator => SortIndicator("name"); public string SortCpuIndicator => SortIndicator("cpu"); public string SortMemoryIndicator => SortIndicator("memory"); public string SortDiskIndicator => SortIndicator("disk"); public string SortNetworkIndicator => SortIndicator("network"); public string SortGpuIndicator => SortIndicator("gpu"); public string SortVramIndicator => SortIndicator("vram");
+    public string SortNameIndicator => SortIndicator("name"); public string SortCpuIndicator => SortIndicator("cpu"); public string SortMemoryIndicator => SortIndicator("memory"); public string SortDiskIndicator => SortIndicator("disk"); public string SortGpuIndicator => SortIndicator("gpu"); public string SortVramIndicator => SortIndicator("vram");
+    public bool IsSortNameActive => IsSortActive("name"); public bool IsSortCpuActive => IsSortActive("cpu"); public bool IsSortMemoryActive => IsSortActive("memory"); public bool IsSortDiskActive => IsSortActive("disk"); public bool IsSortGpuActive => IsSortActive("gpu"); public bool IsSortVramActive => IsSortActive("vram");
+    public string MeasurementSortText => _localization.Format("Performance.Measurement.SortingBy", SortColumnText(),
+        _localization.GetString(_sortDescending ? "Performance.Sort.Descending" : "Performance.Sort.Ascending"));
     internal bool IsRunning => _isRunning; internal bool IsRefreshInProgress => _isRefreshing; internal bool IsTimerEnabled => _timer.IsEnabled;
 
     public void Start() { if (_disposed || _isRunning) return; _isRunning = true; _managedProcessNames = BuildManagedProcessNames(_actions()); _resetSamplesOnNextRefresh = true; _timer.Start(); _ = RefreshAsync(); }
     public void Stop() { if (!_isRunning && !_timer.IsEnabled) return; _isRunning = false; _timer.Stop(); Cancel(ref _refreshCancellation); Cancel(ref _detailsCancellation); Cancel(ref _iconCancellation); }
-    public void NotifyBackgroundStateChanged() { OnPropertyChanged(nameof(CurrentBackgroundKindText)); OnPropertyChanged(nameof(BackgroundPlaybackStateText)); OnPropertyChanged(nameof(BackgroundQualityText)); }
-    public void NotifyLocalizationChanged() { NotifyPerformanceChanged(); OnPropertyChanged(nameof(MeasurementDurationText)); OnPropertyChanged(nameof(LiveViewToggleText)); }
+    // Kept as a compatibility no-op while the window still reports media lifecycle state.
+    public void NotifyLocalizationChanged() { NotifyPerformanceChanged(); OnPropertyChanged(nameof(MeasurementDurationText)); OnPropertyChanged(nameof(LiveViewToggleText)); OnPropertyChanged(nameof(MeasurementSortText)); }
     private void PerformanceTimerOnTick(object? sender, EventArgs e) { OnPropertyChanged(nameof(MeasurementDurationText)); if (!IsLiveViewPaused || IsMeasuring) _ = RefreshAsync(); }
     private async Task RefreshAsync()
     {
@@ -112,8 +108,10 @@ public sealed class PerformancePanelViewModel : ObservableObject, IDisposable
     }
     private void SortProcesses(string? column)
     {
-        var next = column is "name" or "cpu" or "memory" or "disk" or "network" or "gpu" or "vram" ? column : "cpu";
-        _sortDescending = next == _sortColumn ? !_sortDescending : true; _sortColumn = next; RebuildRows(); NotifySortIndicators();
+        var next = column is "name" or "cpu" or "memory" or "disk" or "gpu" or "vram" ? column : "cpu";
+        _sortDescending = next == _sortColumn ? !_sortDescending : true; _sortColumn = next; RebuildRows();
+        if (MeasurementResults.Count > 0) PublishMeasurement();
+        NotifySortIndicators();
     }
     private void ToggleLiveView()
     {
@@ -201,9 +199,10 @@ public sealed class PerformancePanelViewModel : ObservableObject, IDisposable
         var map = _latestProcesses.ToDictionary(item => item.ProcessId); var children = new Dictionary<int, List<PerformanceProcessSnapshot>>();
         foreach (var item in _latestProcesses) if (item.ParentProcessId is { } parent && parent != item.ProcessId && map.ContainsKey(parent)) { if (!children.TryGetValue(parent, out var list)) children[parent] = list = []; list.Add(item); }
         var displaySnapshots = BuildDisplaySnapshots(children);
+        var groupProcessCounts = BuildGroupProcessCounts(children);
         var comparer = Comparer<PerformanceProcessSnapshot>.Create((left, right) => Compare(displaySnapshots[left.ProcessId], displaySnapshots[right.ProcessId]));
         var roots = _latestProcesses.Where(item => item.ParentProcessId is not { } parent || !map.ContainsKey(parent) || parent == item.ProcessId).OrderBy(item => item, comparer).ToList();
-        var rows = new List<PerformanceProcessRowViewModel>(); foreach (var root in roots) AddRow(root, 0, children, displaySnapshots, comparer, rows, new HashSet<int>());
+        var rows = new List<PerformanceProcessRowViewModel>(); foreach (var root in roots) AddRow(root, 0, children, displaySnapshots, groupProcessCounts, comparer, rows, new HashSet<int>());
         SynchronizeRows(rows);
 
         if (SelectedPerformanceProcess is not null && !activeIdentities.Contains(SelectedPerformanceProcess.Identity))
@@ -214,7 +213,8 @@ public sealed class PerformancePanelViewModel : ObservableObject, IDisposable
         }
     }
     private void AddRow(PerformanceProcessSnapshot snapshot, int depth, IReadOnlyDictionary<int, List<PerformanceProcessSnapshot>> children,
-        IReadOnlyDictionary<int, PerformanceProcessSnapshot> displaySnapshots, IComparer<PerformanceProcessSnapshot> comparer,
+        IReadOnlyDictionary<int, PerformanceProcessSnapshot> displaySnapshots, IReadOnlyDictionary<int, int> groupProcessCounts,
+        IComparer<PerformanceProcessSnapshot> comparer,
         ICollection<PerformanceProcessRowViewModel> output, ISet<int> visited)
     {
         if (!visited.Add(snapshot.ProcessId)) return;
@@ -222,15 +222,18 @@ public sealed class PerformancePanelViewModel : ObservableObject, IDisposable
         var isGroup = childItems is { Count: > 0 };
         var key = ProcessIdentity(snapshot);
         var displaySnapshot = displaySnapshots[snapshot.ProcessId];
+        var groupProcessCount = groupProcessCounts.GetValueOrDefault(snapshot.ProcessId, 1);
         if (!_rowsByIdentity.TryGetValue(key, out var row))
-            _rowsByIdentity[key] = row = new PerformanceProcessRowViewModel(displaySnapshot, depth, childItems?.Count ?? 0, isGroup, _expandedGroups.Contains(snapshot.ProcessId));
+            _rowsByIdentity[key] = row = new PerformanceProcessRowViewModel(displaySnapshot, depth, childItems?.Count ?? 0,
+                groupProcessCount, isGroup, _expandedGroups.Contains(snapshot.ProcessId));
         else
-            row.Update(displaySnapshot, depth, childItems?.Count ?? 0, isGroup, _expandedGroups.Contains(snapshot.ProcessId));
+            row.Update(displaySnapshot, depth, childItems?.Count ?? 0, groupProcessCount, isGroup,
+                _expandedGroups.Contains(snapshot.ProcessId));
 
         var cachedIcon = GetCachedIcon(key);
         if (cachedIcon is not null) row.Icon = cachedIcon;
         output.Add(row);
-        if (isGroup && _expandedGroups.Contains(snapshot.ProcessId)) foreach (var child in childItems!.OrderBy(item => item, comparer)) AddRow(child, depth + 1, children, displaySnapshots, comparer, output, visited);
+        if (isGroup && _expandedGroups.Contains(snapshot.ProcessId)) foreach (var child in childItems!.OrderBy(item => item, comparer)) AddRow(child, depth + 1, children, displaySnapshots, groupProcessCounts, comparer, output, visited);
     }
     private void SynchronizeRows(IReadOnlyList<PerformanceProcessRowViewModel> rows)
     {
@@ -253,6 +256,27 @@ public sealed class PerformancePanelViewModel : ObservableObject, IDisposable
         foreach (var process in _latestProcesses) BuildDisplaySnapshot(process, children, output, new HashSet<int>());
         return output;
     }
+    private static IReadOnlyDictionary<int, int> BuildGroupProcessCounts(IReadOnlyDictionary<int, List<PerformanceProcessSnapshot>> children)
+    {
+        var counts = new Dictionary<int, int>();
+        foreach (var processId in children.Keys)
+            CountGroupProcesses(processId, children, counts, new HashSet<int>());
+        return counts;
+    }
+    private static int CountGroupProcesses(int processId, IReadOnlyDictionary<int, List<PerformanceProcessSnapshot>> children,
+        IDictionary<int, int> counts, ISet<int> path)
+    {
+        if (counts.TryGetValue(processId, out var cached)) return cached;
+        if (!path.Add(processId)) return 0;
+
+        var total = 1;
+        if (children.TryGetValue(processId, out var childItems))
+            foreach (var child in childItems)
+                total += CountGroupProcesses(child.ProcessId, children, counts, path);
+
+        path.Remove(processId);
+        return counts[processId] = total;
+    }
     private static PerformanceProcessSnapshot BuildDisplaySnapshot(PerformanceProcessSnapshot process,
         IReadOnlyDictionary<int, List<PerformanceProcessSnapshot>> children, IDictionary<int, PerformanceProcessSnapshot> cache, ISet<int> path)
     {
@@ -269,8 +293,10 @@ public sealed class PerformancePanelViewModel : ObservableObject, IDisposable
             CpuPercent = Sum(items.Select(item => item.CpuPercent)),
             WorkingSetBytes = Sum(items.Select(item => item.WorkingSetBytes)),
             DiskBytesPerSecond = Sum(items.Select(item => item.DiskBytesPerSecond)),
-            NetworkBytesPerSecond = Sum(items.Select(item => item.NetworkBytesPerSecond)),
-            GpuPercent = Sum(items.Select(item => item.GpuPercent)),
+            // GPU Engine reports the busiest engine per process. The group uses
+            // its busiest member as the same normalized 0-100% metric instead of
+            // adding overlapping engine utilization across child processes.
+            GpuPercent = MaxGpu(items.Select(item => item.GpuPercent)),
             VramBytes = Sum(items.Select(item => item.VramBytes)),
             IsUsedBySwitchBoardProfile = items.Any(item => item.IsUsedBySwitchBoardProfile)
         };
@@ -281,6 +307,11 @@ public sealed class PerformancePanelViewModel : ObservableObject, IDisposable
     {
         var available = values.Where(value => value is not null).Select(value => value!.Value).ToArray();
         return available.Length == 0 ? null : available.Sum();
+    }
+    private static double? MaxGpu(IEnumerable<double?> values)
+    {
+        var available = values.Where(value => value is not null).Select(value => value!.Value).ToArray();
+        return available.Length == 0 ? null : available.Max();
     }
     private static long? Sum(IEnumerable<long?> values)
     {
@@ -294,7 +325,6 @@ public sealed class PerformancePanelViewModel : ObservableObject, IDisposable
             "name" => string.Compare(left.ProcessName, right.ProcessName, StringComparison.CurrentCultureIgnoreCase),
             "memory" => CompareMetric(left.WorkingSetBytes, right.WorkingSetBytes),
             "disk" => CompareMetric(left.DiskBytesPerSecond, right.DiskBytesPerSecond),
-            "network" => CompareMetric(left.NetworkBytesPerSecond, right.NetworkBytesPerSecond),
             "gpu" => CompareMetric(left.GpuPercent, right.GpuPercent),
             "vram" => CompareMetric(left.VramBytes, right.VramBytes),
             _ => CompareMetric(left.CpuPercent, right.CpuPercent)
@@ -322,11 +352,44 @@ public sealed class PerformancePanelViewModel : ObservableObject, IDisposable
     }
     private void PublishMeasurement()
     {
-        MeasurementResults.Clear(); foreach (var item in _measurement.Values.OrderByDescending(item => item.AverageCpu).Take(20)) MeasurementResults.Add(item.ToResult()); ClearMeasurementCommand.NotifyCanExecuteChanged();
+        var results = _measurement.Values.Select(item => item.ToResult()).ToList();
+        results.Sort(CompareMeasurement);
+        MeasurementResults.Clear();
+        foreach (var item in results.Take(20)) MeasurementResults.Add(item);
+        ClearMeasurementCommand.NotifyCanExecuteChanged();
     }
-    private void NotifyPerformanceChanged() { foreach (var name in new[] { nameof(PerformanceCpuText), nameof(PerformanceMemoryText), nameof(PerformanceDiskText), nameof(PerformanceDownloadText), nameof(PerformanceUploadText), nameof(PerformanceGpuText), nameof(PerformanceVramText), nameof(SwitchBoardCpuText), nameof(SwitchBoardMemoryText), nameof(SwitchBoardGpuText) }) OnPropertyChanged(name); NotifyBackgroundStateChanged(); }
-    private void NotifySortIndicators() { foreach (var name in new[] { nameof(SortNameIndicator), nameof(SortCpuIndicator), nameof(SortMemoryIndicator), nameof(SortDiskIndicator), nameof(SortNetworkIndicator), nameof(SortGpuIndicator), nameof(SortVramIndicator) }) OnPropertyChanged(name); }
+    private void NotifyPerformanceChanged() { foreach (var name in new[] { nameof(PerformanceCpuText), nameof(PerformanceMemoryText), nameof(PerformanceDiskText), nameof(PerformanceDownloadText), nameof(PerformanceUploadText), nameof(PerformanceGpuText), nameof(PerformanceVramText) }) OnPropertyChanged(name); }
+    private void NotifySortIndicators() { foreach (var name in new[] { nameof(SortNameIndicator), nameof(SortCpuIndicator), nameof(SortMemoryIndicator), nameof(SortDiskIndicator), nameof(SortGpuIndicator), nameof(SortVramIndicator), nameof(IsSortNameActive), nameof(IsSortCpuActive), nameof(IsSortMemoryActive), nameof(IsSortDiskActive), nameof(IsSortGpuActive), nameof(IsSortVramActive), nameof(MeasurementSortText) }) OnPropertyChanged(name); }
     private string SortIndicator(string column) => _sortColumn == column ? (_sortDescending ? "▼" : "▲") : string.Empty;
+    private bool IsSortActive(string column) => string.Equals(_sortColumn, column, StringComparison.Ordinal);
+    private string SortColumnText() => _localization.GetString(_sortColumn switch
+    {
+        "name" => "Performance.Name", "memory" => "Performance.Memory", "disk" => "Performance.Disk",
+        "gpu" => "Performance.Gpu", "vram" => "Performance.Vram", _ => "Performance.Cpu"
+    });
+    private int CompareMeasurement(PerformanceMeasurementResult left, PerformanceMeasurementResult right)
+    {
+        var result = _sortColumn switch
+        {
+            "name" => string.Compare(left.ProcessName, right.ProcessName, StringComparison.CurrentCultureIgnoreCase),
+            "memory" => CompareMeasurementMetric(left.PeakMemoryBytes, right.PeakMemoryBytes),
+            "disk" => CompareMeasurementMetric(left.DiskTotalBytes, right.DiskTotalBytes),
+            "gpu" => CompareMeasurementMetric(left.AverageGpuPercent, right.AverageGpuPercent),
+            "vram" => CompareMeasurementMetric(left.PeakVramBytes, right.PeakVramBytes),
+            _ => CompareMeasurementMetric(left.AverageCpuPercent, right.AverageCpuPercent)
+        };
+        if (_sortColumn == "name") result = _sortDescending ? -result : result;
+        if (result != 0) return result;
+        result = string.Compare(left.ProcessName, right.ProcessName, StringComparison.CurrentCultureIgnoreCase);
+        return result != 0 ? result : left.ProcessId.CompareTo(right.ProcessId);
+    }
+    private int CompareMeasurementMetric<T>(T? left, T? right) where T : struct, IComparable<T>
+    {
+        if (left is null) return right is null ? 0 : 1;
+        if (right is null) return -1;
+        var result = left.Value.CompareTo(right.Value);
+        return _sortDescending ? -result : result;
+    }
     private static void Cancel(ref CancellationTokenSource? source) { var item = Interlocked.Exchange(ref source, null); item?.Cancel(); item?.Dispose(); }
     private static IReadOnlySet<string> BuildManagedProcessNames(IEnumerable<ActionItemViewModel> actions) { var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase); foreach (var action in actions) { if (!action.IsEnabled || action.Type is not (ActionTypeIds.ProgramRun or ActionTypeIds.ProcessConfigure or ActionTypeIds.ProcessSetState or ActionTypeIds.WaitProcessStart or ActionTypeIds.WaitProcessExit or ActionTypeIds.WaitWindow)) continue; var name = PerformanceMonitoringService.NormalizeProcessName(action.Type == ActionTypeIds.ProgramRun ? action.Target : string.IsNullOrWhiteSpace(action.ProcessName) ? action.ExecutablePath : action.ProcessName); if (!string.IsNullOrWhiteSpace(name)) result.Add(name); } return result; }
     private string FormatUsage(long? used, long? total) => used is { } value && total is { } max && max > 0 ? $"{PerformanceFormatting.Bytes(value)} / {PerformanceFormatting.Bytes(max)} ({value * 100d / max:0.#}%)" : _localization.GetString("Common.Unavailable");
@@ -345,34 +408,54 @@ public sealed class PerformanceProcessRowViewModel : ObservableObject
     private PerformanceProcessSnapshot _snapshot;
     private int _depth;
     private int _childCount;
+    private int _groupProcessCount;
     private bool _isGroup;
     private bool _isExpanded;
     private bool _isDetailsExpanded;
     private ImageSource? _icon;
-    public PerformanceProcessRowViewModel(PerformanceProcessSnapshot snapshot, int depth, int childCount, bool isGroup, bool isExpanded) { _snapshot = snapshot; _depth = depth; _childCount = childCount; _isGroup = isGroup; _isExpanded = isExpanded; }
+    public PerformanceProcessRowViewModel(PerformanceProcessSnapshot snapshot, int depth, int childCount, int groupProcessCount, bool isGroup, bool isExpanded) { _snapshot = snapshot; _depth = depth; _childCount = childCount; _groupProcessCount = groupProcessCount; _isGroup = isGroup; _isExpanded = isExpanded; }
     public PerformanceProcessSnapshot Snapshot => _snapshot;
     public (int ProcessId, long? StartedAtUtcTicks) Identity => (ProcessId, Snapshot.ProcessStartTimeUtcTicks);
-    public int ProcessId => Snapshot.ProcessId; public string ProcessName => Snapshot.ProcessName; public int Depth => _depth; public int ChildCount => _childCount; public bool IsGroup => _isGroup; public bool IsExpanded => _isExpanded; public double Indent => Depth * 16d; public string CpuText => Snapshot.CpuText; public string MemoryText => Snapshot.WorkingSetText; public string DiskText => Snapshot.DiskText; public string NetworkText => Snapshot.NetworkText; public string GpuText => Snapshot.GpuText; public string VramText => Snapshot.VramText; public bool IsUsedByProfile => Snapshot.IsUsedBySwitchBoardProfile;
+    public int ProcessId => Snapshot.ProcessId; public string ProcessName => Snapshot.ProcessName; public string DisplayName => IsGroup && _groupProcessCount > 1 ? $"{ProcessName} ({_groupProcessCount})" : ProcessName; public int Depth => _depth; public int ChildCount => _childCount; public bool IsGroup => _isGroup; public bool IsExpanded => _isExpanded; public double Indent => Depth * 16d; public string CpuText => Snapshot.CpuText; public string MemoryText => Snapshot.WorkingSetText; public string DiskText => Snapshot.DiskText; public string GpuText => Snapshot.GpuText; public string VramText => Snapshot.VramText; public bool IsUsedByProfile => Snapshot.IsUsedBySwitchBoardProfile;
     public bool IsSystemProcess => ProcessId <= 4 || KnownSystemProcesses.Contains(ProcessName);
-    public void Update(PerformanceProcessSnapshot snapshot, int depth, int childCount, bool isGroup, bool isExpanded)
+    public void Update(PerformanceProcessSnapshot snapshot, int depth, int childCount, int groupProcessCount, bool isGroup, bool isExpanded)
     {
         _snapshot = snapshot;
         _depth = depth;
         _childCount = childCount;
+        _groupProcessCount = groupProcessCount;
         _isGroup = isGroup;
         _isExpanded = isExpanded;
-        foreach (var name in new[] { nameof(Snapshot), nameof(ProcessName), nameof(Depth), nameof(ChildCount), nameof(IsGroup), nameof(IsExpanded), nameof(Indent), nameof(CpuText), nameof(MemoryText), nameof(DiskText), nameof(NetworkText), nameof(GpuText), nameof(VramText), nameof(IsUsedByProfile) }) OnPropertyChanged(name);
+        foreach (var name in new[] { nameof(Snapshot), nameof(ProcessName), nameof(DisplayName), nameof(Depth), nameof(ChildCount), nameof(IsGroup), nameof(IsExpanded), nameof(Indent), nameof(CpuText), nameof(MemoryText), nameof(DiskText), nameof(GpuText), nameof(VramText), nameof(IsUsedByProfile) }) OnPropertyChanged(name);
     }
     public ImageSource? Icon { get => _icon; set { if (SetProperty(ref _icon, value)) OnPropertyChanged(nameof(HasIcon)); } }
     public bool HasIcon => Icon is not null;
     public bool IsDetailsExpanded { get => _isDetailsExpanded; set => SetProperty(ref _isDetailsExpanded, value); }
 }
-public sealed record PerformanceMeasurementResult(string ProcessName, int ProcessId, string AverageCpuText, string PeakCpuText, string PeakMemoryText, string DiskTotalText, string NetworkTotalText, string AverageGpuText);
+public sealed record PerformanceMeasurementResult(string ProcessName, int ProcessId, double? AverageCpuPercent,
+    double? PeakCpuPercent, long? PeakMemoryBytes, long? DiskTotalBytes, double? AverageGpuPercent, long? PeakVramBytes)
+{
+    public string AverageCpuText => PerformanceFormatting.Percent(AverageCpuPercent);
+    public string PeakCpuText => PerformanceFormatting.Percent(PeakCpuPercent);
+    public string PeakMemoryText => PerformanceFormatting.Bytes(PeakMemoryBytes);
+    public string DiskTotalText => PerformanceFormatting.Bytes(DiskTotalBytes);
+    public string AverageGpuText => PerformanceFormatting.Percent(AverageGpuPercent);
+    public string PeakVramText => PerformanceFormatting.Bytes(PeakVramBytes);
+}
 internal sealed class MeasurementAggregate(int processId, string processName)
 {
-    private int _cpuSamples, _gpuSamples; private double _cpuTotal, _gpuTotal; private long _diskTotal, _networkTotal, _peakMemory; private double _peakCpu;
-    public int ProcessId { get; } = processId; public string ProcessName { get; } = processName; public double AverageCpu => _cpuSamples == 0 ? 0 : _cpuTotal / _cpuSamples;
-    public void Add(PerformanceProcessSnapshot item, double seconds) { if (item.CpuPercent is { } cpu) { _cpuSamples++; _cpuTotal += cpu; _peakCpu = Math.Max(_peakCpu, cpu); } if (item.GpuPercent is { } gpu) { _gpuSamples++; _gpuTotal += gpu; } _peakMemory = Math.Max(_peakMemory, item.WorkingSetBytes ?? 0); _diskTotal += (long)Math.Round((item.DiskBytesPerSecond ?? 0) * seconds); _networkTotal += (long)Math.Round((item.NetworkBytesPerSecond ?? 0) * seconds); }
-    public PerformanceMeasurementResult ToResult() => new(ProcessName, ProcessId, PerformanceFormatting.Percent(AverageCpu), PerformanceFormatting.Percent(_peakCpu), PerformanceFormatting.Bytes(_peakMemory), PerformanceFormatting.Bytes(_diskTotal), PerformanceFormatting.Bytes(_networkTotal), PerformanceFormatting.Percent(_gpuSamples == 0 ? null : _gpuTotal / _gpuSamples));
+    private int _cpuSamples, _gpuSamples; private double _cpuTotal, _gpuTotal, _peakCpu; private long _diskTotal, _peakMemory, _peakVram; private bool _hasMemory, _hasDisk, _hasVram;
+    public int ProcessId { get; } = processId; public string ProcessName { get; } = processName;
+    public void Add(PerformanceProcessSnapshot item, double seconds)
+    {
+        if (item.CpuPercent is { } cpu) { _cpuSamples++; _cpuTotal += cpu; _peakCpu = Math.Max(_peakCpu, cpu); }
+        if (item.GpuPercent is { } gpu) { _gpuSamples++; _gpuTotal += gpu; }
+        if (item.WorkingSetBytes is { } memory) { _hasMemory = true; _peakMemory = Math.Max(_peakMemory, memory); }
+        if (item.VramBytes is { } vram) { _hasVram = true; _peakVram = Math.Max(_peakVram, vram); }
+        if (item.DiskBytesPerSecond is { } disk) { _hasDisk = true; _diskTotal += (long)Math.Round(disk * seconds); }
+    }
+    public PerformanceMeasurementResult ToResult() => new(ProcessName, ProcessId,
+        _cpuSamples == 0 ? null : _cpuTotal / _cpuSamples, _cpuSamples == 0 ? null : _peakCpu,
+        _hasMemory ? _peakMemory : null, _hasDisk ? _diskTotal : null,
+        _gpuSamples == 0 ? null : _gpuTotal / _gpuSamples, _hasVram ? _peakVram : null);
 }
-public readonly record struct BackgroundPerformanceState(string? SourcePath, bool WindowVisible, bool WindowActive, bool WindowMinimized, bool PauseWhenMinimized, bool PauseWhenInactive, bool PauseDuringProfileExecution, bool ProfileExecutionActive, string PerformanceMode);

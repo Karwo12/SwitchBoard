@@ -4,14 +4,8 @@
              xmlns:controls="clr-namespace:SwitchBoard.Controls">
     <UserControl.Resources>
         <Style x:Key="SystemPanelSectionStyle" TargetType="{x:Type controls:CardSurfaceControl}" BasedOn="{StaticResource CardSurfaceStyle}">
-            <Setter Property="Background" Value="{DynamicResource SettingsRowBackgroundBrush}" />
-            <Setter Property="BorderBrush" Value="{DynamicResource BorderHighlightBrush}" />
-            <Setter Property="SurfaceOpacity" Value="0.72" />
         </Style>
         <Style x:Key="SystemPanelRowStyle" TargetType="{x:Type controls:CardSurfaceControl}" BasedOn="{StaticResource CardSurfaceStyle}">
-            <Setter Property="Background" Value="{DynamicResource SettingsRowBackgroundBrush}" />
-            <Setter Property="BorderBrush" Value="{DynamicResource BorderHighlightBrush}" />
-            <Setter Property="SurfaceOpacity" Value="0.58" />
             <Setter Property="CornerRadius" Value="7" />
             <Setter Property="MinHeight" Value="34" />
             <Setter Property="Padding" Value="9,5" />
@@ -72,9 +66,7 @@
                                 </Grid>
                             </StackPanel>
                         </controls:CardSurfaceControl>
-                    </WrapPanel>
-
-                    <controls:CardSurfaceControl Style="{StaticResource SystemPanelSectionStyle}" Margin="0,0,0,10" Padding="10">
+                    <controls:CardSurfaceControl Style="{StaticResource SystemPanelSectionStyle}" Width="340" Margin="0,0,10,10" Padding="10">
                         <StackPanel>
                             <TextBlock FontWeight="SemiBold" Text="{DynamicResource System.Displays}" />
                             <Separator Margin="0,4,0,4" />
@@ -95,6 +87,7 @@
                             </TextBlock>
                         </StackPanel>
                     </controls:CardSurfaceControl>
+                    </WrapPanel>
 
                     <controls:CardSurfaceControl Style="{StaticResource SystemPanelSectionStyle}" Margin="0,0,0,4" Padding="14">
                         <StackPanel>

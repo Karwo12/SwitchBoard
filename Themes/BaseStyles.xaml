@@ -807,7 +807,7 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Separator">
-                    <Border Height="1" Background="{DynamicResource MenuBorder}" />
+                    <Border Height="1" Background="{DynamicResource BorderBrush}" />
                 </ControlTemplate>
             </Setter.Value>
         </Setter>

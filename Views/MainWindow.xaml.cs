@@ -72,9 +72,7 @@ public partial class MainWindow : Window
         SizeChanged += (_, _) => viewModel.CaptureWindowGeometry(this);
         LocationChanged += (_, _) => viewModel.CaptureWindowGeometry(this);
         StateChanged += MainWindowOnStateChanged;
-        Activated += MainWindowOnActivationChanged;
-        Deactivated += MainWindowOnActivationChanged;
-        IsVisibleChanged += MainWindowOnVisibilityChanged;
+        InputManager.Current.PreProcessInput += MainWindowOnPreProcessInput;
         Closed += OnClosed;
         _trayService = new SystemTrayService(OpenFromTray, ExitFromTray, viewModel.GetTrayProfiles,
             () => viewModel.HasPendingRestore,
@@ -235,6 +233,57 @@ public partial class MainWindow : Window
         return false;
     }
 
+    /// <summary>
+    /// Commits an active single-line editor when the user continues interacting
+    /// elsewhere in the application. WPF does not always move keyboard focus
+    /// when the destination is a non-focusable panel/card, which otherwise
+    /// leaves a search or editor TextBox active after such a click.
+    /// </summary>
+    private void MainWindowOnPreProcessInput(object? sender, PreProcessInputEventArgs e)
+    {
+        if (e.StagingItem.Input is not MouseButtonEventArgs
+            {
+                RoutedEvent: var routedEvent,
+                OriginalSource: DependencyObject source
+            } || routedEvent != Mouse.PreviewMouseDownEvent ||
+            !IsPartOfThisWindow(source) || IsInsideEditableInput(source))
+            return;
+
+        if (Keyboard.FocusedElement is TextBox textBox)
+            textBox.GetBindingExpression(TextBox.TextProperty)?.UpdateSource();
+
+        Keyboard.ClearFocus();
+    }
+
+    private bool IsPartOfThisWindow(DependencyObject source)
+    {
+        for (DependencyObject? current = source; current is not null;)
+        {
+            if (ReferenceEquals(current, this)) return true;
+            current = current is Visual or System.Windows.Media.Media3D.Visual3D
+                ? VisualTreeHelper.GetParent(current)
+                : LogicalTreeHelper.GetParent(current);
+        }
+
+        return false;
+    }
+
+    private static bool IsInsideEditableInput(DependencyObject source)
+    {
+        for (DependencyObject? current = source; current is not null;)
+        {
+            if (current is TextBoxBase or PasswordBox ||
+                current is ComboBox { IsEditable: true })
+                return true;
+
+            current = current is Visual or System.Windows.Media.Media3D.Visual3D
+                ? VisualTreeHelper.GetParent(current)
+                : LogicalTreeHelper.GetParent(current);
+        }
+
+        return false;
+    }
+
     private void MinimizeButton_OnClick(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
 
     private void MaximizeButton_OnClick(object sender, RoutedEventArgs e) => ToggleWindowState();
@@ -358,9 +407,7 @@ public partial class MainWindow : Window
         Loaded -= MainWindowOnLoaded;
         SourceInitialized -= MainWindowOnSourceInitialized;
         StateChanged -= MainWindowOnStateChanged;
-        Activated -= MainWindowOnActivationChanged;
-        Deactivated -= MainWindowOnActivationChanged;
-        IsVisibleChanged -= MainWindowOnVisibilityChanged;
+        InputManager.Current.PreProcessInput -= MainWindowOnPreProcessInput;
         ThemeBackgroundHost.NativeSizeChanged -= ThemeBackgroundHostOnNativeSizeChanged;
         ThemeBackgroundHost.VideoBackendProblem -= ThemeBackgroundHostOnVideoBackendProblem;
         _viewModel.PropertyChanged -= ViewModelOnPropertyChanged;
@@ -397,22 +444,12 @@ public partial class MainWindow : Window
     private void MainWindowOnLoaded(object sender, RoutedEventArgs e)
     {
         QueueBackgroundFit(ThemeBackgroundHost.NativeSize);
-        UpdateBackgroundRuntimeState();
     }
 
     private void MainWindowOnStateChanged(object? sender, EventArgs e)
     {
         _viewModel.CaptureWindowGeometry(this);
-        UpdateBackgroundRuntimeState();
     }
-
-    private void MainWindowOnActivationChanged(object? sender, EventArgs e) => UpdateBackgroundRuntimeState();
-
-    private void MainWindowOnVisibilityChanged(object sender, DependencyPropertyChangedEventArgs e) =>
-        UpdateBackgroundRuntimeState();
-
-    private void UpdateBackgroundRuntimeState() => _viewModel.UpdateBackgroundRuntimeState(IsVisible, IsActive,
-        WindowState == WindowState.Minimized);
 
     private void MainWindowOnSourceInitialized(object? sender, EventArgs e)
     {

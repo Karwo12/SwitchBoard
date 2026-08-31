@@ -135,7 +135,7 @@ public sealed class PerformanceMonitoringService : IDisposable
                 result.Add(new PerformanceProcessSnapshot(id, parent, processName,
                     previous is null ? null : CalculateCpu(previous, sample), TryReadWorkingSet(process),
                     previous is null ? null : CalculateRate(previous.Timestamp, sample.Timestamp, previous.Io?.DiskTransferBytes, sample.Io?.DiskTransferBytes),
-                    null, gpuPercent.ContainsKey(id) ? processGpu : null, gpuMemory.ContainsKey(id) ? processVram : null,
+                    gpuPercent.ContainsKey(id) ? processGpu : null, gpuMemory.ContainsKey(id) ? processVram : null,
                     managedProcessNames.Contains(NormalizeProcessName(processName)), startTimeUtcTicks));
             }
             catch (OperationCanceledException) { throw; }
@@ -267,11 +267,11 @@ public sealed record PerformanceSnapshot(DateTimeOffset CapturedAt, double? CpuP
     long? DiskBytesPerSecond, long? DownloadBytesPerSecond, long? UploadBytesPerSecond, double? GpuPercent, long? VramUsedBytes,
     long? VramTotalBytes, IReadOnlyList<PerformanceProcessSnapshot> Processes, PerformanceProcessSnapshot? SwitchBoardProcess);
 public sealed record PerformanceProcessSnapshot(int ProcessId, int? ParentProcessId, string ProcessName, double? CpuPercent, long? WorkingSetBytes,
-    long? DiskBytesPerSecond, long? NetworkBytesPerSecond, double? GpuPercent, long? VramBytes, bool IsUsedBySwitchBoardProfile,
+    long? DiskBytesPerSecond, double? GpuPercent, long? VramBytes, bool IsUsedBySwitchBoardProfile,
     long? ProcessStartTimeUtcTicks = null)
 {
     public string CpuText => PerformanceFormatting.Percent(CpuPercent); public string WorkingSetText => PerformanceFormatting.Bytes(WorkingSetBytes);
-    public string DiskText => PerformanceFormatting.Rate(DiskBytesPerSecond); public string NetworkText => PerformanceFormatting.Rate(NetworkBytesPerSecond);
+    public string DiskText => PerformanceFormatting.Rate(DiskBytesPerSecond);
     public string GpuText => PerformanceFormatting.Percent(GpuPercent); public string VramText => PerformanceFormatting.Bytes(VramBytes);
 }
 public sealed record PerformanceProcessDetails(int ProcessId, string? ExecutablePath, string? Priority);
@@ -294,9 +294,17 @@ internal sealed class NativeGpuSampler : IDisposable
     public GpuSample Sample()
     {
         var engines = _engine.Read(); var processMemory = _processMemory.Read(); var used = _adapterUsed.Read(); var limits = _adapterLimit.Read();
-        return new GpuSample(engines.Count == 0 ? null : Math.Min(100, engines.Values.Sum()), used.Count == 0 ? null : (long)Math.Max(0, used.Values.Sum()), limits.Count == 0 ? null : (long)Math.Max(0, limits.Values.Sum()), AggregateGpu(engines), AggregateMemory(processMemory));
+        // GPU Engine exposes one counter per WDDM engine. Those percentages are
+        // concurrent engine utilisation, so summing them double-counts work and
+        // can exceed 100%. Windows' own overall usage is based on the busiest
+        // engine; use the same model globally and per process.
+        return new GpuSample(engines.Count == 0 ? null : Math.Clamp(engines.Values.Max(), 0d, 100d), used.Count == 0 ? null : (long)Math.Max(0, used.Values.Sum()), limits.Count == 0 ? null : (long)Math.Max(0, limits.Values.Sum()), AggregateGpu(engines), AggregateMemory(processMemory));
     }
-    private static IReadOnlyDictionary<int, double> AggregateGpu(IReadOnlyDictionary<string, double> source) => Aggregate(source).ToDictionary(item => item.Key, item => Math.Min(100, item.Value));
+    private static IReadOnlyDictionary<int, double> AggregateGpu(IReadOnlyDictionary<string, double> source) =>
+        source.Select(item => (Match: ProcessIdPattern.Match(item.Key), Value: item.Value))
+            .Where(item => item.Match.Success && int.TryParse(item.Match.Groups["id"].Value, out _))
+            .GroupBy(item => int.Parse(item.Match.Groups["id"].Value))
+            .ToDictionary(group => group.Key, group => Math.Clamp(group.Max(item => item.Value), 0d, 100d));
     private static IReadOnlyDictionary<int, long> AggregateMemory(IReadOnlyDictionary<string, double> source) => Aggregate(source).ToDictionary(item => item.Key, item => (long)Math.Max(0, item.Value));
     private static Dictionary<int, double> Aggregate(IReadOnlyDictionary<string, double> source)
     {

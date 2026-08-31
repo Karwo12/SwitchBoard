@@ -59,6 +59,17 @@ public sealed class PerformanceMonitoringServiceTests
 
     [Fact]
     [Trait("Category", "Regression")]
+    public void GpuSampler_UsesTheBusiestEngineInsteadOfSummingConcurrentEngines()
+    {
+        var source = File.ReadAllText(FindSourceFile("Services", "Monitoring", "PerformanceMonitoringService.cs"));
+
+        Assert.Contains("engines.Values.Max()", source, StringComparison.Ordinal);
+        Assert.Contains("group.Max(item => item.Value)", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("engines.Values.Sum()", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [Trait("Category", "Regression")]
     public void CaptureImplementation_PreservesProcessesWhenIndividualCountersAreUnavailable()
     {
         var source = File.ReadAllText(FindSourceFile("Services", "Monitoring", "PerformanceMonitoringService.cs"));

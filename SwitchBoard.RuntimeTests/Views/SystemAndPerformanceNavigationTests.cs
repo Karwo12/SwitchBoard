@@ -45,6 +45,25 @@ public sealed class SystemAndPerformanceNavigationTests
         Assert.Contains("VirtualizationMode=\"Recycling\"", panels, StringComparison.Ordinal);
     }
 
+    [Fact]
+    [Trait("Category", "Regression")]
+    public void WorkspaceCardsAndSeparatorsUseTheBaseThemeBorderBrush()
+    {
+        var baseStyles = File.ReadAllText(FindSourceFile("Themes", "BaseStyles.xaml"));
+        var systemPanel = File.ReadAllText(FindSourceFile("Views", "Panels", "SystemPanel.xaml"));
+        var performancePanel = File.ReadAllText(FindSourceFile("Views", "Panels", "PerformancePanel.xaml"));
+
+        Assert.Contains("<Border Height=\"1\" Background=\"{DynamicResource BorderBrush}\"", baseStyles,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("BorderHighlightBrush", systemPanel, StringComparison.Ordinal);
+        Assert.DoesNotContain("BorderHighlightBrush", performancePanel, StringComparison.Ordinal);
+        Assert.Contains("x:Key=\"SystemPanelRowStyle\"", systemPanel, StringComparison.Ordinal);
+        Assert.DoesNotContain("SettingsRowBackgroundBrush", systemPanel, StringComparison.Ordinal);
+        Assert.DoesNotContain("SettingsRowBackgroundBrush", performancePanel, StringComparison.Ordinal);
+        Assert.Contains("BasedOn=\"{StaticResource CardSurfaceStyle}\"", systemPanel, StringComparison.Ordinal);
+        Assert.Contains("BasedOn=\"{StaticResource CardSurfaceStyle}\"", performancePanel, StringComparison.Ordinal);
+    }
+
     private static string FindSourceFile(params string[] relativePath)
     {
         foreach (var start in new[] { Directory.GetCurrentDirectory(), AppContext.BaseDirectory })

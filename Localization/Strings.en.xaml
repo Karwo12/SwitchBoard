@@ -910,18 +910,7 @@
     <system:String x:Key="Performance.ProcessPath">Path</system:String>
     <system:String x:Key="Performance.ProcessPriority">Priority</system:String>
     <system:String x:Key="Performance.ProcessUsedByProfile">Used by a SwitchBoard profile</system:String>
-    <system:String x:Key="Performance.SwitchBoardImpact">SwitchBoard impact</system:String>
-    <system:String x:Key="Performance.BackgroundType">Background type</system:String>
-    <system:String x:Key="Performance.BackgroundActivity">Animated background</system:String>
-    <system:String x:Key="Performance.BackgroundQuality">Background quality</system:String>
-    <system:String x:Key="Performance.Background.Static">Static</system:String>
-    <system:String x:Key="Performance.Background.Gif">GIF</system:String>
-    <system:String x:Key="Performance.Background.Mp4">MP4</system:String>
-    <system:String x:Key="Performance.Background.NotAnimated">Not animated</system:String>
-    <system:String x:Key="Performance.Background.Active">Active</system:String>
-    <system:String x:Key="Performance.Background.Paused">Paused</system:String>
     <system:String x:Key="Performance.GpuAvailabilityHint">GPU and VRAM use Windows WDDM performance counters when they are available.</system:String>
-    <system:String x:Key="Performance.ProcessLimitHint">Up to 140 root processes</system:String>
     <system:String x:Key="Performance.Name">Name</system:String>
     <system:String x:Key="Performance.FullName">Name</system:String>
     <system:String x:Key="Performance.Children">Child processes</system:String>
@@ -930,6 +919,15 @@
     <system:String x:Key="Performance.Measurement.Start">Start measurement</system:String>
     <system:String x:Key="Performance.Measurement.Stop">Stop</system:String>
     <system:String x:Key="Performance.Measurement.Clear">Clear</system:String>
+    <system:String x:Key="Performance.Measurement.SortingBy">Measurement ordered by: {0} ({1})</system:String>
+    <system:String x:Key="Performance.Measurement.CpuAverage">CPU avg.</system:String>
+    <system:String x:Key="Performance.Measurement.CpuPeak">CPU peak</system:String>
+    <system:String x:Key="Performance.Measurement.MemoryPeak">Memory peak</system:String>
+    <system:String x:Key="Performance.Measurement.DiskTotal">Disk total</system:String>
+    <system:String x:Key="Performance.Measurement.GpuAverage">GPU avg.</system:String>
+    <system:String x:Key="Performance.Measurement.VramPeak">VRAM peak</system:String>
+    <system:String x:Key="Performance.Sort.Descending">descending</system:String>
+    <system:String x:Key="Performance.Sort.Ascending">ascending</system:String>
     <system:String x:Key="Performance.LiveView.Pause">Pause</system:String>
     <system:String x:Key="Performance.LiveView.Resume">Resume</system:String>
 </ResourceDictionary>
