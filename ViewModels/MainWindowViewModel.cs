@@ -71,6 +71,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
     private bool _isActionPickerOpen;
     private ActionItemViewModel? _nestedActionTarget;
     private bool _nestedActionThenBranch;
+    private bool _isAddingPostRestoreAction;
     private ThemeOptionViewModel? _selectedThemeOption;
     private LanguageOptionViewModel? _selectedLanguageOption;
     private string _statusMessage;
@@ -207,10 +208,10 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
             .ToList();
 
         SystemPanel = new SystemPanelViewModel(_statusMonitoring,
-            () => _allProfiles.SelectMany(profile => profile.Actions), localizationService, logger);
+            () => _allProfiles.SelectMany(AllTopLevelActions), localizationService, logger);
         PerformancePanel = new PerformancePanelViewModel(
             performanceMonitoring ?? new PerformanceMonitoringService(),
-            () => _allProfiles.SelectMany(profile => EnumerateActions(profile.Actions)),
+            () => _allProfiles.SelectMany(profile => EnumerateActions(AllTopLevelActions(profile))),
             localizationService, logger,
             Application.Current?.Dispatcher ?? Dispatcher.CurrentDispatcher);
 
@@ -247,15 +248,6 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
             new ProfileAppearanceOption("#44B78B", localizationService.GetString("Settings.ProfileColorGreen"), "#44B78B"),
             new ProfileAppearanceOption("#E6953B", localizationService.GetString("Settings.ProfileColorOrange"), "#E6953B"),
             new ProfileAppearanceOption("#D95D63", localizationService.GetString("Settings.ProfileColorRed"), "#D95D63")
-        ];
-        ProfileIconOptions =
-        [
-            new ProfileAppearanceOption(null, localizationService.GetString("Settings.AppearanceNone")),
-            new ProfileAppearanceOption("bolt", localizationService.GetString("Settings.ProfileIconBolt")),
-            new ProfileAppearanceOption("briefcase", localizationService.GetString("Settings.ProfileIconBriefcase")),
-            new ProfileAppearanceOption("gamepad", localizationService.GetString("Settings.ProfileIconGamepad")),
-            new ProfileAppearanceOption("monitor", localizationService.GetString("Settings.ProfileIconMonitor")),
-            new ProfileAppearanceOption("moon", localizationService.GetString("Settings.ProfileIconMoon"))
         ];
         ActivityStatusOptions =
         [
@@ -322,10 +314,21 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         DuplicateProfileCommand = new RelayCommand<ProfileItemViewModel>(DuplicateProfile, profile => profile is not null && !HasCriticalOperation);
         ExportProfileCommand = new AsyncRelayCommand<ProfileItemViewModel>(ExportProfileAsync, profile => profile is not null);
         SetProfileColorCommand = new RelayCommand<string>(SetSelectedProfileColor, _ => SelectedProfile is not null && !HasCriticalOperation);
-        SetProfileIconCommand = new RelayCommand<string>(SetSelectedProfileIcon, _ => SelectedProfile is not null && !HasCriticalOperation);
+        SetProfileIconFromActionCommand = new RelayCommand<ActionItemViewModel>(SetProfileIconFromAction,
+            action => action is not null && !HasCriticalOperation);
+        ChooseProfileIconCommand = new RelayCommand(ChooseSelectedProfileIcon,
+            () => SelectedProfile is not null && !HasCriticalOperation);
+        ChooseProfileIconForProfileCommand = new RelayCommand<ProfileItemViewModel>(ChooseProfileIconForProfile,
+            profile => profile is not null && !HasCriticalOperation);
+        ClearProfileIconCommand = new RelayCommand(ClearSelectedProfileIcon,
+            () => SelectedProfile is not null && !HasCriticalOperation && SelectedProfile.HasAppearance);
+        ClearProfileIconForProfileCommand = new RelayCommand<ProfileItemViewModel>(ClearProfileIconForProfile,
+            profile => profile is not null && !HasCriticalOperation && profile.HasAppearance);
         ImportProfileCommand = new AsyncRelayCommand(ImportProfileAsync, () => !HasCriticalOperation);
         AddActionCommand = new RelayCommand(AddAction, () => SelectedProfile is not null && SelectedActionType is not null && !HasCriticalOperation);
         ToggleActionPickerCommand = new RelayCommand(ToggleMainActionPicker);
+        TogglePostRestoreActionPickerCommand = new RelayCommand(TogglePostRestoreActionPicker,
+            () => SelectedProfile is not null && !HasCriticalOperation);
         SelectActionTypeCommand = new RelayCommand<ActionTypeOption>(SelectActionType, option => option is not null);
         OpenThenActionPickerCommand = new RelayCommand<ActionItemViewModel>(action => OpenNestedActionPicker(action, true),
             action => action?.CanAddNestedActions == true);
@@ -533,7 +536,6 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
     public IReadOnlyList<SettingsOptionViewModel> Mp4RendererPreferenceOptions { get; }
     public IReadOnlyList<SettingsOptionViewModel> ActivityHistoryRetentionOptions { get; }
     public IReadOnlyList<ProfileAppearanceOption> ProfileColorOptions { get; }
-    public IReadOnlyList<ProfileAppearanceOption> ProfileIconOptions { get; }
     public IReadOnlyList<SettingsOptionViewModel> ActivityStatusOptions { get; }
     public IReadOnlyList<SettingsOptionViewModel> ActivityTimeRangeOptions { get; }
     public ObservableCollection<ProfileFilterOption> ActivityProfileOptions { get; }
@@ -1088,7 +1090,11 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
                 AddActionCommand.NotifyCanExecuteChanged();
                 RunProfileCommand.NotifyCanExecuteChanged();
                 SetProfileColorCommand.NotifyCanExecuteChanged();
-                SetProfileIconCommand.NotifyCanExecuteChanged();
+                SetProfileIconFromActionCommand.NotifyCanExecuteChanged();
+                ChooseProfileIconCommand.NotifyCanExecuteChanged();
+                ChooseProfileIconForProfileCommand.NotifyCanExecuteChanged();
+                ClearProfileIconCommand.NotifyCanExecuteChanged();
+                ClearProfileIconForProfileCommand.NotifyCanExecuteChanged();
                 OnPropertyChanged(nameof(RunAvailabilityMessage));
                 OnPropertyChanged(nameof(HasRunValidationIssue));
                 BuildPreflight(value);
@@ -1330,11 +1336,16 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
     public RelayCommand<ProfileItemViewModel> DuplicateProfileCommand { get; }
     public AsyncRelayCommand<ProfileItemViewModel> ExportProfileCommand { get; }
     public RelayCommand<string> SetProfileColorCommand { get; }
-    public RelayCommand<string> SetProfileIconCommand { get; }
+    public RelayCommand<ActionItemViewModel> SetProfileIconFromActionCommand { get; }
+    public RelayCommand ChooseProfileIconCommand { get; }
+    public RelayCommand<ProfileItemViewModel> ChooseProfileIconForProfileCommand { get; }
+    public RelayCommand ClearProfileIconCommand { get; }
+    public RelayCommand<ProfileItemViewModel> ClearProfileIconForProfileCommand { get; }
     public AsyncRelayCommand ImportProfileCommand { get; }
 
     public RelayCommand AddActionCommand { get; }
     public RelayCommand ToggleActionPickerCommand { get; }
+    public RelayCommand TogglePostRestoreActionPickerCommand { get; }
     public RelayCommand<ActionTypeOption> SelectActionTypeCommand { get; }
     public RelayCommand<ActionItemViewModel> OpenThenActionPickerCommand { get; }
     public RelayCommand<ActionItemViewModel> OpenElseActionPickerCommand { get; }
@@ -1491,7 +1502,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         }
         SelectedProfile = profile;
         if (actionId is not Guid targetActionId) return true;
-        var action = FindAction(profile.Actions, targetActionId);
+        var action = FindAction(AllTopLevelActions(profile), targetActionId);
         if (action is null)
         {
             StatusMessage = _localizationService.GetString("Activity.NavigationActionMissing");
@@ -1569,29 +1580,43 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
 
     private void RefreshPersistentActivityViews()
     {
+        foreach (var entry in HistoryEntries) entry.Dispose();
         HistoryEntries.Clear();
         foreach (var session in ProfileExecutionHistoryBuilder.Build(_activityService?.Records ?? []))
         {
-            var item = new ProfileExecutionViewModel(session, _localizationService);
+            var item = new ProfileExecutionViewModel(session, _localizationService, FindActivitySourceAction);
             if (MatchesActivityFilter(item.Timestamp, item.ProfileId, item.Result.ToString(),
                     new string?[] { item.ProfileName, item.StatusText }
                         .Concat(item.Actions.SelectMany(action =>
                             new string?[] { action.Name, action.Description }
                                 .Concat(GetActionProcessSearchTerms(item.ProfileId, action.ActionId))))))
                 HistoryEntries.Add(item);
+            else
+                item.Dispose();
         }
+        foreach (var entry in SystemChangeEntries) entry.Dispose();
         SystemChangeEntries.Clear();
         foreach (var change in _activityService?.SystemChanges ?? [])
         {
-            var item = new SystemChangeItemViewModel(change, _localizationService);
+            var item = new SystemChangeItemViewModel(change, _localizationService,
+                FindActivitySourceAction(change.ProfileId, change.ActionId));
             if (MatchesActivityFilter(item.Timestamp, item.ProfileId, item.Status,
                     new string?[] { item.FriendlyName, item.Details, item.ProcessSearchText }
                         .Concat(GetActionProcessSearchTerms(item.ProfileId, item.ActionId))))
                 SystemChangeEntries.Add(item);
+            else
+                item.Dispose();
         }
         OnPropertyChanged(nameof(UnresolvedSystemChangeCount));
         OnPropertyChanged(nameof(SystemChangeTabText));
         OnPropertyChanged(nameof(SystemChangeNoticeText));
+    }
+
+    private ActionItemViewModel? FindActivitySourceAction(Guid? profileId, Guid actionId)
+    {
+        if (profileId is not { } id) return null;
+        var profile = _allProfiles.FirstOrDefault(item => item.Id == id);
+        return profile is null ? null : FindAction(AllTopLevelActions(profile), actionId);
     }
 
     private void RefreshActivityDisplayEntries()
@@ -1643,7 +1668,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
     {
         if (profileId is not Guid profileKey || actionId is not Guid actionKey) return [];
         var profile = _allProfiles.FirstOrDefault(item => item.Id == profileKey);
-        var action = profile is null ? null : FindAction(profile.Actions, actionKey);
+        var action = profile is null ? null : FindAction(AllTopLevelActions(profile), actionKey);
         if (action is null) return [];
 
         return [action.ProcessName, action.ExecutablePath, Path.GetFileName(action.ExecutablePath), action.Target];
@@ -1710,7 +1735,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
     {
         var profile = entry.ProfileId is Guid profileId ? _allProfiles.FirstOrDefault(item => item.Id == profileId) : null;
         var action = profile is not null && entry.ActionId is Guid actionId
-            ? FindAction(profile.Actions, actionId)
+            ? FindAction(AllTopLevelActions(profile), actionId)
             : null;
         return new ActivityEntryViewModel(entry, profile?.Name, action?.DisplayName ?? action?.Name,
             _localizationService);
@@ -1892,16 +1917,57 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         MarkDirty(_localizationService.GetString("Status.ProfileDuplicated"));
     }
 
-    private void SetSelectedProfileColor(string? color) => SetSelectedProfileAppearance(color, SelectedProfile?.Icon);
-
-    private void SetSelectedProfileIcon(string? icon) => SetSelectedProfileAppearance(SelectedProfile?.Color, icon);
-
-    private void SetSelectedProfileAppearance(string? color, string? icon)
+    private void SetSelectedProfileColor(string? color)
     {
         if (SelectedProfile is null || HasCriticalOperation) return;
         SelectedProfile.Color = color;
-        SelectedProfile.Icon = icon;
         StatusMessage = _localizationService.GetString("Status.ProfileAppearanceChanged");
+    }
+
+    private void SetProfileIconFromAction(ActionItemViewModel? action)
+    {
+        if (action is null || HasCriticalOperation) return;
+        var profile = _allProfiles.FirstOrDefault(candidate =>
+            EnumerateActions(AllTopLevelActions(candidate)).Any(item => ReferenceEquals(item, action)));
+        if (profile is null) return;
+
+        profile.SetIconSourceAction(action.Id);
+        StatusMessage = _localizationService.GetString("Status.ProfileAppearanceChanged");
+        ClearProfileIconCommand.NotifyCanExecuteChanged();
+    }
+
+    private void ChooseSelectedProfileIcon()
+    {
+        ChooseProfileIconForProfile(SelectedProfile);
+    }
+
+    private void ChooseProfileIconForProfile(ProfileItemViewModel? profile)
+    {
+        if (profile is null || HasCriticalOperation) return;
+        var sourcePath = _dialogService.SelectFile(
+            _localizationService.GetString("Dialog.SelectProfileIconTitle"),
+            _localizationService.GetString("Dialog.ProfileIconFileFilter"),
+            profile.IconSourcePath);
+        if (string.IsNullOrWhiteSpace(sourcePath)) return;
+
+        profile.SetIconSourcePath(sourcePath);
+        StatusMessage = _localizationService.GetString("Status.ProfileAppearanceChanged");
+        ClearProfileIconCommand.NotifyCanExecuteChanged();
+        ClearProfileIconForProfileCommand.NotifyCanExecuteChanged();
+    }
+
+    private void ClearSelectedProfileIcon()
+    {
+        ClearProfileIconForProfile(SelectedProfile);
+    }
+
+    private void ClearProfileIconForProfile(ProfileItemViewModel? profile)
+    {
+        if (profile is null || HasCriticalOperation) return;
+        profile.ClearIconSource();
+        StatusMessage = _localizationService.GetString("Status.ProfileAppearanceChanged");
+        ClearProfileIconCommand.NotifyCanExecuteChanged();
+        ClearProfileIconForProfileCommand.NotifyCanExecuteChanged();
     }
 
     private void AddAction()
@@ -1915,25 +1981,28 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
 
         RecordStructuralUndo("add-action");
 
+        var actions = _isAddingPostRestoreAction
+            ? SelectedProfile.PostRestoreActions
+            : SelectedProfile.Actions;
         var action = new ActionItemViewModel(new ActionDefinition
         {
             Id = Guid.NewGuid(),
             Type = SelectedActionType.TypeId,
             Name = null,
             ActionSchemaVersion = 1,
-            SortOrder = SelectedProfile.Actions.Count,
+            SortOrder = actions.Count,
             IsEnabled = true,
             FailurePolicy = ActionFailurePolicy.Continue,
             Parameters = _actionPickerCatalog.CreateDefaultParameters(SelectedActionType.TypeId, nested: false)
         }, _localizationService);
         Subscribe(action);
-        foreach (var existingAction in SelectedProfile.Actions)
+        foreach (var existingAction in actions)
         {
             existingAction.IsExpanded = false;
         }
 
         action.IsExpanded = true;
-        SelectedProfile.Actions.Add(action);
+        actions.Add(action);
         SelectedAction = action;
         _ = HydrateDisplayActionsAsync();
         NotifyActionCommandStates();
@@ -1950,13 +2019,23 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
     private void ToggleMainActionPicker()
     {
         _nestedActionTarget = null;
+        _isAddingPostRestoreAction = false;
         IsActionPickerOpen = !IsActionPickerOpen;
+    }
+
+    private void TogglePostRestoreActionPicker()
+    {
+        _nestedActionTarget = null;
+        var isAlreadyTargetingPostRestore = _isAddingPostRestoreAction && IsActionPickerOpen;
+        _isAddingPostRestoreAction = true;
+        IsActionPickerOpen = !isAlreadyTargetingPostRestore;
     }
 
     private void OpenNestedActionPicker(ActionItemViewModel? action, bool thenBranch)
     {
         if (action is null || !action.CanAddNestedActions) return;
         _nestedActionTarget = action;
+        _isAddingPostRestoreAction = false;
         _nestedActionThenBranch = thenBranch;
         IsActionPickerOpen = true;
     }
@@ -1981,6 +2060,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
             return;
         }
         AddAction();
+        _isAddingPostRestoreAction = false;
     }
 
     private void DuplicateAction(ActionItemViewModel? action)
@@ -1989,11 +2069,13 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         RecordStructuralUndo("duplicate-action");
         var model = action.ToModel();
         ResetRuntimeAndAssignIds(model);
+        var actions = GetActionCollection(SelectedProfile, action);
+        if (actions is null) return;
         var copy = new ActionItemViewModel(model, _localizationService);
         Subscribe(copy);
-        var index = SelectedProfile.Actions.IndexOf(action);
-        foreach (var existing in SelectedProfile.Actions) existing.IsExpanded = false;
-        SelectedProfile.Actions.Insert(index + 1, copy);
+        var index = actions.IndexOf(action);
+        foreach (var existing in actions) existing.IsExpanded = false;
+        actions.Insert(index + 1, copy);
         SelectedAction = copy;
         _ = HydrateDisplayActionsAsync();
         MarkDirty(_localizationService.GetString("Status.ActionDuplicated"));
@@ -2088,13 +2170,15 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
 
         RecordStructuralUndo("delete-action");
 
-        var removedIndex = SelectedProfile.Actions.IndexOf(action);
-        SelectedProfile.Actions.Remove(action);
+        var actions = GetActionCollection(SelectedProfile, action);
+        if (actions is null) return;
+        var removedIndex = actions.IndexOf(action);
+        actions.Remove(action);
         if (ReferenceEquals(SelectedAction, action))
         {
-            SelectedAction = SelectedProfile.Actions.Count == 0
+            SelectedAction = actions.Count == 0
                 ? null
-                : SelectedProfile.Actions[Math.Min(removedIndex, SelectedProfile.Actions.Count - 1)];
+                : actions[Math.Min(removedIndex, actions.Count - 1)];
         }
         NotifyActionCommandStates();
         MarkDirty(_localizationService.GetString("Status.ActionRemoved"));
@@ -2107,11 +2191,13 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
             return;
         }
 
-        var index = SelectedProfile.Actions.IndexOf(action);
+        var actions = GetActionCollection(SelectedProfile, action);
+        if (actions is null) return;
+        var index = actions.IndexOf(action);
         if (index > 0)
         {
             RecordStructuralUndo("move-action");
-            SelectedProfile.Actions.Move(index, index - 1);
+            actions.Move(index, index - 1);
             NotifyActionCommandStates();
             MarkDirty(_localizationService.GetString("Status.ActionOrderChanged"));
         }
@@ -2124,25 +2210,26 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
             return;
         }
 
-        var index = SelectedProfile.Actions.IndexOf(action);
-        if (index >= 0 && index < SelectedProfile.Actions.Count - 1)
+        var actions = GetActionCollection(SelectedProfile, action);
+        if (actions is null) return;
+        var index = actions.IndexOf(action);
+        if (index >= 0 && index < actions.Count - 1)
         {
             RecordStructuralUndo("move-action");
-            SelectedProfile.Actions.Move(index, index + 1);
+            actions.Move(index, index + 1);
             NotifyActionCommandStates();
             MarkDirty(_localizationService.GetString("Status.ActionOrderChanged"));
         }
     }
 
     private bool CanMoveActionUp(ActionItemViewModel? action) =>
-        SelectedProfile is not null && action is not null && SelectedProfile.Actions.IndexOf(action) > 0;
+        SelectedProfile is not null && action is not null &&
+        GetActionCollection(SelectedProfile, action) is { } actions && actions.IndexOf(action) > 0;
 
     private bool CanMoveActionDown(ActionItemViewModel? action) =>
-        SelectedProfile is not null &&
-        action is not null &&
-        SelectedProfile.Actions.IndexOf(action) is var index &&
-        index >= 0 &&
-        index < SelectedProfile.Actions.Count - 1;
+        SelectedProfile is not null && action is not null &&
+        GetActionCollection(SelectedProfile, action) is { } actions && actions.IndexOf(action) is var index &&
+        index >= 0 && index < actions.Count - 1;
 
     public async Task ApplyReorderAsync(ReorderDropRequest? request)
     {
@@ -2276,10 +2363,16 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
     private bool ReorderAction(ReorderDropRequest request)
     {
         if (SelectedProfile is null || request.Item is not ActionItemViewModel action) return false;
-        var actions = SelectedProfile.Actions;
+        var actions = GetActionCollection(SelectedProfile, action);
+        if (actions is null) return false;
+        if (request.TargetItem is ActionItemViewModel targetAction &&
+            !ReferenceEquals(GetActionCollection(SelectedProfile, targetAction), actions))
+            return false;
         var oldIndex = actions.IndexOf(action);
         if (oldIndex < 0) return false;
-        var insertionIndex = Math.Clamp(request.TargetIndex, 0, actions.Count);
+        var insertionIndex = request.TargetItem is ActionItemViewModel target
+            ? actions.IndexOf(target) + (request.TargetIndex > SelectedProfile.EditorActions.IndexOf(target) ? 1 : 0)
+            : Math.Clamp(request.TargetIndex, 0, actions.Count);
         var newIndex = insertionIndex > oldIndex ? insertionIndex - 1 : insertionIndex;
         newIndex = Math.Clamp(newIndex, 0, actions.Count - 1);
         if (newIndex == oldIndex) return false;
@@ -2290,6 +2383,13 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         MarkDirty(_localizationService.GetString("Status.ActionOrderChanged"));
         return true;
     }
+
+    private static ObservableCollection<ActionItemViewModel>? GetActionCollection(ProfileItemViewModel profile,
+        ActionItemViewModel action) => profile.Actions.Contains(action)
+        ? profile.Actions
+        : profile.PostRestoreActions.Contains(action)
+            ? profile.PostRestoreActions
+            : null;
 
     private bool ReorderTheme(ReorderDropRequest request)
     {
@@ -2746,7 +2846,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         _userSettings.LanguageId = languageId;
         foreach (var actionType in AvailableActionTypes) actionType.RefreshLocalization();
         ActionPickerView.Refresh();
-        foreach (var action in _allProfiles.SelectMany(profile => profile.Actions)) action.RefreshDisplayName();
+        foreach (var action in _allProfiles.SelectMany(AllTopLevelActions)) action.RefreshDisplayName();
         foreach (var languageOption in LanguageOptions) languageOption.RefreshDisplayName();
         CloseBehaviorOptions[0].RefreshDisplayName(_localizationService.GetString("Settings.CloseSwitchBoard"));
         CloseBehaviorOptions[1].RefreshDisplayName(_localizationService.GetString("Settings.MinimizeToTray"));
@@ -3136,7 +3236,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         foreach (var profile in _allProfiles)
         {
             profile.PropertyChanged -= ItemOnPropertyChanged;
-            foreach (var action in EnumerateActions(profile.Actions))
+            foreach (var action in EnumerateActions(AllTopLevelActions(profile)))
                 action.PropertyChanged -= ItemOnPropertyChanged;
         }
     }
@@ -3158,7 +3258,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
                 _statusRefreshQueued = false;
                 var profile = SelectedProfile;
                 if (profile is not null)
-                    await _statusMonitoring.RefreshSelectedProfileAsync(profile.Actions);
+                    await _statusMonitoring.RefreshSelectedProfileAsync(AllTopLevelActions(profile));
             }
         }
         catch (Exception exception)
@@ -3539,17 +3639,78 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         {
             var progress = new Progress<ProfileRestoreProgress>(ApplyRestoreProgress);
             var result = await _profileRestoreRunner.RunAsync(_pendingRestoreSession, progress,
-                _profileExecutionCancellation.Token);
-            var completedCurrentSession = result.PendingRestoreCount == 0;
-            await RefreshPendingRestoreAsync();
-            RestoreNoticeText = !completedCurrentSession
-                ? _localizationService.GetString("Restore.Partial")
-                : RestoreChangeCount > 0
+                _profileExecutionCancellation.Token, deferCompletionActivity: true);
+            var baseRestoreSucceeded = result.Status == PersistentSessionStatus.Restored &&
+                                      result.PendingRestoreCount == 0;
+
+            if (!baseRestoreSucceeded)
+            {
+                _profileRestoreRunner.RecordCompletionActivity(result);
+                await RefreshPendingRestoreAsync();
+                RestoreNoticeText = RestoreChangeCount > 0
                     ? _localizationService.GetString("Restore.PreviousPending")
-                    : _localizationService.GetString("Restore.Completed");
-            SetExecutionStatus(result.PendingRestoreCount == 0 ? "Execution.Status.Success" : "Execution.Status.CompletedWithErrors");
-            if (result.Status == PersistentSessionStatus.Restored && result.PendingRestoreCount == 0 &&
-                profileToRestore is not null && profileToRestore.CloseSwitchBoardAfterSuccessfulRestore)
+                    : _localizationService.GetString("Restore.Partial");
+                SetExecutionStatus("Execution.Status.CompletedWithErrors");
+                return;
+            }
+
+            // A post-restore list belongs to a regular profile-run restore only.
+            // Restoring a single-action test or a later reversible post action must
+            // not recursively start the list again.
+            var shouldRunPostRestoreActions = result.Origin == ExecutionOrigin.ProfileRun;
+            var postRestoreSucceeded = true;
+            if (shouldRunPostRestoreActions && profileToRestore?.PostRestoreActions.Count > 0)
+            {
+                SetProfileExecutionState(profileToRestore, ProfileExecutionState.Executing);
+                CurrentExecutionActionNumber = 0;
+                TotalExecutionActions = profileToRestore.PostRestoreActions.Count(action => action.IsEnabled &&
+                    !string.Equals(action.Type, ActionTypeIds.Comment, StringComparison.OrdinalIgnoreCase));
+                CurrentExecutionActionName = _localizationService.GetString("Activity.PostRestorePhase");
+                ExecutionErrorMessage = string.Empty;
+                SetExecutionStatus("Execution.Status.Running");
+
+                try
+                {
+                    var postRestoreSession = await RunPostRestoreActionsAsync(profileToRestore,
+                        _profileExecutionCancellation.Token);
+                    LastExecutionSession = postRestoreSession;
+                    postRestoreSucceeded = postRestoreSession.Status == ExecutionSessionStatus.Completed &&
+                        postRestoreSession.Journal.All(entry => entry.Status is ActionJournalStatus.Success or
+                            ActionJournalStatus.Skipped);
+                    if (!postRestoreSucceeded)
+                    {
+                        ExecutionErrorMessage = postRestoreSession.Journal.LastOrDefault(entry =>
+                            entry.Status is ActionJournalStatus.Failed or ActionJournalStatus.Unsupported)?.ErrorMessage ??
+                            _localizationService.GetString("Status.ProfileFailed");
+                    }
+                }
+                catch (Exception exception) when (exception is not OperationCanceledException)
+                {
+                    postRestoreSucceeded = false;
+                    ExecutionErrorMessage = exception.Message;
+                }
+            }
+
+            await RefreshPendingRestoreAsync();
+            if (!postRestoreSucceeded)
+            {
+                SetProfileExecutionState(profileToRestore, ProfileExecutionState.Error);
+                SetExecutionStatus("Execution.Status.Failed");
+                RestoreNoticeText = _localizationService.Format("Activity.PostRestoreFailed", ExecutionErrorMessage);
+                StatusMessage = _localizationService.GetString("Status.ProfileFailed");
+                _activityService?.Add(ActivityLevel.Error,
+                    _localizationService.Format("Activity.PostRestoreFailed", ExecutionErrorMessage),
+                    profileToRestore?.Id);
+                return;
+            }
+
+            _profileRestoreRunner.RecordCompletionActivity(result);
+            RestoreNoticeText = RestoreChangeCount > 0
+                ? _localizationService.GetString("Restore.PreviousPending")
+                : _localizationService.GetString("Restore.Completed");
+            SetExecutionStatus("Execution.Status.Success");
+            if (shouldRunPostRestoreActions && profileToRestore is not null &&
+                profileToRestore.CloseSwitchBoardAfterSuccessfulRestore)
             {
                 _allowCloseWithoutConfirmation = true;
                 _profileCompletionBehavior.HandleSuccessfulRestore(profileToRestore.ToModel());
@@ -3572,7 +3733,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
             _profileExecutionCancellation = null;
             IsRestoreRunning = false;
             ClearActiveActionExecutionStates();
-            if (SelectedProfile is not null)
+            if (SelectedProfile?.ExecutionState is ProfileExecutionState.Restoring or ProfileExecutionState.Executing)
                 SetProfileExecutionState(SelectedProfile, ProfileExecutionState.Normal);
         }
     }
@@ -3583,6 +3744,17 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         await RestoreProfileAsync();
         _lastSingleActionTestSession = null;
         UndoSingleActionTestCommand.NotifyCanExecuteChanged();
+    }
+
+    private Task<ExecutionSession> RunPostRestoreActionsAsync(ProfileItemViewModel profile,
+        CancellationToken cancellationToken)
+    {
+        var postRestoreProfile = profile.ToModel();
+        postRestoreProfile.Actions = postRestoreProfile.PostRestoreActions;
+        postRestoreProfile.PostRestoreActions = [];
+        return _profileRunner.RunAsync(postRestoreProfile,
+            new Progress<ProfileExecutionProgress>(ApplyExecutionProgress), cancellationToken,
+            ExecutionOrigin.PostRestore);
     }
 
     private void SetRestoreCount(int value)
@@ -3601,7 +3773,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
     private static void ResetActionExecutionStates(ProfileItemViewModel? profile)
     {
         if (profile is null) return;
-        foreach (var action in EnumerateActions(profile.Actions))
+        foreach (var action in EnumerateActions(AllTopLevelActions(profile)))
             action.ResetExecutionState();
     }
 
@@ -3612,7 +3784,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
             : SelectedProfile;
         return profile is null
             ? null
-            : EnumerateActions(profile.Actions).FirstOrDefault(action => action.Id == actionId);
+            : EnumerateActions(AllTopLevelActions(profile)).FirstOrDefault(action => action.Id == actionId);
     }
 
     private void ApplyActionExecutionState(Guid actionId, Guid profileId, ActionExecutionState state) =>
@@ -3620,7 +3792,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
 
     private void ClearActiveActionExecutionStates()
     {
-        foreach (var action in _allProfiles.SelectMany(profile => EnumerateActions(profile.Actions)))
+        foreach (var action in _allProfiles.SelectMany(profile => EnumerateActions(AllTopLevelActions(profile))))
         {
             if (action.IsExecutionRunning || action.IsRestoring)
                 action.ResetExecutionState();
@@ -3845,7 +4017,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
 
     private async Task HydrateDisplayActionsAsync()
     {
-        var actions = _allProfiles.SelectMany(profile => profile.Actions)
+        var actions = _allProfiles.SelectMany(AllTopLevelActions)
             .Where(action => action.Type == ActionTypeIds.DisplayConfigure)
             .ToList();
         if (actions.Count == 0) return;
@@ -3909,7 +4081,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         }
 
         var shouldExpand = !action.IsExpanded;
-        foreach (var candidate in SelectedProfile.Actions)
+        foreach (var candidate in AllTopLevelActions(SelectedProfile))
         {
             candidate.IsExpanded = false;
         }
@@ -3927,6 +4099,13 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         action.TargetType = TargetTypeIds.Executable;
         action.Target = target;
         action.TrySetSuggestedName(suggestedName);
+        if (string.Equals(Path.GetExtension(target), ".lnk", StringComparison.OrdinalIgnoreCase))
+        {
+            action.Arguments = string.Empty;
+            action.WorkingDirectory = string.Empty;
+            action.UseCustomWorkingDirectory = false;
+            return;
+        }
         action.WorkingDirectory = workingDirectory;
         action.UseCustomWorkingDirectory = !string.IsNullOrWhiteSpace(workingDirectory);
     }
@@ -4336,7 +4515,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         }
         ActionPickerView.Refresh();
 
-        foreach (var action in _allProfiles.SelectMany(profile => profile.Actions))
+        foreach (var action in _allProfiles.SelectMany(AllTopLevelActions))
         {
             action.RefreshDisplayName();
         }
@@ -4581,6 +4760,8 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
             profile.SortOrder = profileIndex;
             for (var actionIndex = 0; actionIndex < profile.Actions.Count; actionIndex++)
                 profile.Actions[actionIndex].SortOrder = actionIndex;
+            for (var actionIndex = 0; actionIndex < profile.PostRestoreActions.Count; actionIndex++)
+                profile.PostRestoreActions[actionIndex].SortOrder = actionIndex;
         }
     }
 
@@ -4594,9 +4775,12 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         foreach (var profile in _allProfiles)
         {
             Subscribe(profile);
-            foreach (var action in EnumerateActions(profile.Actions)) Subscribe(action);
+            foreach (var action in EnumerateActions(AllTopLevelActions(profile))) Subscribe(action);
         }
     }
+
+    private static IEnumerable<ActionItemViewModel> AllTopLevelActions(ProfileItemViewModel profile) =>
+        profile.Actions.Concat(profile.PostRestoreActions);
 
     private static IEnumerable<ActionItemViewModel> EnumerateActions(IEnumerable<ActionItemViewModel> actions)
     {
@@ -4612,7 +4796,16 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
 
     private void ItemOnPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(ProfileItemViewModel.SettingsDisplayName)) return;
+        if (e.PropertyName is nameof(ProfileItemViewModel.SettingsDisplayName) or
+            nameof(ProfileItemViewModel.HasAppearance) or nameof(ProfileItemViewModel.IconPathData) or
+            nameof(ProfileItemViewModel.IconSourceDisplayName) or nameof(ProfileItemViewModel.IconImage) or
+            nameof(ProfileItemViewModel.HasIconImage) or nameof(ActionItemViewModel.ApplicationIcon) or
+            nameof(ActionItemViewModel.HasApplicationIcon)) return;
+        if (sender is ProfileItemViewModel && e.PropertyName is nameof(ProfileItemViewModel.IconSourcePath) or
+                nameof(ProfileItemViewModel.IconSourceActionId) or nameof(ProfileItemViewModel.HasAppearance))
+            ClearProfileIconCommand.NotifyCanExecuteChanged();
+        if (sender is ProfileItemViewModel)
+            ClearProfileIconForProfileCommand.NotifyCanExecuteChanged();
         if ((sender is CategoryItemViewModel && e.PropertyName == nameof(CategoryItemViewModel.Name)) ||
             (sender is ProfileItemViewModel &&
              (e.PropertyName is nameof(ProfileItemViewModel.Name) or nameof(ProfileItemViewModel.CategoryId))))
@@ -4635,7 +4828,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
                 nameof(ActionItemViewModel.CurrentStatusTooltip) or nameof(ActionItemViewModel.LastChecked)))
         {
             changedAction.ClearExecutionError();
-            _allProfiles.FirstOrDefault(profile => profile.Actions.Any(action =>
+            _allProfiles.FirstOrDefault(profile => AllTopLevelActions(profile).Any(action =>
                 EnumerateActions([action]).Any(candidate => candidate.Id == changedAction.Id)))?.ClearExecutionError();
         }
         if (e.PropertyName is nameof(CategoryItemViewModel.IsEditing) or
@@ -4735,7 +4928,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         foreach (var profile in _allProfiles)
         {
             profile.PropertyChanged -= ItemOnPropertyChanged;
-            foreach (var action in EnumerateActions(profile.Actions)) action.PropertyChanged -= ItemOnPropertyChanged;
+            foreach (var action in EnumerateActions(AllTopLevelActions(profile))) action.PropertyChanged -= ItemOnPropertyChanged;
         }
         Categories.Clear();
         _allProfiles.Clear();
@@ -4776,7 +4969,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         foreach (var profile in _allProfiles)
         {
             profile.PropertyChanged -= ItemOnPropertyChanged;
-            foreach (var action in EnumerateActions(profile.Actions)) action.PropertyChanged -= ItemOnPropertyChanged;
+            foreach (var action in EnumerateActions(AllTopLevelActions(profile))) action.PropertyChanged -= ItemOnPropertyChanged;
         }
         Categories.Clear();
         _allProfiles.Clear();
@@ -4860,6 +5053,8 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
                 model.SortOrder = index;
                 for (var actionIndex = 0; actionIndex < model.Actions.Count; actionIndex++)
                     model.Actions[actionIndex].SortOrder = actionIndex;
+                for (var actionIndex = 0; actionIndex < model.PostRestoreActions.Count; actionIndex++)
+                    model.PostRestoreActions[actionIndex].SortOrder = actionIndex;
                 profiles.Add(model);
             }
         }
@@ -4879,6 +5074,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
 
     private void NotifyActionCommandStates()
     {
+        TogglePostRestoreActionPickerCommand.NotifyCanExecuteChanged();
         MoveActionUpCommand.NotifyCanExecuteChanged();
         MoveActionDownCommand.NotifyCanExecuteChanged();
     }

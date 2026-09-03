@@ -54,6 +54,19 @@
         <Style x:Key="ActivityTab2ButtonStyle" TargetType="Button" BasedOn="{StaticResource ActivityTabButtonStyle}">
             <Style.Triggers><DataTrigger Binding="{Binding ActivityTabIndex}" Value="2"><Setter Property="Background" Value="{DynamicResource SelectedBrush}" /><Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" /></DataTrigger></Style.Triggers>
         </Style>
+        <Style x:Key="SystemChangeStatusDotStyle" TargetType="Ellipse">
+            <Setter Property="Width" Value="8" />
+            <Setter Property="Height" Value="8" />
+            <Setter Property="Fill" Value="{DynamicResource TextSecondaryBrush}" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Status}" Value="restored"><Setter Property="Fill" Value="{DynamicResource SuccessBrush}" /></DataTrigger>
+                <DataTrigger Binding="{Binding Status}" Value="pending"><Setter Property="Fill" Value="{DynamicResource WarningBrush}" /></DataTrigger>
+                <DataTrigger Binding="{Binding Status}" Value="discarded"><Setter Property="Fill" Value="{DynamicResource WarningBrush}" /></DataTrigger>
+                <DataTrigger Binding="{Binding Status}" Value="external-change"><Setter Property="Fill" Value="{DynamicResource WarningBrush}" /></DataTrigger>
+                <DataTrigger Binding="{Binding Status}" Value="left-active"><Setter Property="Fill" Value="{DynamicResource WarningBrush}" /></DataTrigger>
+                <DataTrigger Binding="{Binding Status}" Value="restore-failed"><Setter Property="Fill" Value="{DynamicResource DangerBrush}" /></DataTrigger>
+            </Style.Triggers>
+        </Style>
     </UserControl.Resources>
     <Border Margin="0" Padding="16"
             Background="{DynamicResource ActivitySurfaceBrush}"
@@ -124,17 +137,23 @@
                             <ListBox.ItemTemplate><DataTemplate>
                                 <controls:CardSurfaceControl Style="{DynamicResource ActivityRowSurfaceStyle}" Margin="0,0,0,5">
                                     <Grid HorizontalAlignment="Stretch" MouseLeftButtonDown="SystemChangeEntry_OnMouseDoubleClick">
-                                        <Grid.ColumnDefinitions><ColumnDefinition Width="58" /><ColumnDefinition Width="170" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="58" /><ColumnDefinition Width="200" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                                         <TextBlock Style="{StaticResource CaptionText}" Text="{Binding Timestamp, StringFormat={}{0:HH:mm:ss}}" />
-                                        <TextBlock Grid.Column="1" FontWeight="SemiBold" Text="{Binding FriendlyName}" Cursor="Hand" TextDecorations="Underline" TextTrimming="CharacterEllipsis" ToolTip="{Binding FriendlyName}" MouseLeftButtonDown="SystemChangeTarget_OnMouseLeftButtonDown">
-                                            <TextBlock.Style><Style TargetType="TextBlock">
-                                                <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding IsNavigable}" Value="False"><Setter Property="TextDecorations" Value="{x:Null}" /><Setter Property="Cursor" Value="Arrow" /></DataTrigger>
-                                                    <Trigger Property="IsMouseOver" Value="True"><Setter Property="Foreground" Value="{DynamicResource AccentBrush}" /></Trigger>
-                                                </Style.Triggers>
-                                            </Style></TextBlock.Style>
-                                        </TextBlock>
+                                        <Grid Grid.Column="1" ToolTip="{Binding FriendlyName}">
+                                            <Grid.ColumnDefinitions><ColumnDefinition Width="18" /><ColumnDefinition Width="14" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                            <Image Width="16" Height="16" VerticalAlignment="Center" Source="{Binding IconPresentation.Icon}"
+                                                   Visibility="{Binding IconPresentation.HasIcon, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                            <Ellipse Grid.Column="1" VerticalAlignment="Center" Style="{StaticResource SystemChangeStatusDotStyle}" />
+                                            <TextBlock Grid.Column="2" FontWeight="SemiBold" Text="{Binding FriendlyName}" Cursor="Hand" TextDecorations="Underline" TextTrimming="CharacterEllipsis" MouseLeftButtonDown="SystemChangeTarget_OnMouseLeftButtonDown">
+                                                <TextBlock.Style><Style TargetType="TextBlock">
+                                                    <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsNavigable}" Value="False"><Setter Property="TextDecorations" Value="{x:Null}" /><Setter Property="Cursor" Value="Arrow" /></DataTrigger>
+                                                        <Trigger Property="IsMouseOver" Value="True"><Setter Property="Foreground" Value="{DynamicResource AccentBrush}" /></Trigger>
+                                                    </Style.Triggers>
+                                                </Style></TextBlock.Style>
+                                            </TextBlock>
+                                        </Grid>
                                         <TextBlock Grid.Column="2" Margin="12,0,12,0" Text="{Binding Details}" TextWrapping="Wrap" ToolTip="{Binding Details}" />
                                         <TextBlock Grid.Column="3" VerticalAlignment="Center" FontWeight="SemiBold" Text="{Binding StatusText}">
                                             <TextBlock.Style><Style TargetType="TextBlock">
@@ -218,12 +237,14 @@
                                                         </Style>
                                                     </Path.Style>
                                                 </Path>
-                                                <TextBlock Grid.Column="1" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}"
-                                                           Text="{Binding ProfileName}" TextTrimming="CharacterEllipsis" />
+                                                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                                    <Ellipse Margin="0,0,6,0" VerticalAlignment="Center" Style="{DynamicResource ProfileResultStatusDotStyle}" />
+                                                    <TextBlock FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}"
+                                                               Text="{Binding ProfileName}" TextTrimming="CharacterEllipsis" />
+                                                </StackPanel>
                                                 <TextBlock Grid.Column="2" Margin="12,0,16,0" Style="{StaticResource CaptionText}"
                                                            Text="{Binding Timestamp, StringFormat={}{0:dd.MM.yyyy HH:mm:ss}}" />
                                                 <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
-                                                    <Ellipse Margin="0,0,6,0" VerticalAlignment="Center" Style="{DynamicResource ProfileResultStatusDotStyle}" />
                                                     <TextBlock FontWeight="SemiBold" Text="{Binding StatusText}">
                                                         <TextBlock.Style><Style TargetType="TextBlock">
                                                             <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
@@ -238,6 +259,7 @@
                                                 </StackPanel>
                                                 <StackPanel Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="3" Margin="0,5,0,0">
                                                     <TextBlock Style="{StaticResource CaptionText}" Text="{Binding ActionSummaryText}" />
+                                                    <TextBlock Margin="0,2,0,0" Style="{StaticResource CaptionText}" Foreground="{DynamicResource AccentBrush}" Text="{Binding PhaseText}" />
                                                     <TextBlock Margin="0,2,0,0" Foreground="{DynamicResource DangerBrush}" Text="{Binding ProgressText}" />
                                                     <TextBlock Margin="0,2,0,0" Foreground="{DynamicResource AccentBrush}" Text="{Binding RestoreText}" />
                                                 </StackPanel>
@@ -248,17 +270,22 @@
                                             <ItemsControl ItemsSource="{Binding Actions}" HorizontalContentAlignment="Stretch">
                                                 <ItemsControl.ItemTemplate><DataTemplate>
                                                     <Grid Margin="0,2" Cursor="Hand" MouseLeftButtonDown="HistoryAction_OnMouseLeftButtonDown">
-                                                        <Grid.ColumnDefinitions><ColumnDefinition Width="170" /><ColumnDefinition Width="64" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-                                                        <TextBlock FontWeight="SemiBold" Text="{Binding Name}" TextDecorations="Underline" Cursor="Hand" TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}">
-                                                            <TextBlock.Style><Style TargetType="TextBlock">
-                                                                <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
-                                                                <Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Foreground" Value="{DynamicResource AccentBrush}" /><Setter Property="Opacity" Value="0.86" /></Trigger></Style.Triggers>
-                                                            </Style></TextBlock.Style>
-                                                        </TextBlock>
+                                                        <Grid.ColumnDefinitions><ColumnDefinition Width="200" /><ColumnDefinition Width="64" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                                        <Grid ToolTip="{Binding Name}">
+                                                            <Grid.ColumnDefinitions><ColumnDefinition Width="18" /><ColumnDefinition Width="14" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                                            <Image Width="16" Height="16" VerticalAlignment="Center" Source="{Binding IconPresentation.Icon}"
+                                                                   Visibility="{Binding IconPresentation.HasIcon, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                                            <Ellipse Grid.Column="1" VerticalAlignment="Center" Style="{DynamicResource ActionResultStatusDotStyle}" />
+                                                            <TextBlock Grid.Column="2" FontWeight="SemiBold" Text="{Binding Name}" TextDecorations="Underline" Cursor="Hand" TextTrimming="CharacterEllipsis">
+                                                                <TextBlock.Style><Style TargetType="TextBlock">
+                                                                    <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+                                                                    <Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Foreground" Value="{DynamicResource AccentBrush}" /><Setter Property="Opacity" Value="0.86" /></Trigger></Style.Triggers>
+                                                                </Style></TextBlock.Style>
+                                                            </TextBlock>
+                                                        </Grid>
                                                         <TextBlock Grid.Column="1" HorizontalAlignment="Left" Style="{StaticResource CaptionText}" Text="{Binding DurationText}" ToolTip="{Binding DurationText}" />
                                                         <TextBlock Grid.Column="2" Margin="12,0,12,0" Style="{StaticResource CaptionText}" Text="{Binding Description}" TextWrapping="Wrap" ToolTip="{Binding Description}" />
                                                         <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
-                                                            <Ellipse Margin="0,0,6,0" VerticalAlignment="Center" Style="{DynamicResource ActionResultStatusDotStyle}" />
                                                             <TextBlock FontWeight="SemiBold" Text="{Binding StatusText}">
                                                                 <TextBlock.Style><Style TargetType="TextBlock">
                                                                     <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />

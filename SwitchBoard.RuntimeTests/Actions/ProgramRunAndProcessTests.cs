@@ -6,6 +6,96 @@ namespace SwitchBoard.RuntimeTests.Actions;
 public sealed class ProgramRunAndProcessTests : RuntimeTestBase
 {
     [Fact]
+    [Trait("Category", "Regression")]
+    public void ProgramRun_ExecutableStartInfo_KeepsExistingDirectLaunchBehavior()
+    {
+        var executablePath = Path.Combine(Path.GetTempPath(), "SwitchBoard", "example.exe");
+        var workingDirectory = Path.GetDirectoryName(executablePath)!;
+        var action = Action(ActionTypeIds.ProgramRun, new JsonObject
+        {
+            [ActionParameterNames.Target] = executablePath,
+            [ActionParameterNames.Arguments] = "--example value",
+            [ActionParameterNames.WorkingDirectory] = workingDirectory,
+            [ActionParameterNames.UseCustomWorkingDirectory] = true
+        });
+
+        var startInfo = ProgramRunActionHandler.CreateStartInfo(action, executablePath);
+
+        Assert.False(startInfo.UseShellExecute);
+        Assert.Equal("--example value", startInfo.Arguments);
+        Assert.Equal(workingDirectory, startInfo.WorkingDirectory);
+    }
+
+    [Fact]
+    [Trait("Category", "Regression")]
+    public void ProgramRun_ShortcutStartInfo_UsesWindowsShellAndLeavesShortcutSettingsUntouched()
+    {
+        var shortcutPath = Path.Combine(Path.GetTempPath(), "SwitchBoard", "example.lnk");
+        var action = Action(ActionTypeIds.ProgramRun, new JsonObject
+        {
+            [ActionParameterNames.Target] = shortcutPath,
+            [ActionParameterNames.Arguments] = "--must-not-override-shortcut",
+            [ActionParameterNames.WorkingDirectory] = Path.Combine(Path.GetTempPath(), "other-directory"),
+            [ActionParameterNames.UseCustomWorkingDirectory] = true
+        });
+
+        var startInfo = ProgramRunActionHandler.CreateStartInfo(action, shortcutPath);
+
+        Assert.True(startInfo.UseShellExecute);
+        Assert.Equal(shortcutPath, startInfo.FileName);
+        Assert.Equal(string.Empty, startInfo.Arguments);
+        Assert.Equal(string.Empty, startInfo.WorkingDirectory);
+    }
+
+    [Fact]
+    [Trait("Category", "Regression")]
+    public async Task ProgramRun_MissingShortcut_ReturnsNormalStartError()
+    {
+        var shortcutPath = Path.Combine(Path.GetTempPath(), $"SwitchBoard-missing-{Guid.NewGuid():N}.lnk");
+        var action = Action(ActionTypeIds.ProgramRun, new JsonObject
+        {
+            [ActionParameterNames.Target] = shortcutPath,
+            [ActionParameterNames.InstanceBehavior] = InstanceBehaviorIds.StartAnother
+        });
+
+        var result = await new ProgramRunActionHandler().ExecuteAsync(
+            action, new(Guid.NewGuid(), Guid.NewGuid()), CancellationToken.None);
+
+        Assert.False(result.IsSuccessful);
+        Assert.Contains("Could not start", result.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
+    [Trait("Platform", "Windows")]
+    public async Task ProgramRun_ShortcutSmoke_UsesArgumentsAndWorkingDirectoryStoredInShortcut()
+    {
+        using var context = new RuntimeTestContext();
+        var shortcutPath = Path.Combine(context.Root, "program-run-smoke.lnk");
+        var shortcutWorkingDirectory = Path.Combine(context.Root, "shortcut-working-directory");
+        var markerPath = Path.Combine(context.Root, "shortcut-working-directory.txt");
+        Directory.CreateDirectory(shortcutWorkingDirectory);
+        CreateWindowsShortcut(shortcutPath, Path.Combine(Environment.SystemDirectory, "cmd.exe"),
+            $"/d /c echo %CD%>\"{markerPath}\"", shortcutWorkingDirectory);
+        var action = Action(ActionTypeIds.ProgramRun, new JsonObject
+        {
+            [ActionParameterNames.Target] = shortcutPath,
+            [ActionParameterNames.Arguments] = "/d /c echo unexpected>ignored.txt",
+            [ActionParameterNames.WorkingDirectory] = context.Root,
+            [ActionParameterNames.UseCustomWorkingDirectory] = true,
+            [ActionParameterNames.InstanceBehavior] = InstanceBehaviorIds.StartAnother
+        });
+
+        var result = await new ProgramRunActionHandler().ExecuteAsync(
+            action, new(Guid.NewGuid(), Guid.NewGuid()), CancellationToken.None);
+        await TestHelpers.WaitUntilAsync(() => File.Exists(markerPath), TimeSpan.FromSeconds(5));
+
+        Assert.True(result.IsSuccessful, result.Message);
+        Assert.Equal(Path.GetFullPath(shortcutWorkingDirectory), (await File.ReadAllTextAsync(markerPath)).Trim());
+        Assert.False(File.Exists(Path.Combine(context.Root, "ignored.txt")));
+    }
+
+    [Fact]
     [Trait("Category", "Integration")]
     [Trait("Platform", "Windows")]
     public async Task ProcessSetState_StoppedProcess_IsSkippedOnSecondExecution()
@@ -602,6 +692,20 @@ Set-Content -LiteralPath $PidPath -Value $child.Id
             KillProcess(notepad!.Id);
             notepad.Dispose();
         }
+    }
+
+    private static void CreateWindowsShortcut(string shortcutPath, string targetPath, string arguments,
+        string workingDirectory)
+    {
+        var shellType = Type.GetTypeFromProgID("WScript.Shell") ??
+                        throw new InvalidOperationException("Windows Script Host is not available.");
+        dynamic shell = Activator.CreateInstance(shellType) ??
+                        throw new InvalidOperationException("Windows Shell could not create a shortcut.");
+        dynamic shortcut = shell.CreateShortcut(shortcutPath);
+        shortcut.TargetPath = targetPath;
+        shortcut.Arguments = arguments;
+        shortcut.WorkingDirectory = workingDirectory;
+        shortcut.Save();
     }
 
     private static string GetPowerShellPath() => Path.Combine(

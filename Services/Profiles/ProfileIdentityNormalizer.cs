@@ -17,6 +17,7 @@ public static class ProfileIdentityNormalizer
         ArgumentNullException.ThrowIfNull(profile);
         profile.Id = Guid.NewGuid();
         AssignNewActionIds(profile.Actions);
+        AssignNewActionIds(profile.PostRestoreActions);
     }
 
     public static void AssignNewActionIds(IEnumerable<ActionDefinition> actions)

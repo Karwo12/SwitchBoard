@@ -30,6 +30,7 @@
 
     <system:String x:Key="Editor.NewActionType">Nowy typ akcji</system:String>
     <system:String x:Key="Editor.AddAction">+ Dodaj akcję</system:String>
+    <system:String x:Key="Editor.PostRestoreActions">Po przywróceniu profilu</system:String>
     <system:String x:Key="Editor.SearchActions">Szukaj akcji...</system:String>
     <system:String x:Key="Editor.NoActionsFound">Nie znaleziono akcji</system:String>
     <system:String x:Key="Editor.DuplicateAction">Duplikuj akcję</system:String>
@@ -450,6 +451,8 @@
     <system:String x:Key="Dialog.ArgumentsHeading">Argumenty uruchomienia</system:String>
     <system:String x:Key="Dialog.ArgumentsHint">Wpisz argumenty, które zostaną przekazane programowi podczas uruchamiania.</system:String>
     <system:String x:Key="Dialog.ProgramFileFilter">Programy i skróty (*.exe;*.lnk)|*.exe;*.lnk|Wszystkie pliki (*.*)|*.*</system:String>
+    <system:String x:Key="Dialog.SelectProfileIconTitle">Wybierz ikonę profilu</system:String>
+    <system:String x:Key="Dialog.ProfileIconFileFilter">Ikony profilu (*.exe;*.ico)|*.exe;*.ico|Wszystkie pliki (*.*)|*.*</system:String>
     <system:String x:Key="Dialog.FindProgramTitle">Znajdź program</system:String>
     <system:String x:Key="Dialog.SelectProcessTitle">Wybierz działający proces</system:String>
     <system:String x:Key="Dialog.SelectServiceTitle">Wybierz usługę</system:String>
@@ -557,6 +560,8 @@
     <system:String x:Key="Activity.DurationUnknown">—</system:String>
     <system:String x:Key="Activity.HistoryProgress">{0}/{1} akcji wykonanych</system:String>
     <system:String x:Key="Activity.HistoryRestored">Przywrócono</system:String>
+    <system:String x:Key="Activity.PostRestorePhase">Po przywróceniu profilu</system:String>
+    <system:String x:Key="Activity.PostRestoreFailed">Akcje po przywróceniu profilu nie powiodły się: {0}</system:String>
     <system:String x:Key="Activity.HistoryRestoreFailed">Przywracanie nie powiodło się</system:String>
     <system:String x:Key="Activity.NavigationProfileMissing">Profil nie jest już dostępny</system:String>
     <system:String x:Key="Activity.NavigationActionMissing">Akcja nie jest już dostępna</system:String>
@@ -755,6 +760,10 @@
     <system:String x:Key="Settings.ProfileAppearance">Wyglad profilu</system:String>
     <system:String x:Key="Settings.ProfileColor">Kolor</system:String>
     <system:String x:Key="Settings.ProfileIcon">Ikona</system:String>
+    <system:String x:Key="Settings.ProfileIconFromAction">Z akcji profilu&#x2026;</system:String>
+    <system:String x:Key="Settings.ProfileIconFromFile">Z pliku&#x2026;</system:String>
+    <system:String x:Key="Settings.ProfileIconRemove">Usu&#x144; ikon&#x119;</system:String>
+    <system:String x:Key="Settings.ProfileIconBuiltIn">Symbol wbudowany</system:String>
     <system:String x:Key="Settings.ProfileColorBlue">Niebieski</system:String>
     <system:String x:Key="Settings.ProfileColorPurple">Fioletowy</system:String>
     <system:String x:Key="Settings.ProfileColorGreen">Zielony</system:String>
@@ -765,6 +774,9 @@
     <system:String x:Key="Settings.ProfileIconGamepad">Gamepad</system:String>
     <system:String x:Key="Settings.ProfileIconMonitor">Monitor</system:String>
     <system:String x:Key="Settings.ProfileIconMoon">Ksiezyc</system:String>
+    <system:String x:Key="Settings.ProfileIconReset">Usuń</system:String>
+    <system:String x:Key="Settings.ProfileIconChoose">Wybierz ikonę…</system:String>
+    <system:String x:Key="Settings.ProfileIconFileHint">Wybierz plik EXE lub ICO. SwitchBoard zapamięta tylko ścieżkę źródła.</system:String>
     <system:String x:Key="Settings.CheckUpdates">Sprawdz aktualizacje</system:String>
     <system:String x:Key="Settings.OpenRelease">Otworz GitHub Release</system:String>
     <system:String x:Key="Settings.About">O programie</system:String>

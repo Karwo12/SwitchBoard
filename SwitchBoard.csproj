@@ -24,6 +24,7 @@
     <Compile Remove="SwitchBoard.LibVlcPlugin\**\*.cs" />
     <Compile Remove="build-temp-tests\**\*.cs" />
     <Resource Include="Assets\switchboard.ico" />
+    <Resource Include="Assets\ActionIcons\*.png" />
   </ItemGroup>
 
 </Project>

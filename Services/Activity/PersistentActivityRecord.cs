@@ -60,4 +60,5 @@ public sealed record SystemChangeEntry(
     JsonObject? RequestedState,
     JsonObject? StateAfter,
     string Status,
-    string Message);
+    string Message,
+    ExecutionOrigin Origin = ExecutionOrigin.ProfileRun);

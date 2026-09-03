@@ -59,6 +59,29 @@ public sealed class PerformanceMonitoringServiceTests
 
     [Fact]
     [Trait("Category", "Regression")]
+    public void LogicalGrouping_DoesNotPresentApplicationsLaunchedByExplorerAsExplorerChildren()
+    {
+        var explorer = Process(10, null, "explorer");
+        var chrome = Process(20, explorer.ProcessId, "chrome");
+        var chromeRenderer = Process(21, chrome.ProcessId, "chrome");
+        var code = Process(30, explorer.ProcessId, "Code");
+        var codeRenderer = Process(31, code.ProcessId, "Code");
+
+        var children = SwitchBoard.ViewModels.Panels.PerformanceProcessGrouping.BuildLogicalChildren(
+            [explorer, chrome, chromeRenderer, code, codeRenderer]);
+
+        Assert.False(children.ContainsKey(explorer.ProcessId));
+        Assert.Equal([chromeRenderer.ProcessId], children[chrome.ProcessId].Select(item => item.ProcessId));
+        Assert.Equal([codeRenderer.ProcessId], children[code.ProcessId].Select(item => item.ProcessId));
+        Assert.Equal(new[] { explorer.ProcessId, chrome.ProcessId, code.ProcessId },
+            new[] { explorer, chrome, chromeRenderer, code, codeRenderer }
+                .Where(item => !SwitchBoard.ViewModels.Panels.PerformanceProcessGrouping
+                    .GetLogicalChildProcessIds(children).Contains(item.ProcessId))
+                .Select(item => item.ProcessId));
+    }
+
+    [Fact]
+    [Trait("Category", "Regression")]
     public void GpuSampler_UsesTheBusiestEngineInsteadOfSummingConcurrentEngines()
     {
         var source = File.ReadAllText(FindSourceFile("Services", "Monitoring", "PerformanceMonitoringService.cs"));
@@ -89,4 +112,7 @@ public sealed class PerformanceMonitoringServiceTests
 
         throw new FileNotFoundException("Could not find the requested source file.", Path.Combine(relativePath));
     }
+
+    private static PerformanceProcessSnapshot Process(int processId, int? parentProcessId, string name) =>
+        new(processId, parentProcessId, name, null, null, null, null, null, false);
 }

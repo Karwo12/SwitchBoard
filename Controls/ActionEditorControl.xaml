@@ -38,6 +38,7 @@
                     <RowDefinition Height="*" MinHeight="0" />
                     <RowDefinition Height="Auto" />
                     <!-- Reserve a compact footer below the separator so the action list never resizes. -->
+                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="48" MinHeight="0" />
                 </Grid.RowDefinitions>
 
@@ -175,8 +176,9 @@
                     <StackPanel>
                         <Button x:Name="ActionPickerButton" MinWidth="170" HorizontalContentAlignment="Left"
                                 Command="{Binding ToggleActionPickerCommand}"
+                                Click="ActionPickerButton_OnClick"
                                 Content="{DynamicResource Editor.AddAction}" />
-                        <Popup PlacementTarget="{Binding ElementName=ActionPickerButton}"
+                        <Popup x:Name="ActionPickerPopup" PlacementTarget="{Binding ElementName=ActionPickerButton}"
                                Placement="Bottom" VerticalOffset="6" HorizontalOffset="0"
                                AllowsTransparency="True" PopupAnimation="Slide" StaysOpen="False"
                                IsOpen="{Binding IsActionPickerOpen, Mode=TwoWay}"
@@ -252,7 +254,7 @@
                     <ListBox x:Name="ActionList"
                              MinHeight="0"
                              VerticalAlignment="Stretch"
-                             ItemsSource="{Binding SelectedProfile.Actions}"
+                             ItemsSource="{Binding SelectedProfile.EditorActions}"
                              controls:ListBoxDragDrop.DragKind="Action"
                              controls:ListBoxDragDrop.AcceptKinds="Action"
                              controls:ListBoxDragDrop.DropCommand="{Binding ReorderDropCommand}"
@@ -273,6 +275,32 @@
                         </ListBox.ItemContainerStyle>
                         <ListBox.ItemTemplate>
                             <DataTemplate>
+                                <StackPanel>
+                                <Border Margin="0,14,0,5" Padding="0,12,0,8"
+                                        BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsPostRestoreSectionStart}" Value="True">
+                                                    <Setter Property="Visibility" Value="Visible" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock VerticalAlignment="Center" Style="{StaticResource SectionTitle}"
+                                                   Text="{DynamicResource Editor.PostRestoreActions}" />
+                                        <Button Grid.Column="1" Margin="12,0,0,0"
+                                                Command="{Binding DataContext.TogglePostRestoreActionPickerCommand, Source={x:Reference Root}}"
+                                                Click="PostRestoreActionPicker_OnClick"
+                                                Content="{DynamicResource Editor.AddAction}" />
+                                    </Grid>
+                                </Border>
                                 <Grid>
                                     <controls:CardSurfaceControl>
                                         <controls:CardSurfaceControl.Style>
@@ -303,13 +331,35 @@
                                              <Grid>
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="Auto" />
                                                 <ColumnDefinition Width="*" />
                                                 <ColumnDefinition Width="Auto" />
                                             </Grid.ColumnDefinitions>
                                             <CheckBox Margin="0,0,13,0"
                                                       IsChecked="{Binding IsEnabled}"
                                                       ToolTip="{DynamicResource Tooltip.EnableAction}" />
-                                            <Button Grid.Column="1"
+                                            <Border Grid.Column="1" Width="22" Height="22" Margin="0,0,9,0"
+                                                    VerticalAlignment="Center" Background="{DynamicResource InputBackgroundBrush}"
+                                                    CornerRadius="5" SnapsToDevicePixels="True">
+                                                <Grid>
+                                                    <Image Source="{Binding ActionFallbackIcon}" Width="18" Height="18"
+                                                           Stretch="Uniform" SnapsToDevicePixels="True">
+                                                        <Image.Style>
+                                                            <Style TargetType="Image">
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding HasApplicationIcon}" Value="True">
+                                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </Image.Style>
+                                                    </Image>
+                                                    <Image Source="{Binding ApplicationIcon}" Width="18" Height="18"
+                                                           Stretch="Uniform" SnapsToDevicePixels="True"
+                                                           Visibility="{Binding HasApplicationIcon, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                                </Grid>
+                                            </Border>
+                                            <Button Grid.Column="2"
                                                     controls:ListBoxDragDrop.IsDragHandle="True"
                                                     Padding="0"
                                                     HorizontalContentAlignment="Stretch"
@@ -399,7 +449,7 @@
                                                     </TextBlock>
                                                 </Grid>
                                             </Button>
-                                            <Button Grid.Column="2" Margin="8,0,0,0"
+                                            <Button Grid.Column="3" Margin="8,0,0,0"
                                                     Style="{StaticResource CompactIconButton}"
                                                     ToolTip="{DynamicResource Tooltip.MoreOptions}"
                                                     Click="ActionOverflow_OnClick">
@@ -426,7 +476,7 @@
                                             </Button>
                                         </Grid>
 
-                                        <TextBlock Margin="31,6,0,0" Foreground="{DynamicResource DangerBrush}"
+                                        <TextBlock Margin="62,6,0,0" Foreground="{DynamicResource DangerBrush}"
                                                    Text="{Binding ValidationMessage}" TextWrapping="Wrap">
                                             <TextBlock.Style>
                                                 <Style TargetType="TextBlock">
@@ -439,7 +489,7 @@
                                             </TextBlock.Style>
                                         </TextBlock>
 
-                                        <Border Margin="31,13,0,0"
+                                        <Border Margin="62,13,0,0"
                                                 Padding="13"
                                                 Background="{DynamicResource InputBackgroundBrush}"
                                                 BorderBrush="{DynamicResource BorderBrush}"
@@ -551,7 +601,17 @@
                                                         controls:ListBoxDragDrop.IsDragHandle="True"
                                                         AutomationProperties.Name="{Binding DisplayName}"
                                                         ToolTip="{Binding Type}">
-                                                    <TextBlock FontWeight="SemiBold" Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis" />
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="20" />
+                                                            <ColumnDefinition Width="*" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <Image Source="{Binding ActionFallbackIcon}" Width="16" Height="16"
+                                                               HorizontalAlignment="Left" VerticalAlignment="Center"
+                                                               Stretch="Uniform" SnapsToDevicePixels="True" />
+                                                        <TextBlock Grid.Column="1" FontWeight="SemiBold" Text="{Binding DisplayName}"
+                                                                   TextTrimming="CharacterEllipsis" />
+                                                    </Grid>
                                                 </Button>
                                                 <Button Grid.Column="1" Margin="8,0,0,0"
                                                         Style="{StaticResource CompactIconButton}"
@@ -589,6 +649,7 @@
                                         </StackPanel>
                                     </Border>
                                 </Grid>
+                                </StackPanel>
                             </DataTemplate>
                         </ListBox.ItemTemplate>
                     </ListBox>
@@ -600,7 +661,7 @@
                             <Style TargetType="StackPanel">
                                 <Setter Property="Visibility" Value="Collapsed" />
                                 <Style.Triggers>
-                                    <DataTrigger Binding="{Binding SelectedProfile.Actions.Count, Mode=OneWay}" Value="0">
+                                    <DataTrigger Binding="{Binding SelectedProfile.EditorActions.Count, Mode=OneWay}" Value="0">
                                         <Setter Property="Visibility" Value="Visible" />
                                     </DataTrigger>
                                 </Style.Triggers>
@@ -620,7 +681,33 @@
                     </StackPanel>
                 </Grid>
 
-                <Grid Grid.Row="7" Margin="0,6,24,0" VerticalAlignment="Stretch"
+                <Border Grid.Row="6" Margin="0,10,0,0" Padding="0,12,0,0"
+                        BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding SelectedProfile.PostRestoreActions.Count, Mode=OneWay}" Value="0">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock VerticalAlignment="Center" Style="{StaticResource SectionTitle}"
+                                   Text="{DynamicResource Editor.PostRestoreActions}" />
+                        <Button Grid.Column="1" Margin="12,0,0,0"
+                                Command="{Binding TogglePostRestoreActionPickerCommand}"
+                                Click="PostRestoreActionPicker_OnClick"
+                                Content="{DynamicResource Editor.AddAction}" />
+                    </Grid>
+                </Border>
+
+                <Grid Grid.Row="8" Margin="0,6,24,0" VerticalAlignment="Stretch"
                       Visibility="{Binding HasExecutionStatus, Converter={StaticResource BooleanToVisibilityConverter}}">
                     <Grid Height="30" VerticalAlignment="Center">
                         <Grid.ColumnDefinitions>
@@ -652,7 +739,7 @@
                     </Grid>
                 </Grid>
 
-                <Border Grid.Row="6" Height="1" Margin="0"
+                <Border Grid.Row="7" Height="1" Margin="0"
                         Background="{DynamicResource BorderBrush}" />
 
             </Grid>

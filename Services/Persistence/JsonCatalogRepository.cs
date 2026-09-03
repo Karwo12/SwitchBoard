@@ -61,6 +61,7 @@ public sealed class JsonCatalogRepository : ICatalogRepository, IDisposable
             foreach (var profile in catalog.Profiles)
             {
                 profile.Actions ??= [];
+                profile.PostRestoreActions ??= [];
             }
 
             return catalog;

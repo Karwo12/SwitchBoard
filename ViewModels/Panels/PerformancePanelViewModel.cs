@@ -21,7 +21,7 @@ public sealed class PerformancePanelViewModel : ObservableObject, IDisposable
     private readonly DispatcherTimer _timer;
     private readonly HashSet<int> _expandedGroups = [];
     private readonly Dictionary<int, MeasurementAggregate> _measurement = [];
-    private readonly Dictionary<string, ImageSource?> _iconCache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly FileIconCache _iconCache;
     private readonly Dictionary<(int ProcessId, long? StartedAtUtcTicks), string?> _processPaths = [];
     private readonly Dictionary<(int ProcessId, long? StartedAtUtcTicks), PerformanceProcessRowViewModel> _rowsByIdentity = [];
     private CancellationTokenSource? _refreshCancellation, _detailsCancellation, _iconCancellation;
@@ -36,9 +36,10 @@ public sealed class PerformancePanelViewModel : ObservableObject, IDisposable
     private DateTimeOffset? _lastMeasurementSampleAt;
 
     public PerformancePanelViewModel(PerformanceMonitoringService monitoring, Func<IEnumerable<ActionItemViewModel>> actions,
-        ILocalizationService localization, IAppLogger? logger, Dispatcher dispatcher)
+        ILocalizationService localization, IAppLogger? logger, Dispatcher dispatcher, FileIconCache? iconCache = null)
     {
         _monitoring = monitoring; _actions = actions; _localization = localization; _logger = logger;
+        _iconCache = iconCache ?? FileIconCache.Shared;
         PerformanceProcesses = []; MeasurementResults = [];
         _timer = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background, PerformanceTimerOnTick, dispatcher);
         _timer.Stop();
@@ -165,13 +166,15 @@ public sealed class PerformancePanelViewModel : ObservableObject, IDisposable
                 effectivePaths[identity] = path;
                 _processPaths[identity] = path;
             }
-            foreach (var path in effectivePaths.Values.Where(path => !string.IsNullOrWhiteSpace(path)).Distinct(StringComparer.OrdinalIgnoreCase))
+            var uncachedPaths = effectivePaths.Values
+                .Where(path => !string.IsNullOrWhiteSpace(path))
+                .Select(path => path!)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Where(path => !_iconCache.TryGetCachedIcon(path, out _))
+                .ToArray();
+            foreach (var path in uncachedPaths)
             {
-                if (_iconCache.ContainsKey(path!)) continue;
-                ImageSource? icon = null;
-                try { icon = await Task.Run(() => FileIconProvider.TryGetSmallIcon(path), cancellation.Token); } catch { }
-                if (_iconCache.Count >= 256) _iconCache.Remove(_iconCache.Keys.First());
-                _iconCache[path!] = icon;
+                try { await _iconCache.GetSmallIconAsync(path, cancellation.Token); } catch (OperationCanceledException) { throw; }
             }
             if (!cancellation.IsCancellationRequested && !_disposed && ReferenceEquals(_snapshot, snapshot))
                 foreach (var row in PerformanceProcesses) row.Icon = GetCachedIcon(row.Identity);
@@ -185,23 +188,27 @@ public sealed class PerformancePanelViewModel : ObservableObject, IDisposable
     {
         if (!visited.Add(process.ProcessId)) return null;
         if (paths.TryGetValue(process.ProcessId, out var path) && !string.IsNullOrWhiteSpace(path)) return path;
-        if (process.ParentProcessId is { } parentId && snapshotsById.TryGetValue(parentId, out var parent))
+        if (process.ParentProcessId is { } parentId && snapshotsById.TryGetValue(parentId, out var parent) &&
+            PerformanceProcessGrouping.IsLogicalChild(parent, process))
             return ResolveIconPath(parent, paths, snapshotsById, visited);
         return null;
     }
-    private ImageSource? GetCachedIcon((int ProcessId, long? StartedAtUtcTicks) identity) => _processPaths.TryGetValue(identity, out var path) && path is not null && _iconCache.TryGetValue(path, out var icon) ? icon : null;
+    private ImageSource? GetCachedIcon((int ProcessId, long? StartedAtUtcTicks) identity) =>
+        _processPaths.TryGetValue(identity, out var path) && path is not null &&
+        _iconCache.TryGetCachedIcon(path, out var icon) ? icon : null;
     private void RebuildRows()
     {
         var activeIdentities = _latestProcesses.Select(ProcessIdentity).ToHashSet();
         foreach (var stale in _rowsByIdentity.Keys.Where(key => !activeIdentities.Contains(key)).ToArray()) _rowsByIdentity.Remove(stale);
         foreach (var stale in _processPaths.Keys.Where(key => !activeIdentities.Contains(key)).ToArray()) _processPaths.Remove(stale);
 
-        var map = _latestProcesses.ToDictionary(item => item.ProcessId); var children = new Dictionary<int, List<PerformanceProcessSnapshot>>();
-        foreach (var item in _latestProcesses) if (item.ParentProcessId is { } parent && parent != item.ProcessId && map.ContainsKey(parent)) { if (!children.TryGetValue(parent, out var list)) children[parent] = list = []; list.Add(item); }
+        var children = PerformanceProcessGrouping.BuildLogicalChildren(_latestProcesses);
+        var logicalChildProcessIds = PerformanceProcessGrouping.GetLogicalChildProcessIds(children);
         var displaySnapshots = BuildDisplaySnapshots(children);
         var groupProcessCounts = BuildGroupProcessCounts(children);
         var comparer = Comparer<PerformanceProcessSnapshot>.Create((left, right) => Compare(displaySnapshots[left.ProcessId], displaySnapshots[right.ProcessId]));
-        var roots = _latestProcesses.Where(item => item.ParentProcessId is not { } parent || !map.ContainsKey(parent) || parent == item.ProcessId).OrderBy(item => item, comparer).ToList();
+        var roots = _latestProcesses.Where(item => !logicalChildProcessIds.Contains(item.ProcessId))
+            .OrderBy(item => item, comparer).ToList();
         var rows = new List<PerformanceProcessRowViewModel>(); foreach (var root in roots) AddRow(root, 0, children, displaySnapshots, groupProcessCounts, comparer, rows, new HashSet<int>());
         SynchronizeRows(rows);
 

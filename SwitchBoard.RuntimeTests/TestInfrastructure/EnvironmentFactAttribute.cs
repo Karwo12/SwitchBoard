@@ -102,6 +102,8 @@ internal static class EnvironmentRequirements
                 "The PowerShell process test requires SWITCHBOARD_RUN_REAL_SYSTEM_TESTS=1 on a dedicated machine.",
             "PowerQoS" when !HasPowerQoS() => "The Power QoS API is unavailable in this Windows environment.",
             "RunningService" when !HasRunningService() => "The test environment exposes no running Windows service.",
+            "CurrentCatalogIconSmoke" when !AllowsCurrentCatalogIconSmoke() =>
+                "The current-catalog icon smoke test requires SWITCHBOARD_RUN_CURRENT_CATALOG_ICON_SMOKE=1.",
             _ => null
         };
     }
@@ -112,6 +114,9 @@ internal static class EnvironmentRequirements
 
     private static bool AllowsRealSystemIntegration() => string.Equals(
         Environment.GetEnvironmentVariable("SWITCHBOARD_RUN_REAL_SYSTEM_TESTS"), "1", StringComparison.Ordinal);
+
+    private static bool AllowsCurrentCatalogIconSmoke() => string.Equals(
+        Environment.GetEnvironmentVariable("SWITCHBOARD_RUN_CURRENT_CATALOG_ICON_SMOKE"), "1", StringComparison.Ordinal);
 
     private static bool HasAudioEndpoint()
     {

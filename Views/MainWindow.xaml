@@ -418,20 +418,27 @@
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
                     <Border Grid.Column="0" Grid.RowSpan="2" Width="4" Margin="0,4,2,5" CornerRadius="2" Background="{Binding Color}" />
-                    <Path Grid.Column="1" Grid.Row="0" Width="12" Height="12" HorizontalAlignment="Center"
-                          Data="{Binding IconPathData}"
-                          Stretch="Uniform">
-                        <Path.Style>
-                            <Style TargetType="Path">
-                                <Setter Property="Fill" Value="{Binding Color}" />
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding Color}" Value="{x:Null}">
+                    <Border Grid.Column="1" Grid.Row="0" Width="17" Height="17" HorizontalAlignment="Center"
+                            Background="{DynamicResource InputBackgroundBrush}" CornerRadius="3">
+                        <Grid>
+                            <Path Width="12" Height="12" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                  Data="{Binding IconPathData}" Stretch="Uniform">
+                                <Path.Style>
+                                    <Style TargetType="Path">
                                         <Setter Property="Fill" Value="{DynamicResource TextSecondaryBrush}" />
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </Path.Style>
-                    </Path>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding HasIconImage}" Value="True">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Path.Style>
+                            </Path>
+                            <Image Source="{Binding IconImage}" Width="16" Height="16"
+                                   Stretch="Uniform" SnapsToDevicePixels="True"
+                                   Visibility="{Binding HasIconImage, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                        </Grid>
+                    </Border>
                     <controls:RenamableListItemControl Grid.Column="2"
                         Foreground="{DynamicResource TextPrimaryBrush}"
                         Text="{Binding Name}"
@@ -497,12 +504,46 @@
                                 <MenuItem Header="{DynamicResource Settings.ProfileColorRed}" Command="{Binding PlacementTarget.Tag.SetProfileColorCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="#D95D63" />
                             </MenuItem>
                             <MenuItem Header="{DynamicResource Settings.ProfileIcon}">
-                                <MenuItem Header="{DynamicResource Settings.AppearanceNone}" Command="{Binding PlacementTarget.Tag.SetProfileIconCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-                                <MenuItem Header="{DynamicResource Settings.ProfileIconBolt}" Command="{Binding PlacementTarget.Tag.SetProfileIconCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="bolt" />
-                                <MenuItem Header="{DynamicResource Settings.ProfileIconBriefcase}" Command="{Binding PlacementTarget.Tag.SetProfileIconCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="briefcase" />
-                                <MenuItem Header="{DynamicResource Settings.ProfileIconGamepad}" Command="{Binding PlacementTarget.Tag.SetProfileIconCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="gamepad" />
-                                <MenuItem Header="{DynamicResource Settings.ProfileIconMonitor}" Command="{Binding PlacementTarget.Tag.SetProfileIconCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="monitor" />
-                                <MenuItem Header="{DynamicResource Settings.ProfileIconMoon}" Command="{Binding PlacementTarget.Tag.SetProfileIconCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="moon" />
+                                <MenuItem Header="{DynamicResource Settings.ProfileIconFromAction}"
+                                          ItemsSource="{Binding PlacementTarget.DataContext.Actions, RelativeSource={RelativeSource AncestorType=ContextMenu}}">
+                                    <MenuItem.ItemContainerStyle>
+                                        <Style TargetType="MenuItem">
+                                            <Setter Property="Command" Value="{Binding PlacementTarget.Tag.SetProfileIconFromActionCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                            <Setter Property="CommandParameter" Value="{Binding}" />
+                                        </Style>
+                                    </MenuItem.ItemContainerStyle>
+                                    <MenuItem.ItemTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Orientation="Horizontal">
+                                                <Grid Width="18" Height="18" Margin="0,0,8,0">
+                                                    <Image Source="{Binding ActionFallbackIcon}" Width="16" Height="16" Stretch="Uniform">
+                                                        <Image.Style>
+                                                            <Style TargetType="Image">
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding HasApplicationIcon}" Value="True">
+                                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </Image.Style>
+                                                    </Image>
+                                                    <Image Source="{Binding ApplicationIcon}" Width="16" Height="16" Stretch="Uniform"
+                                                           Visibility="{Binding HasApplicationIcon, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                                </Grid>
+                                                <StackPanel>
+                                                    <TextBlock Text="{Binding DisplayName}" />
+                                                    <TextBlock Style="{StaticResource CaptionText}" Text="{Binding Summary}" TextTrimming="CharacterEllipsis" />
+                                                </StackPanel>
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </MenuItem.ItemTemplate>
+                                </MenuItem>
+                                <MenuItem Header="{DynamicResource Settings.ProfileIconFromFile}"
+                                          Command="{Binding PlacementTarget.Tag.ChooseProfileIconForProfileCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                          CommandParameter="{Binding}" />
+                                <MenuItem Header="{DynamicResource Settings.ProfileIconRemove}"
+                                          Command="{Binding PlacementTarget.Tag.ClearProfileIconForProfileCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                          CommandParameter="{Binding}" />
                             </MenuItem>
                         </ContextMenu>
                     </Button.ContextMenu>
@@ -624,7 +665,7 @@
                          ItemContainerStyle="{StaticResource ProfileNavigationListBoxItemStyle}"
                          ItemTemplate="{StaticResource ProfileNavigationItemTemplate}"
                          SelectionChanged="ProfileList_OnSelectionChanged"
-                         SelectedItem="{Binding DataContext.SelectedProfile, RelativeSource={RelativeSource AncestorType=Window}, Mode=TwoWay}"
+                         SelectedItem="{Binding DataContext.SelectedProfile, RelativeSource={RelativeSource AncestorType=Window}, Mode=OneWay}"
                          controls:ListBoxDragDrop.DragKind="Profile"
                          controls:ListBoxDragDrop.AcceptKinds="Profile"
                          controls:ListBoxDragDrop.DropCommand="{Binding DataContext.ReorderDropCommand, RelativeSource={RelativeSource AncestorType=Window}}"
@@ -1166,7 +1207,8 @@
                                                      BorderThickness="0"
                                                      ItemContainerStyle="{StaticResource ProfileNavigationListBoxItemStyle}"
                                                      ItemTemplate="{StaticResource ProfileNavigationItemTemplate}"
-                                                     SelectedItem="{Binding DataContext.SelectedProfile, RelativeSource={RelativeSource AncestorType=Window}, Mode=TwoWay}"
+                                                     SelectionChanged="ProfileList_OnSelectionChanged"
+                                                     SelectedItem="{Binding DataContext.SelectedProfile, RelativeSource={RelativeSource AncestorType=Window}, Mode=OneWay}"
                                                      controls:ListBoxDragDrop.DragKind="Profile"
                                                      controls:ListBoxDragDrop.AcceptKinds="Profile"
                                                      controls:ListBoxDragDrop.DropCommand="{Binding DataContext.ReorderDropCommand, RelativeSource={RelativeSource AncestorType=Window}}"
@@ -1201,7 +1243,8 @@
                                      BorderThickness="0"
                                      ItemContainerStyle="{StaticResource ProfileNavigationListBoxItemStyle}"
                                      ItemTemplate="{StaticResource ProfileNavigationItemTemplate}"
-                                     SelectedItem="{Binding SelectedProfile, Mode=TwoWay}"
+                                     SelectionChanged="ProfileList_OnSelectionChanged"
+                                     SelectedItem="{Binding SelectedProfile, Mode=OneWay}"
                                      controls:ListBoxDragDrop.DragKind="Profile"
                                      controls:ListBoxDragDrop.AcceptKinds="Profile"
                                      controls:ListBoxDragDrop.DropCommand="{Binding ReorderDropCommand}"
@@ -1363,7 +1406,8 @@
                                  controls:ListBoxDragDrop.AcceptKinds="Profile"
                                  controls:ListBoxDragDrop.DropCommand="{Binding ReorderDropCommand}"
                                  controls:ListBoxDragDrop.TargetParentId="{Binding SelectedCategory.Id}"
-                                 SelectedItem="{Binding SelectedProfile, Mode=TwoWay}">
+                                 SelectionChanged="ProfileList_OnSelectionChanged"
+                                 SelectedItem="{Binding SelectedProfile, Mode=OneWay}">
                             <ListBox.ItemContainerStyle>
                                 <Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
                                     <Setter Property="BorderThickness" Value="0" />
@@ -1394,20 +1438,27 @@
                                                 <RowDefinition Height="Auto" />
                                             </Grid.RowDefinitions>
                                             <Border Grid.Column="0" Grid.RowSpan="2" Width="4" Margin="0,4,2,5" CornerRadius="2" Background="{Binding Color}" />
-                                            <Path Grid.Column="1" Grid.Row="0" Width="12" Height="12" HorizontalAlignment="Center"
-                                                  Data="{Binding IconPathData}"
-                                                  Stretch="Uniform">
+                                            <Border Grid.Column="1" Grid.Row="0" Width="17" Height="17" HorizontalAlignment="Center"
+                                                    Background="{DynamicResource InputBackgroundBrush}" CornerRadius="3">
+                                                <Grid>
+                                                <Path Width="12" Height="12" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                  Data="{Binding IconPathData}" Stretch="Uniform">
                                                 <Path.Style>
                                                     <Style TargetType="Path">
-                                                        <Setter Property="Fill" Value="{Binding Color}" />
+                                                        <Setter Property="Fill" Value="{DynamicResource TextSecondaryBrush}" />
                                                         <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding Color}" Value="{x:Null}">
-                                                                <Setter Property="Fill" Value="{DynamicResource TextSecondaryBrush}" />
+                                                            <DataTrigger Binding="{Binding HasIconImage}" Value="True">
+                                                                <Setter Property="Visibility" Value="Collapsed" />
                                                             </DataTrigger>
                                                         </Style.Triggers>
                                                     </Style>
                                                 </Path.Style>
-                                            </Path>
+                                                </Path>
+                                                <Image Source="{Binding IconImage}" Width="16" Height="16"
+                                                       Stretch="Uniform" SnapsToDevicePixels="True"
+                                                       Visibility="{Binding HasIconImage, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                                </Grid>
+                                            </Border>
                                             <controls:RenamableListItemControl
                                                 Grid.Column="2"
                                                 Text="{Binding Name}"
@@ -1460,12 +1511,46 @@
                                                         <MenuItem Header="{DynamicResource Settings.ProfileColorRed}" Command="{Binding PlacementTarget.Tag.SetProfileColorCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="#D95D63" />
                                                     </MenuItem>
                                                     <MenuItem Header="{DynamicResource Settings.ProfileIcon}">
-                                                        <MenuItem Header="{DynamicResource Settings.AppearanceNone}" Command="{Binding PlacementTarget.Tag.SetProfileIconCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-                                                        <MenuItem Header="{DynamicResource Settings.ProfileIconBolt}" Command="{Binding PlacementTarget.Tag.SetProfileIconCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="bolt" />
-                                                        <MenuItem Header="{DynamicResource Settings.ProfileIconBriefcase}" Command="{Binding PlacementTarget.Tag.SetProfileIconCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="briefcase" />
-                                                        <MenuItem Header="{DynamicResource Settings.ProfileIconGamepad}" Command="{Binding PlacementTarget.Tag.SetProfileIconCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="gamepad" />
-                                                        <MenuItem Header="{DynamicResource Settings.ProfileIconMonitor}" Command="{Binding PlacementTarget.Tag.SetProfileIconCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="monitor" />
-                                                        <MenuItem Header="{DynamicResource Settings.ProfileIconMoon}" Command="{Binding PlacementTarget.Tag.SetProfileIconCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="moon" />
+                                                        <MenuItem Header="{DynamicResource Settings.ProfileIconFromAction}"
+                                                                  ItemsSource="{Binding PlacementTarget.DataContext.Actions, RelativeSource={RelativeSource AncestorType=ContextMenu}}">
+                                                            <MenuItem.ItemContainerStyle>
+                                                                <Style TargetType="MenuItem">
+                                                                    <Setter Property="Command" Value="{Binding PlacementTarget.Tag.SetProfileIconFromActionCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                                                    <Setter Property="CommandParameter" Value="{Binding}" />
+                                                                </Style>
+                                                            </MenuItem.ItemContainerStyle>
+                                                            <MenuItem.ItemTemplate>
+                                                                <DataTemplate>
+                                                                    <StackPanel Orientation="Horizontal">
+                                                                        <Grid Width="18" Height="18" Margin="0,0,8,0">
+                                                                            <Image Source="{Binding ActionFallbackIcon}" Width="16" Height="16" Stretch="Uniform">
+                                                                                <Image.Style>
+                                                                                    <Style TargetType="Image">
+                                                                                        <Style.Triggers>
+                                                                                            <DataTrigger Binding="{Binding HasApplicationIcon}" Value="True">
+                                                                                                <Setter Property="Visibility" Value="Collapsed" />
+                                                                                            </DataTrigger>
+                                                                                        </Style.Triggers>
+                                                                                    </Style>
+                                                                                </Image.Style>
+                                                                            </Image>
+                                                                            <Image Source="{Binding ApplicationIcon}" Width="16" Height="16" Stretch="Uniform"
+                                                                                   Visibility="{Binding HasApplicationIcon, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                                                        </Grid>
+                                                                        <StackPanel>
+                                                                            <TextBlock Text="{Binding DisplayName}" />
+                                                                            <TextBlock Style="{StaticResource CaptionText}" Text="{Binding Summary}" TextTrimming="CharacterEllipsis" />
+                                                                        </StackPanel>
+                                                                    </StackPanel>
+                                                                </DataTemplate>
+                                                            </MenuItem.ItemTemplate>
+                                                        </MenuItem>
+                                                        <MenuItem Header="{DynamicResource Settings.ProfileIconFromFile}"
+                                                                  Command="{Binding PlacementTarget.Tag.ChooseProfileIconForProfileCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                                  CommandParameter="{Binding}" />
+                                                        <MenuItem Header="{DynamicResource Settings.ProfileIconRemove}"
+                                                                  Command="{Binding PlacementTarget.Tag.ClearProfileIconForProfileCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                                  CommandParameter="{Binding}" />
                                                     </MenuItem>
                                                 </ContextMenu>
                                             </Button.ContextMenu>
@@ -1706,31 +1791,34 @@
                                         </CheckBox>
                                         <TextBlock Margin="0,18,0,0" Style="{StaticResource EyebrowText}"
                                                    Text="{DynamicResource Settings.ProfileAppearance}" />
-                                        <Grid Margin="0,7,0,0">
+                                        <StackPanel Margin="0,7,0,0">
+                                            <TextBlock Style="{StaticResource CaptionText}"
+                                                       Text="{DynamicResource Settings.ProfileColor}" />
+                                            <ComboBox Margin="0,4,0,0"
+                                                      ItemsSource="{Binding ProfileColorOptions}"
+                                                      DisplayMemberPath="DisplayName"
+                                                      SelectedValuePath="Value"
+                                                      SelectedValue="{Binding SelectedProfile.Color, Mode=TwoWay}" />
+                                        </StackPanel>
+                                        <TextBlock Margin="0,16,0,0" Style="{StaticResource CaptionText}"
+                                                   Text="{DynamicResource Settings.ProfileIcon}" />
+                                        <Grid Margin="0,4,0,0">
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="12" />
-                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="Auto" />
                                             </Grid.ColumnDefinitions>
-                                            <StackPanel>
-                                                <TextBlock Style="{StaticResource CaptionText}"
-                                                           Text="{DynamicResource Settings.ProfileColor}" />
-                                                <ComboBox Margin="0,4,0,0"
-                                                          ItemsSource="{Binding ProfileColorOptions}"
-                                                          DisplayMemberPath="DisplayName"
-                                                          SelectedValuePath="Value"
-                                                          SelectedValue="{Binding SelectedProfile.Color, Mode=TwoWay}" />
-                                            </StackPanel>
-                                            <StackPanel Grid.Column="2">
-                                                <TextBlock Style="{StaticResource CaptionText}"
-                                                           Text="{DynamicResource Settings.ProfileIcon}" />
-                                                <ComboBox Margin="0,4,0,0"
-                                                          ItemsSource="{Binding ProfileIconOptions}"
-                                                          DisplayMemberPath="DisplayName"
-                                                          SelectedValuePath="Value"
-                                                          SelectedValue="{Binding SelectedProfile.Icon, Mode=TwoWay}" />
-                                            </StackPanel>
+                                            <TextBlock Margin="0,0,10,0" VerticalAlignment="Center"
+                                                       Text="{Binding SelectedProfile.IconSourceDisplayName}"
+                                                       TextTrimming="CharacterEllipsis" />
+                                            <Button Grid.Column="1" Command="{Binding ChooseProfileIconCommand}"
+                                                    Content="{DynamicResource Settings.ProfileIconFromFile}" />
+                                            <Button Grid.Column="2" Margin="7,0,0,0"
+                                                    Command="{Binding ClearProfileIconCommand}"
+                                                    Content="{DynamicResource Settings.ProfileIconRemove}" />
                                         </Grid>
+                                        <TextBlock Margin="0,5,0,0" Style="{StaticResource CaptionText}"
+                                                   Text="{DynamicResource Settings.ProfileIconFileHint}" TextWrapping="Wrap" />
                                     </StackPanel>
                                 </controls:CardSurfaceControl>
                             </StackPanel>

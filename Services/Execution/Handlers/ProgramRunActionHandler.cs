@@ -79,7 +79,7 @@ public sealed class ProgramRunActionHandler : IReversibleActionHandler
                     return ActionExecutionResult.Failure("Windows did not start the requested target.");
                 var windowResult = await ApplyWindowBehaviorAsync(action, target, cancellationToken);
                 if (windowResult is not null) return windowResult;
-                if (IsProtocolTarget(target) || string.Equals(Path.GetExtension(target), ".lnk", StringComparison.OrdinalIgnoreCase))
+                if (IsProtocolTarget(target) || IsShellShortcutTarget(target))
                 {
                     var postLaunchResult = await ApplyPostLaunchProcessSettingsAsync(action, target,
                         untrackedProcess.Id, cancellationToken);
@@ -205,21 +205,24 @@ public sealed class ProgramRunActionHandler : IReversibleActionHandler
     internal static ProcessStartInfo CreateStartInfo(ActionDefinition action, string target)
     {
         var arguments = ActionParameterReader.ReadString(action.Parameters, ActionParameterNames.Arguments);
+        var isShellShortcut = IsShellShortcutTarget(target);
         var storedWorkingDirectory = ActionParameterReader.ReadString(
             action.Parameters, ActionParameterNames.WorkingDirectory).Trim();
         var useCustomWorkingDirectory = ActionParameterReader.ReadBoolean(
             action.Parameters, ActionParameterNames.UseCustomWorkingDirectory,
             !string.IsNullOrWhiteSpace(storedWorkingDirectory));
-        var workingDirectory = useCustomWorkingDirectory ? storedWorkingDirectory : string.Empty;
+        // A shortcut carries its own arguments and working directory. Passing either here would
+        // override what Windows Shell reads from the shortcut instead of matching Explorer's behavior.
+        var workingDirectory = !isShellShortcut && useCustomWorkingDirectory ? storedWorkingDirectory : string.Empty;
         var useShellExecute = IsProtocolTarget(target) ||
-                              string.Equals(Path.GetExtension(target), ".lnk", StringComparison.OrdinalIgnoreCase) ||
+                              isShellShortcut ||
                               ActionParameterReader.ReadBoolean(action.Parameters,
                                   ActionParameterNames.RunAsAdministrator, false);
 
         var startInfo = new ProcessStartInfo
         {
             FileName = target,
-            Arguments = arguments,
+            Arguments = isShellShortcut ? string.Empty : arguments,
             UseShellExecute = useShellExecute
         };
         if (ActionParameterReader.ReadBoolean(action.Parameters, ActionParameterNames.RunAsAdministrator, false))
@@ -235,6 +238,9 @@ public sealed class ProgramRunActionHandler : IReversibleActionHandler
     internal static bool IsProtocolTarget(string target) =>
         Uri.TryCreate(target, UriKind.Absolute, out var uri) && !uri.IsFile &&
         !string.IsNullOrWhiteSpace(uri.Scheme);
+
+    private static bool IsShellShortcutTarget(string target) =>
+        string.Equals(Path.GetExtension(target), ".lnk", StringComparison.OrdinalIgnoreCase);
 
     private async Task<ActionExecutionResult?> ApplyPostLaunchProcessSettingsAsync(
         ActionDefinition action, string launchTarget, int directProcessId, CancellationToken cancellationToken)

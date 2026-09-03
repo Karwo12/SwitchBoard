@@ -375,20 +375,23 @@ public sealed class ConfigurationOperationsTests
 
     [Fact]
     [Trait("Category", "Unit")]
-    public void ProfileAppearanceCommands_UpdateOnlyPresentationFieldsAndKeepLegacyDefaults()
+    public void ProfileAppearanceCommands_StoreAnActionIconByStableId()
     {
         using var context = new RuntimeTestContext();
-        var profile = new ProfileDefinition { Name = "Games" };
+        var action = new ActionDefinition { Id = Guid.NewGuid(), Type = ActionTypeIds.Delay };
+        var profile = new ProfileDefinition { Name = "Games", Actions = [action] };
         using var main = CreateMain(context, new SwitchBoardCatalog { Profiles = [profile] }, new UserSettings(),
             new AppDataPaths(Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"))));
 
         main.SetProfileColorCommand.Execute("#4F8EF7");
-        main.SetProfileIconCommand.Execute("gamepad");
+        main.SetProfileIconFromActionCommand.Execute(main.SelectedProfile!.Actions.Single());
 
         Assert.Equal("#4F8EF7", main.SelectedProfile!.Color);
-        Assert.Equal("gamepad", main.SelectedProfile.Icon);
+        Assert.Equal(action.Id, main.SelectedProfile.IconSourceActionId);
         Assert.Equal("#4F8EF7", main.SelectedProfile.ToModel().Color);
-        Assert.Equal("gamepad", main.SelectedProfile.ToModel().Icon);
+        Assert.Null(main.SelectedProfile.ToModel().Icon);
+        Assert.Equal(ProfileIconSourceDefinition.ActionSourceType, main.SelectedProfile.ToModel().IconSource?.Type);
+        Assert.Equal(action.Id, main.SelectedProfile.ToModel().IconSource?.ActionId);
     }
 
     [Fact]
@@ -612,8 +615,15 @@ public sealed class ConfigurationOperationsTests
 
         Assert.Null(legacy.Color);
         Assert.Null(legacy.Icon);
+        Assert.Null(legacy.IconSource);
         Assert.Equal("#4F8EF7", current.Color);
         Assert.Equal("bolt", current.Icon);
+        Assert.Null(current.IconSource);
+
+        var viewModel = new ProfileItemViewModel(current, new TestLocalizationService());
+        Assert.False(viewModel.HasIconImage);
+        Assert.Null(viewModel.ToModel().Icon);
+        Assert.Null(viewModel.ToModel().IconSource);
     }
 
     [Theory]

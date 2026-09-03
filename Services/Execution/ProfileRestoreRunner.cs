@@ -15,7 +15,8 @@ public sealed class ProfileRestoreRunner(IActionRegistry actionRegistry, IExecut
     public bool IsRunning => Volatile.Read(ref _isRunning) != 0;
 
     public async Task<PersistentExecutionSession> RunAsync(PersistentExecutionSession session,
-        IProgress<ProfileRestoreProgress>? progress = null, CancellationToken cancellationToken = default)
+        IProgress<ProfileRestoreProgress>? progress = null, CancellationToken cancellationToken = default,
+        bool deferCompletionActivity = false)
     {
         if (Interlocked.CompareExchange(ref _isRunning, 1, 0) != 0)
             throw new InvalidOperationException("Another restore operation is already running.");
@@ -97,11 +98,7 @@ public sealed class ProfileRestoreRunner(IActionRegistry actionRegistry, IExecut
             }
             session.Status = session.PendingRestoreCount == 0 ? PersistentSessionStatus.Restored : PersistentSessionStatus.PartiallyRestored;
             await repository.SaveAsync(session, cancellationToken);
-            activity?.Add(session.PendingRestoreCount == 0 ? ActivityLevel.Success : ActivityLevel.Warning,
-                session.PendingRestoreCount == 0
-                    ? FormatActivity("Activity.RestoreCompleted", "Profile restored: {0}", session.ProfileName)
-                    : FormatActivity("Activity.RestorePartial", "Profile partially restored: {0}", session.ProfileName),
-                session.ProfileId);
+            if (!deferCompletionActivity) RecordCompletionActivity(session);
             return session;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -123,6 +120,21 @@ public sealed class ProfileRestoreRunner(IActionRegistry actionRegistry, IExecut
             throw;
         }
         finally { Volatile.Write(ref _isRunning, 0); }
+    }
+
+    /// <summary>
+    /// Records the final restore outcome. The UI can defer this until any configured
+    /// post-restore actions have completed, so a base restore is not presented as
+    /// the completion of the whole workflow too early.
+    /// </summary>
+    public void RecordCompletionActivity(PersistentExecutionSession session)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        activity?.Add(session.PendingRestoreCount == 0 ? ActivityLevel.Success : ActivityLevel.Warning,
+            session.PendingRestoreCount == 0
+                ? FormatActivity("Activity.RestoreCompleted", "Profile restored: {0}", session.ProfileName)
+                : FormatActivity("Activity.RestorePartial", "Profile partially restored: {0}", session.ProfileName),
+            session.ProfileId);
     }
 
     private string FormatActivity(string resourceKey, string fallback, params object?[] arguments) =>

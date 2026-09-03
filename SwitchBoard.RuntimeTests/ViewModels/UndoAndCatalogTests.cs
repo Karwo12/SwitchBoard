@@ -290,7 +290,7 @@ public sealed class UndoAndCatalogTests : RuntimeTestBase
         Assert.True(profileListStart >= 0);
         var profileList = xaml[profileListStart..xaml.IndexOf("</ListBox>", profileListStart, StringComparison.Ordinal)];
         Assert.Contains("SelectionChanged=\"ProfileList_OnSelectionChanged\"", profileList, StringComparison.Ordinal);
-        Assert.Contains("SelectedItem=\"{Binding DataContext.SelectedProfile, RelativeSource={RelativeSource AncestorType=Window}, Mode=TwoWay}\"",
+        Assert.Contains("SelectedItem=\"{Binding DataContext.SelectedProfile, RelativeSource={RelativeSource AncestorType=Window}, Mode=OneWay}\"",
             profileList, StringComparison.Ordinal);
 
         var settingsStart = xaml.IndexOf("x:Name=\"SettingsProfileSelector\"", StringComparison.Ordinal);
@@ -332,6 +332,25 @@ public sealed class UndoAndCatalogTests : RuntimeTestBase
         Assert.Equal(new[] { scenario.ProfileB1.Id, scenario.ProfileA1.Id },
             scenario.Service.Saved.Profiles.Where(item => item.CategoryId == scenario.CategoryB.Id)
                 .OrderBy(item => item.SortOrder).Select(item => item.Id));
+    }
+
+    [Fact]
+    [Trait("Category", "Regression")]
+    public async Task CatalogReorder_MovingTheSelectedProfileKeepsItsViewModelAndActionsAvailable()
+    {
+        using var scenario = new DragScenario();
+        var profile = scenario.Main.AllProfiles.Single(item => item.Id == scenario.ProfileA1.Id);
+        var firstAction = profile.Actions[0];
+        scenario.Main.SelectedProfile = profile;
+
+        await scenario.Main.ApplyReorderAsync(new(ReorderItemKind.Profile, profile, scenario.CategoryB, 0, Guid.Empty));
+        Assert.Same(profile, scenario.Main.SelectedProfile);
+        Assert.Same(firstAction, scenario.Main.SelectedProfile!.Actions[0]);
+
+        await scenario.Main.ApplyReorderAsync(new(ReorderItemKind.Profile, profile, scenario.CategoryB, 0,
+            scenario.CategoryB.Id));
+        Assert.Same(profile, scenario.Main.SelectedProfile);
+        Assert.Same(firstAction, scenario.Main.SelectedProfile!.Actions[0]);
     }
 
     [Fact]

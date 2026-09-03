@@ -3,11 +3,12 @@ using SwitchBoard.Services.Activity;
 
 namespace SwitchBoard.ViewModels;
 
-public sealed class ProfileExecutionViewModel : ObservableObject
+public sealed class ProfileExecutionViewModel : ObservableObject, IDisposable
 {
     private bool _isExpanded;
 
-    public ProfileExecutionViewModel(ProfileExecutionSummary summary, ILocalizationService localization)
+    public ProfileExecutionViewModel(ProfileExecutionSummary summary, ILocalizationService localization,
+        Func<Guid?, Guid, ActionItemViewModel?>? sourceActionLookup = null)
     {
         SessionId = summary.SessionId;
         ProfileId = summary.ProfileId;
@@ -22,7 +23,8 @@ public sealed class ProfileExecutionViewModel : ObservableObject
             _ => "Status.ProfileFailed"
         });
         Actions = summary.Actions
-            .Select(action => new ProfileExecutionActionViewModel(action, localization))
+            .Select(action => new ProfileExecutionActionViewModel(action, localization,
+                sourceActionLookup?.Invoke(action.ProfileId, action.ActionId)))
             .ToList();
         DurationText = FormatDuration(localization, summary.StartedAt, summary.CompletedAt);
         ActionSummaryText = localization.Format("Activity.HistorySummary", Actions.Count, DurationText);
@@ -34,6 +36,9 @@ public sealed class ProfileExecutionViewModel : ObservableObject
             : summary.HasRestoreFailure
                 ? localization.GetString("Activity.HistoryRestoreFailed")
                 : string.Empty;
+        PhaseText = summary.IsPostRestore
+            ? localization.GetString("Activity.PostRestorePhase")
+            : string.Empty;
         ToggleExpandedCommand = new RelayCommand(() => IsExpanded = !IsExpanded);
     }
 
@@ -47,6 +52,7 @@ public sealed class ProfileExecutionViewModel : ObservableObject
     public string ActionSummaryText { get; }
     public string ProgressText { get; }
     public string RestoreText { get; }
+    public string PhaseText { get; }
     public IReadOnlyList<ProfileExecutionActionViewModel> Actions { get; }
     public bool HasActions => Actions.Count > 0;
     public RelayCommand ToggleExpandedCommand { get; }
@@ -55,6 +61,11 @@ public sealed class ProfileExecutionViewModel : ObservableObject
     {
         get => _isExpanded;
         set => SetProperty(ref _isExpanded, value);
+    }
+
+    public void Dispose()
+    {
+        foreach (var action in Actions) action.Dispose();
     }
 
     private static string FormatDuration(ILocalizationService localization,
@@ -66,10 +77,12 @@ public sealed class ProfileExecutionViewModel : ObservableObject
     }
 }
 
-public sealed class ProfileExecutionActionViewModel
+public sealed class ProfileExecutionActionViewModel : IDisposable
 {
+    private readonly ActivityIconViewModel _icon;
+
     public ProfileExecutionActionViewModel(ProfileExecutionActionSummary summary,
-        ILocalizationService localization)
+        ILocalizationService localization, ActionItemViewModel? sourceAction = null)
     {
         ActionId = summary.ActionId;
         ProfileId = summary.ProfileId;
@@ -85,6 +98,7 @@ public sealed class ProfileExecutionActionViewModel
             "cancelled" => "Execution.Status.Cancelled",
             _ => "Execution.Status.Failed"
         });
+        _icon = new ActivityIconViewModel(sourceAction, summary.ActionType);
     }
 
     public Guid ActionId { get; }
@@ -95,6 +109,11 @@ public sealed class ProfileExecutionActionViewModel
     public ActivityLevel Level { get; }
     public string DurationText { get; }
     public string StatusText { get; }
+    public ActivityIconViewModel IconPresentation => _icon;
+    public System.Windows.Media.ImageSource? Icon => _icon.Icon;
+    public bool HasIcon => _icon.HasIcon;
+
+    public void Dispose() => _icon.Dispose();
 
     private static string FormatDuration(ILocalizationService localization,
         DateTimeOffset? startedAt, DateTimeOffset? completedAt)

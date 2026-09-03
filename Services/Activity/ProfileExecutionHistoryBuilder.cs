@@ -1,4 +1,5 @@
 using SwitchBoard.Models.Actions;
+using SwitchBoard.Models.Execution;
 
 namespace SwitchBoard.Services.Activity;
 
@@ -19,7 +20,8 @@ public sealed record ProfileExecutionActionSummary(
     string Result,
     DateTimeOffset Timestamp,
     DateTimeOffset? StartedAt = null,
-    DateTimeOffset? CompletedAt = null);
+    DateTimeOffset? CompletedAt = null,
+    string ActionType = "");
 
 public sealed record ProfileExecutionSummary(
     Guid SessionId,
@@ -30,7 +32,8 @@ public sealed record ProfileExecutionSummary(
     ProfileExecutionResult Result,
     IReadOnlyList<ProfileExecutionActionSummary> Actions,
     bool IsRestored,
-    bool HasRestoreFailure)
+    bool HasRestoreFailure,
+    bool IsPostRestore = false)
 {
     public int SuccessfulActionCount => Actions.Count(action =>
         action.Result is "success" or "skipped");
@@ -90,7 +93,8 @@ public static class ProfileExecutionHistoryBuilder
                     latest.Result ?? string.Empty,
                     latest.Timestamp,
                     startedAt,
-                    completedAt);
+                    completedAt,
+                    latest.ActionType ?? string.Empty);
             })
             .ToList();
 
@@ -111,7 +115,8 @@ public static class ProfileExecutionHistoryBuilder
             result,
             actionRecords,
             isRestored,
-            hasRestoreFailure);
+            hasRestoreFailure,
+            records.Any(record => record.Origin == ExecutionOrigin.PostRestore));
     }
 
     private static bool IsExecutionActionRecord(PersistentActivityRecord record) =>

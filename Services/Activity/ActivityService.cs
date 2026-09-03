@@ -344,7 +344,8 @@ public sealed class ActivityService : IActivityService
                     first.StateBefore?.DeepClone().AsObject(), first.RequestedState?.DeepClone().AsObject(),
                     first.StateAfter?.DeepClone().AsObject(),
                     last.RestoreStatus ?? first.RestoreStatus ?? SystemChangeStatuses.Pending,
-                    last.Message);
+                    last.Message,
+                    first.Origin);
             })
             .OrderByDescending(change => change.Timestamp)
             .ToList();
@@ -362,6 +363,7 @@ public sealed class ActivityService : IActivityService
 
     private static PersistentActivityRecord Clone(PersistentActivityRecord record) => new()
     {
+        Origin = record.Origin,
         Timestamp = record.Timestamp,
         StartedAt = record.StartedAt,
         CompletedAt = record.CompletedAt,

@@ -95,7 +95,8 @@ public sealed class ProfileCatalogService(ICatalogRepository repository) : IProf
             ValidateProfileActions(profile, profileIds, actionIds);
 
         var edges = catalog.Profiles.ToDictionary(profile => profile.Id,
-            profile => profile.Actions.SelectMany(EnumerateProfileTargets).ToHashSet());
+            profile => profile.Actions.Concat(profile.PostRestoreActions)
+                .SelectMany(EnumerateProfileTargets).ToHashSet());
         var visiting = new HashSet<Guid>();
         var visited = new HashSet<Guid>();
         foreach (var profile in catalog.Profiles)
@@ -107,10 +108,12 @@ public sealed class ProfileCatalogService(ICatalogRepository repository) : IProf
         HashSet<Guid>? actionIds = null)
     {
         ArgumentNullException.ThrowIfNull(profile);
-        if (profile.Actions is null)
+        if (profile.Actions is null || profile.PostRestoreActions is null)
             throw new InvalidDataException("A profile contains a missing action list.");
         actionIds ??= [];
         foreach (var action in profile.Actions)
+            ValidateAction(action, 0, profileIds, actionIds);
+        foreach (var action in profile.PostRestoreActions)
             ValidateAction(action, 0, profileIds, actionIds);
     }
 

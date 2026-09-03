@@ -1,12 +1,16 @@
 using SwitchBoard.Localization;
 using SwitchBoard.Models.Actions;
+using SwitchBoard.Models.Execution;
 using SwitchBoard.Services.Activity;
 
 namespace SwitchBoard.ViewModels;
 
-public sealed class SystemChangeItemViewModel
+public sealed class SystemChangeItemViewModel : IDisposable
 {
-    public SystemChangeItemViewModel(SystemChangeEntry change, ILocalizationService localization)
+    private readonly ActivityIconViewModel _icon;
+
+    public SystemChangeItemViewModel(SystemChangeEntry change, ILocalizationService localization,
+        ActionItemViewModel? sourceAction = null)
     {
         Timestamp = change.Timestamp;
         ProfileId = change.ProfileId;
@@ -23,10 +27,14 @@ public sealed class SystemChangeItemViewModel
             SystemChangeStatuses.ExternalChange => "SystemChange.External",
             _ => "SystemChange.Pending"
         });
-        Details = change.ActionType == ActionTypeIds.ServiceSetState
+        var details = change.ActionType == ActionTypeIds.ServiceSetState
             ? BuildServiceDetails(change, localization)
             : change.Message;
+        Details = change.Origin == ExecutionOrigin.PostRestore
+            ? string.Concat(localization.GetString("Activity.PostRestorePhase"), " - ", details)
+            : details;
         ProcessSearchText = BuildProcessSearchText(change);
+        _icon = new ActivityIconViewModel(sourceAction, change.ActionType);
     }
 
     public DateTimeOffset Timestamp { get; }
@@ -38,10 +46,15 @@ public sealed class SystemChangeItemViewModel
     public string StatusText { get; }
     public string Status { get; }
     public string Message { get; }
+    public ActivityIconViewModel IconPresentation => _icon;
+    public System.Windows.Media.ImageSource? Icon => _icon.Icon;
+    public bool HasIcon => _icon.HasIcon;
     /// <summary>Process identifiers persisted with the change, used only by the activity filter.</summary>
     public string ProcessSearchText { get; }
     public bool IsUnresolved => Status is SystemChangeStatuses.Pending or SystemChangeStatuses.Discarded or
         SystemChangeStatuses.LeftActive or SystemChangeStatuses.RestoreFailed;
+
+    public void Dispose() => _icon.Dispose();
 
     private static string BuildServiceDetails(SystemChangeEntry change, ILocalizationService localization)
     {

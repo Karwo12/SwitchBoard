@@ -348,7 +348,10 @@ public sealed class SettingsWorkspaceTests
         Assert.Contains("DisplayMemberPath=\"SettingsDisplayName\"", mainXaml, StringComparison.Ordinal);
         Assert.Contains("SelectedItem=\"{Binding SelectedProfile, Mode=TwoWay}\"", mainXaml, StringComparison.Ordinal);
         Assert.Contains("ItemsSource=\"{Binding ProfileColorOptions}\"", mainXaml, StringComparison.Ordinal);
-        Assert.Contains("ItemsSource=\"{Binding ProfileIconOptions}\"", mainXaml, StringComparison.Ordinal);
+        Assert.Contains("Settings.ProfileIconFromAction", mainXaml, StringComparison.Ordinal);
+        Assert.Contains("Settings.ProfileIconFromFile", mainXaml, StringComparison.Ordinal);
+        Assert.Contains("Settings.ProfileIconRemove", mainXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("SetProfileIconCommand", mainXaml, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"SubmenuArrow\"", baseStyles, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"SubmenuPopup\"", baseStyles, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"GeneralSettingsPanel\"", mainXaml, StringComparison.Ordinal);

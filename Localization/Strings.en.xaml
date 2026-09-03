@@ -30,6 +30,7 @@
 
     <system:String x:Key="Editor.NewActionType">New action type</system:String>
     <system:String x:Key="Editor.AddAction">+ Add Action</system:String>
+    <system:String x:Key="Editor.PostRestoreActions">After restoring profile</system:String>
     <system:String x:Key="Editor.SearchActions">Search actions...</system:String>
     <system:String x:Key="Editor.NoActionsFound">No actions found</system:String>
     <system:String x:Key="Editor.DuplicateAction">Duplicate action</system:String>
@@ -497,6 +498,8 @@
     <system:String x:Key="Dialog.ArgumentsHeading">Launch arguments</system:String>
     <system:String x:Key="Dialog.ArgumentsHint">Enter the arguments that will be passed to the program when it starts.</system:String>
     <system:String x:Key="Dialog.ProgramFileFilter">Programs and shortcuts (*.exe;*.lnk)|*.exe;*.lnk|All files (*.*)|*.*</system:String>
+    <system:String x:Key="Dialog.SelectProfileIconTitle">Select profile icon</system:String>
+    <system:String x:Key="Dialog.ProfileIconFileFilter">Profile icons (*.exe;*.ico)|*.exe;*.ico|All files (*.*)|*.*</system:String>
     <system:String x:Key="Dialog.FindProgramTitle">Find a program</system:String>
     <system:String x:Key="Dialog.SelectProcessTitle">Select a running process</system:String>
     <system:String x:Key="Dialog.SelectServiceTitle">Select service</system:String>
@@ -604,6 +607,8 @@
     <system:String x:Key="Activity.DurationUnknown">—</system:String>
     <system:String x:Key="Activity.HistoryProgress">{0}/{1} actions completed</system:String>
     <system:String x:Key="Activity.HistoryRestored">Restored</system:String>
+    <system:String x:Key="Activity.PostRestorePhase">After restoring profile</system:String>
+    <system:String x:Key="Activity.PostRestoreFailed">Post-restore actions failed: {0}</system:String>
     <system:String x:Key="Activity.HistoryRestoreFailed">Restore failed</system:String>
     <system:String x:Key="Activity.NavigationProfileMissing">Profile is no longer available</system:String>
     <system:String x:Key="Activity.NavigationActionMissing">Action is no longer available</system:String>
@@ -796,6 +801,10 @@
     <system:String x:Key="Settings.ProfileAppearance">Profile appearance</system:String>
     <system:String x:Key="Settings.ProfileColor">Color</system:String>
     <system:String x:Key="Settings.ProfileIcon">Icon</system:String>
+    <system:String x:Key="Settings.ProfileIconFromAction">From profile action…</system:String>
+    <system:String x:Key="Settings.ProfileIconFromFile">From file…</system:String>
+    <system:String x:Key="Settings.ProfileIconRemove">Remove icon</system:String>
+    <system:String x:Key="Settings.ProfileIconBuiltIn">Built-in symbol</system:String>
     <system:String x:Key="Settings.ProfileColorBlue">Blue</system:String>
     <system:String x:Key="Settings.ProfileColorPurple">Purple</system:String>
     <system:String x:Key="Settings.ProfileColorGreen">Green</system:String>
@@ -806,6 +815,9 @@
     <system:String x:Key="Settings.ProfileIconGamepad">Gamepad</system:String>
     <system:String x:Key="Settings.ProfileIconMonitor">Monitor</system:String>
     <system:String x:Key="Settings.ProfileIconMoon">Moon</system:String>
+    <system:String x:Key="Settings.ProfileIconReset">Remove</system:String>
+    <system:String x:Key="Settings.ProfileIconChoose">Choose icon…</system:String>
+    <system:String x:Key="Settings.ProfileIconFileHint">Choose an EXE or ICO file. SwitchBoard stores only the source path.</system:String>
     <system:String x:Key="Settings.CheckUpdates">Check for updates</system:String>
     <system:String x:Key="Settings.Updates">Updates</system:String>
     <system:String x:Key="Settings.CheckUpdatesAtStartup">Automatically check for updates at startup</system:String>

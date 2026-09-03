@@ -72,7 +72,7 @@ public partial class ActionEditorControl : UserControl
         Dispatcher.BeginInvoke(DispatcherPriority.ContextIdle, () =>
         {
             if (DataContext is not ViewModels.MainWindowViewModel viewModel) return;
-            var action = viewModel.SelectedProfile?.Actions.SelectMany(Flatten).FirstOrDefault(item => item.Id == actionId);
+            var action = viewModel.SelectedProfile?.EditorActions.SelectMany(Flatten).FirstOrDefault(item => item.Id == actionId);
             if (action is null) return;
             ActionList.SelectedItem = action;
             ActionList.UpdateLayout();
@@ -124,6 +124,14 @@ public partial class ActionEditorControl : UserControl
             viewModel.IsActionPickerOpen = false;
             e.Handled = true;
         }
+    }
+
+    private void ActionPickerButton_OnClick(object sender, RoutedEventArgs e) =>
+        ActionPickerPopup.PlacementTarget = ActionPickerButton;
+
+    private void PostRestoreActionPicker_OnClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement target) ActionPickerPopup.PlacementTarget = target;
     }
 
     private void ActionEditor_OnPreviewKeyDown(object sender, KeyEventArgs e)

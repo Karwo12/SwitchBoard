@@ -43,6 +43,31 @@ public sealed class ActionEditorCompositionTests
         Assert.DoesNotContain("Task.Delay", codeBehind, StringComparison.Ordinal);
     }
 
+    [Fact]
+    [Trait("Category", "Regression")]
+    public void ActionCards_SwapTheFallbackForThePublishedApplicationIcon()
+    {
+        var host = File.ReadAllText(FindSourceFile("Controls", "ActionEditorControl.xaml"));
+
+        Assert.Contains("Source=\"{Binding ActionFallbackIcon}\"", host, StringComparison.Ordinal);
+        Assert.Contains("Source=\"{Binding ApplicationIcon}\"", host, StringComparison.Ordinal);
+        Assert.Contains("Visibility=\"{Binding HasApplicationIcon, Converter={StaticResource BooleanToVisibilityConverter}}\"",
+            host, StringComparison.Ordinal);
+        Assert.Contains("<DataTrigger Binding=\"{Binding HasApplicationIcon}\" Value=\"True\">", host,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [Trait("Category", "Regression")]
+    public void ActionCards_UseOneVirtualizedPresentationForBothActionCollections()
+    {
+        var host = File.ReadAllText(FindSourceFile("Controls", "ActionEditorControl.xaml"));
+
+        Assert.Contains("ItemsSource=\"{Binding SelectedProfile.EditorActions}\"", host, StringComparison.Ordinal);
+        Assert.Contains("VirtualizationMode=\"Recycling\"", host, StringComparison.Ordinal);
+        Assert.Contains("Editor.PostRestoreActions", host, StringComparison.Ordinal);
+    }
+
     private static string FindSourceFile(params string[] relativePath)
     {
         foreach (var start in new[] { Directory.GetCurrentDirectory(), AppContext.BaseDirectory })

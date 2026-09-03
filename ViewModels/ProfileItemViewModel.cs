@@ -1,6 +1,13 @@
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
+using System.ComponentModel;
+using System.IO;
+using System.Windows;
+using System.Windows.Media;
+using System.Windows.Threading;
 using SwitchBoard.Localization;
 using SwitchBoard.Models.Profiles;
+using SwitchBoard.Services.Discovery;
 
 namespace SwitchBoard.ViewModels;
 
@@ -13,11 +20,20 @@ public sealed class ProfileItemViewModel : ObservableObject
     private bool _closeSwitchBoardAfterSuccessfulCompletion;
     private bool _closeSwitchBoardAfterSuccessfulRestore;
     private string? _color;
-    private string? _icon;
+    private string? _iconSourcePath;
+    private Guid? _iconSourceActionId;
+    private ImageSource? _iconImage;
+    private int _iconLoadVersion;
+    private readonly FileIconCache _iconCache;
+    private readonly Dispatcher? _uiDispatcher;
+    private readonly ObservableCollection<ActionItemViewModel> _editorActions = [];
     private ProfileExecutionState _executionState;
 
-    public ProfileItemViewModel(ProfileDefinition profile, ILocalizationService localizationService)
+    public ProfileItemViewModel(ProfileDefinition profile, ILocalizationService localizationService,
+        FileIconCache? iconCache = null)
     {
+        _iconCache = iconCache ?? FileIconCache.Shared;
+        _uiDispatcher = Application.Current?.Dispatcher;
         Id = profile.Id;
         CategoryId = profile.CategoryId;
         _name = profile.Name;
@@ -26,12 +42,24 @@ public sealed class ProfileItemViewModel : ObservableObject
         _closeSwitchBoardAfterSuccessfulCompletion = profile.CloseSwitchBoardAfterSuccessfulCompletion;
         _closeSwitchBoardAfterSuccessfulRestore = profile.CloseSwitchBoardAfterSuccessfulRestore;
         _color = profile.Color;
-        _icon = profile.Icon;
+        _iconSourcePath = NormalizeIconSourcePath(profile.IconSource);
+        _iconSourceActionId = NormalizeIconSourceActionId(profile.IconSource);
         SortOrder = profile.SortOrder;
         Actions = new ObservableCollection<ActionItemViewModel>(
             profile.Actions
                 .OrderBy(action => action.SortOrder)
-                .Select(action => new ActionItemViewModel(action, localizationService)));
+                .Select(action => new ActionItemViewModel(action, localizationService, iconCache: _iconCache)));
+        PostRestoreActions = new ObservableCollection<ActionItemViewModel>(
+            profile.PostRestoreActions
+                .OrderBy(action => action.SortOrder)
+                .Select(action => new ActionItemViewModel(action, localizationService, iconCache: _iconCache)));
+        EditorActions = new ReadOnlyObservableCollection<ActionItemViewModel>(_editorActions);
+        Actions.CollectionChanged += ActionsOnCollectionChanged;
+        PostRestoreActions.CollectionChanged += ActionsOnCollectionChanged;
+        foreach (var action in Actions) SubscribeToAction(action);
+        foreach (var action in PostRestoreActions) SubscribeToAction(action);
+        SynchronizeEditorActions();
+        RefreshIconImage();
     }
 
     public Guid Id { get; }
@@ -92,34 +120,76 @@ public sealed class ProfileItemViewModel : ObservableObject
         }
     }
 
-    /// <summary>Optional identifier from the small built-in profile icon set.</summary>
-    public string? Icon
+    /// <summary>Optional full path to the EXE or ICO selected as the profile icon source.</summary>
+    public string? IconSourcePath => _iconSourcePath;
+
+    /// <summary>Stable ID of the selected action when the profile follows an action icon.</summary>
+    public Guid? IconSourceActionId => _iconSourceActionId;
+
+    public bool UsesActionIcon => IconSourceActionId is not null;
+
+    public ActionItemViewModel? IconSourceAction => IconSourceActionId is { } actionId
+        ? Actions.Concat(PostRestoreActions).FirstOrDefault(action => action.Id == actionId)
+        : null;
+
+    public string IconSourceDisplayName => IconSourceAction?.DisplayName ??
+        (UsesActionIcon ? "-" : string.IsNullOrWhiteSpace(IconSourcePath) ? "-" : Path.GetFileName(IconSourcePath));
+
+    public ImageSource? IconImage
     {
-        get => _icon;
-        set
+        get => _iconImage;
+        private set
         {
-            var normalized = string.IsNullOrWhiteSpace(value) || string.Equals(value, "none", StringComparison.OrdinalIgnoreCase)
-                ? null : value.Trim();
-            if (!SetProperty(ref _icon, normalized)) return;
-            OnPropertyChanged(nameof(HasAppearance));
-            OnPropertyChanged(nameof(IconPathData));
+            if (!SetProperty(ref _iconImage, value)) return;
+            OnPropertyChanged(nameof(HasIconImage));
         }
     }
 
-    public bool HasAppearance => !string.IsNullOrWhiteSpace(Color) || !string.IsNullOrWhiteSpace(Icon);
+    public bool HasIconImage => IconImage is not null;
 
-    /// <summary>Small vector paths used only in the profile navigation.</summary>
-    public string IconPathData => Icon?.ToLowerInvariant() switch
+    public bool HasAppearance => !string.IsNullOrWhiteSpace(Color) || UsesActionIcon ||
+                                 !string.IsNullOrWhiteSpace(IconSourcePath);
+
+    /// <summary>Sets a file-backed profile icon and replaces any action-backed icon.</summary>
+    public void SetIconSourcePath(string? sourcePath)
     {
-        "bolt" => "M13,1 L3,10 H9 L7,17 L17,7 H11 Z",
-        "gamepad" => "M5,7 H15 C17.2,7 18.8,9 18.3,11.2 L17.5,14.2 C17.1,15.8 15,16.3 13.9,15 L12,13.2 H8 L6.1,15 C5,16.3 2.9,15.8 2.5,14.2 L1.7,11.2 C1.2,9 2.8,7 5,7 Z M5,10 V13 M3.5,11.5 H6.5 M14.5,10.5 H14.6 M16,12 H16.1",
-        "briefcase" => "M2,6 H18 V16 H2 Z M7,6 V4 H13 V6 M2,10 H18 M8,10 V12 H12 V10",
-        "moon" => "M14.8,14.8 A7,7 0 1 1 9.2,2.2 A5.6,5.6 0 1 0 14.8,14.8 Z",
-        "monitor" => "M2,3 H18 V14 H2 Z M7,18 H13 M10,14 V18",
-        _ => string.Empty
-    };
+        var normalized = NormalizeIconSourcePath(sourcePath);
+        if (string.Equals(_iconSourcePath, normalized, StringComparison.OrdinalIgnoreCase) && _iconSourceActionId is null) return;
+
+        _iconSourcePath = normalized;
+        _iconSourceActionId = null;
+        NotifyIconSourceChanged();
+    }
+
+    /// <summary>Uses the selected profile action's shared icon source without copying the bitmap.</summary>
+    public void SetIconSourceAction(Guid? actionId)
+    {
+        Guid? normalized = actionId is { } value && value != Guid.Empty ? value : null;
+        if (_iconSourceActionId == normalized && _iconSourcePath is null) return;
+
+        _iconSourceActionId = normalized;
+        _iconSourcePath = null;
+        NotifyIconSourceChanged();
+    }
+
+    public void ClearIconSource()
+    {
+        if (_iconSourcePath is null && _iconSourceActionId is null) return;
+        _iconSourcePath = null;
+        _iconSourceActionId = null;
+        NotifyIconSourceChanged();
+    }
+
+    /// <summary>Neutral navigation fallback when no action or file icon is currently available.</summary>
+    public string IconPathData => "M3,2 H17 A2,2 0 0 1 19,4 V16 A2,2 0 0 1 17,18 H3 A2,2 0 0 1 1,16 V4 A2,2 0 0 1 3,2 Z M5,6 H15 M5,10 H12";
 
     public ObservableCollection<ActionItemViewModel> Actions { get; }
+
+    /// <summary>Actions that run only after a successful regular restore.</summary>
+    public ObservableCollection<ActionItemViewModel> PostRestoreActions { get; }
+
+    /// <summary>Single virtualized editor presentation; ordering remains isolated in the two source collections.</summary>
+    public ReadOnlyObservableCollection<ActionItemViewModel> EditorActions { get; }
 
     public ProfileExecutionState ExecutionState
     {
@@ -192,7 +262,156 @@ public sealed class ProfileItemViewModel : ObservableObject
         CloseSwitchBoardAfterSuccessfulCompletion = CloseSwitchBoardAfterSuccessfulCompletion,
         CloseSwitchBoardAfterSuccessfulRestore = CloseSwitchBoardAfterSuccessfulRestore,
         Color = Color,
-        Icon = Icon,
-        Actions = Actions.Select(action => action.ToModel()).ToList()
+        // Built-in symbols are legacy-only. New saves retain exactly one explicit source,
+        // either a file path or a stable action ID.
+        Icon = null,
+        IconSource = BuildIconSourceDefinition(),
+        Actions = Actions.Select(action => action.ToModel()).ToList(),
+        PostRestoreActions = PostRestoreActions.Select(action => action.ToModel()).ToList()
     };
+
+    private void RefreshIconImage()
+    {
+        var request = ++_iconLoadVersion;
+        if (UsesActionIcon)
+        {
+            IconImage = IconSourceAction?.ApplicationIcon ?? IconSourceAction?.ActionFallbackIcon;
+            return;
+        }
+
+        var sourcePath = IconSourcePath;
+        if (sourcePath is null)
+        {
+            IconImage = null;
+            return;
+        }
+
+        _ = LoadIconImageAsync(sourcePath, request);
+    }
+
+    private async Task LoadIconImageAsync(string sourcePath, int request)
+    {
+        ImageSource? icon;
+        try { icon = await _iconCache.GetSmallIconAsync(sourcePath); }
+        catch { icon = null; }
+        if (request != _iconLoadVersion || !string.Equals(sourcePath, IconSourcePath, StringComparison.OrdinalIgnoreCase))
+            return;
+        if (_uiDispatcher is { HasShutdownStarted: false, HasShutdownFinished: false } dispatcher &&
+            !dispatcher.CheckAccess())
+        {
+            await dispatcher.InvokeAsync(() =>
+            {
+                if (request == _iconLoadVersion &&
+                    string.Equals(sourcePath, IconSourcePath, StringComparison.OrdinalIgnoreCase))
+                    IconImage = icon;
+            });
+            return;
+        }
+
+        if (request == _iconLoadVersion && string.Equals(sourcePath, IconSourcePath, StringComparison.OrdinalIgnoreCase))
+            IconImage = icon;
+    }
+
+    private ProfileIconSourceDefinition? BuildIconSourceDefinition() => IconSourceActionId is { } actionId
+        ? new ProfileIconSourceDefinition
+        {
+            Type = ProfileIconSourceDefinition.ActionSourceType,
+            ActionId = actionId
+        }
+        : string.IsNullOrWhiteSpace(IconSourcePath) ? null : new ProfileIconSourceDefinition
+        {
+            Type = ProfileIconSourceDefinition.FileSourceType,
+            Path = IconSourcePath
+        };
+
+    private void NotifyIconSourceChanged()
+    {
+        OnPropertyChanged(nameof(IconSourcePath));
+        OnPropertyChanged(nameof(IconSourceActionId));
+        OnPropertyChanged(nameof(IconSourceAction));
+        OnPropertyChanged(nameof(UsesActionIcon));
+        OnPropertyChanged(nameof(IconSourceDisplayName));
+        OnPropertyChanged(nameof(HasAppearance));
+        RefreshIconImage();
+    }
+
+    private void ActionsOnCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (e.OldItems is not null)
+        {
+            foreach (var action in e.OldItems.OfType<ActionItemViewModel>()) UnsubscribeFromAction(action);
+        }
+        if (e.NewItems is not null)
+        {
+            foreach (var action in e.NewItems.OfType<ActionItemViewModel>()) SubscribeToAction(action);
+        }
+        if (UsesActionIcon)
+        {
+            OnPropertyChanged(nameof(IconSourceAction));
+            OnPropertyChanged(nameof(IconSourceDisplayName));
+            RefreshIconImage();
+        }
+        SynchronizeEditorActions();
+    }
+
+    private void SynchronizeEditorActions()
+    {
+        var ordered = Actions.Concat(PostRestoreActions).ToList();
+        for (var index = 0; index < ordered.Count; index++)
+        {
+            var action = ordered[index];
+            var currentIndex = _editorActions.IndexOf(action);
+            if (currentIndex == index) continue;
+            if (currentIndex >= 0) _editorActions.Move(currentIndex, index);
+            else _editorActions.Insert(index, action);
+        }
+        while (_editorActions.Count > ordered.Count)
+            _editorActions.RemoveAt(_editorActions.Count - 1);
+
+        for (var index = 0; index < Actions.Count; index++)
+            Actions[index].IsPostRestoreSectionStart = false;
+        for (var index = 0; index < PostRestoreActions.Count; index++)
+            PostRestoreActions[index].IsPostRestoreSectionStart = index == 0;
+    }
+
+    private void SubscribeToAction(ActionItemViewModel action) => action.PropertyChanged += IconSourceActionOnPropertyChanged;
+
+    private void UnsubscribeFromAction(ActionItemViewModel action) => action.PropertyChanged -= IconSourceActionOnPropertyChanged;
+
+    private void IconSourceActionOnPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (sender is not ActionItemViewModel action || action.Id != IconSourceActionId) return;
+        if (e.PropertyName is nameof(ActionItemViewModel.ApplicationIcon) or nameof(ActionItemViewModel.ActionFallbackIcon))
+            RefreshIconImage();
+        if (e.PropertyName is nameof(ActionItemViewModel.DisplayName) or nameof(ActionItemViewModel.Summary))
+            OnPropertyChanged(nameof(IconSourceDisplayName));
+    }
+
+    private static string? NormalizeIconSourcePath(ProfileIconSourceDefinition? source) =>
+        source is not null && string.Equals(source.Type, ProfileIconSourceDefinition.FileSourceType,
+            StringComparison.OrdinalIgnoreCase) ? NormalizeIconSourcePath(source.Path) : null;
+
+    private static Guid? NormalizeIconSourceActionId(ProfileIconSourceDefinition? source) =>
+        source is not null && string.Equals(source.Type, ProfileIconSourceDefinition.ActionSourceType,
+            StringComparison.OrdinalIgnoreCase) && source.ActionId is { } actionId && actionId != Guid.Empty
+            ? actionId
+            : null;
+
+    private static string? NormalizeIconSourcePath(string? sourcePath)
+    {
+        if (string.IsNullOrWhiteSpace(sourcePath)) return null;
+        try
+        {
+            var trimmed = sourcePath.Trim();
+            var extension = Path.GetExtension(trimmed);
+            if (!Path.IsPathFullyQualified(trimmed) ||
+                (!extension.Equals(".exe", StringComparison.OrdinalIgnoreCase) &&
+                 !extension.Equals(".ico", StringComparison.OrdinalIgnoreCase))) return null;
+            return Path.GetFullPath(trimmed);
+        }
+        catch (Exception exception) when (exception is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return null;
+        }
+    }
 }

@@ -1,4 +1,7 @@
 using System.IO;
+using System.Windows;
+using System.Windows.Media;
+using System.Windows.Threading;
 using System.Text.Json.Nodes;
 using System.Collections.ObjectModel;
 using SwitchBoard.Localization;
@@ -52,6 +55,7 @@ public sealed class ActionItemViewModel : ObservableObject
     private int _timeoutSeconds;
     private int _delaySeconds;
     private bool _isExpanded;
+    private bool _isPostRestoreSectionStart;
     private bool _isAdvancedOptionsExpanded;
     private string _displayDeviceName;
     private string _displayDeviceId;
@@ -112,10 +116,17 @@ public sealed class ActionItemViewModel : ObservableObject
     private ActionExecutionState _executionState;
     private readonly int _nestingDepth;
     private readonly bool _hasNestingDepthViolation;
+    private readonly FileIconCache _iconCache;
+    private readonly Dispatcher? _uiDispatcher;
+    private ImageSource? _applicationIcon;
+    private int _iconLoadVersion;
 
-    public ActionItemViewModel(ActionDefinition action, ILocalizationService localizationService, int nestingDepth = 0)
+    public ActionItemViewModel(ActionDefinition action, ILocalizationService localizationService, int nestingDepth = 0,
+        FileIconCache? iconCache = null)
     {
         _localizationService = localizationService;
+        _iconCache = iconCache ?? FileIconCache.Shared;
+        _uiDispatcher = Application.Current?.Dispatcher;
         _nestingDepth = nestingDepth;
         var legacyProcessState = action.Type == ActionTypeIds.ProcessSetState;
         var normalizedType = legacyProcessState ? ActionTypeIds.ProcessConfigure : action.Type;
@@ -380,6 +391,7 @@ public sealed class ActionItemViewModel : ObservableObject
             CanMoveNestedActionUp);
         MoveNestedActionDownCommand = new RelayCommand<ActionItemViewModel>(item => MoveNestedAction(item, 1),
             CanMoveNestedActionDown);
+        RefreshApplicationIcon();
     }
 
     public Guid Id { get; }
@@ -437,6 +449,30 @@ public sealed class ActionItemViewModel : ObservableObject
     }
 
     public bool IsComment => Type == ActionTypeIds.Comment;
+
+    /// <summary>Presentation-only marker used by the shared editor to introduce the post-restore section.</summary>
+    public bool IsPostRestoreSectionStart
+    {
+        get => _isPostRestoreSectionStart;
+        internal set => SetProperty(ref _isPostRestoreSectionStart, value);
+    }
+
+    /// <summary>Application icon when this action has an explicitly configured local executable source.</summary>
+    public ImageSource? ApplicationIcon
+    {
+        get => _applicationIcon;
+        private set
+        {
+            if (!SetProperty(ref _applicationIcon, value)) return;
+            OnPropertyChanged(nameof(HasApplicationIcon));
+        }
+    }
+
+    public bool HasApplicationIcon => ApplicationIcon is not null;
+
+    /// <summary>Packaged fallback shown only when this action has no reliable EXE icon.</summary>
+    public ImageSource? ActionFallbackIcon => _iconCache.GetActionIcon(GetFallbackIconAsset(Type, ScriptPath));
+    internal ActionIconAsset FallbackIconAsset => GetFallbackIconAsset(Type, ScriptPath);
     public string CommentText
     {
         get => _commentText;
@@ -513,11 +549,21 @@ public sealed class ActionItemViewModel : ObservableObject
             OnPropertyChanged(nameof(Summary));
             OnPropertyChanged(nameof(SupportsRestore));
             NotifyValidation();
+            RefreshApplicationIcon();
         }
     }
     public bool IsUriTarget => string.Equals(TargetType, TargetTypeIds.Uri, StringComparison.OrdinalIgnoreCase);
     public bool IsExecutableTarget => !IsUriTarget;
-    public string WorkingDirectory { get => _workingDirectory; set { if (SetProperty(ref _workingDirectory, value)) OnPropertyChanged(nameof(Summary)); } }
+    public string WorkingDirectory
+    {
+        get => _workingDirectory;
+        set
+        {
+            if (!SetProperty(ref _workingDirectory, value)) return;
+            OnPropertyChanged(nameof(Summary));
+            RefreshApplicationIcon();
+        }
+    }
     public bool UseCustomWorkingDirectory
     {
         get => _useCustomWorkingDirectory;
@@ -700,7 +746,7 @@ public sealed class ActionItemViewModel : ObservableObject
             Type = type,
             SortOrder = target.Count,
             Parameters = parameters?.DeepClone().AsObject() ?? DefaultNestedParameters(type)
-        }, _localizationService, _nestingDepth + 1);
+        }, _localizationService, _nestingDepth + 1, _iconCache);
         SubscribeNested(item);
         target.Add(item);
         NotifyValidation();
@@ -764,7 +810,18 @@ public sealed class ActionItemViewModel : ObservableObject
         OnPropertyChanged("NestedConfiguration");
     };
 
-    public string Target { get => _target; set => SetWithSummary(ref _target, value); }
+    public string Target
+    {
+        get => _target;
+        set
+        {
+            if (!SetProperty(ref _target, value)) return;
+            OnPropertyChanged(nameof(Summary));
+            OnPropertyChanged(nameof(SupportsRestore));
+            NotifyValidation();
+            RefreshApplicationIcon();
+        }
+    }
     public string ProcessName
     {
         get => _processName;
@@ -775,18 +832,50 @@ public sealed class ActionItemViewModel : ObservableObject
             OnPropertyChanged(nameof(Summary));
             OnPropertyChanged(nameof(SupportsRestore));
             NotifyValidation();
+            RefreshApplicationIcon();
         }
     }
-    public string ExecutablePath { get => _executablePath; set => SetWithSummary(ref _executablePath, value); }
+    public string ExecutablePath
+    {
+        get => _executablePath;
+        set
+        {
+            if (!SetProperty(ref _executablePath, value)) return;
+            OnPropertyChanged(nameof(Summary));
+            OnPropertyChanged(nameof(SupportsRestore));
+            NotifyValidation();
+            RefreshApplicationIcon();
+        }
+    }
     // Retained for deserializing old process.setState profiles; the editor uses ProcessOperation.
     public string DesiredProcessState { get => _desiredProcessState; set => SetWithSummary(ref _desiredProcessState, value); }
-    public string ServiceName { get => _serviceName; set => SetWithSummary(ref _serviceName, value); }
+    public string ServiceName
+    {
+        get => _serviceName;
+        set
+        {
+            if (!SetProperty(ref _serviceName, value)) return;
+            OnPropertyChanged(nameof(Summary));
+            OnPropertyChanged(nameof(SupportsRestore));
+            NotifyValidation();
+            RefreshApplicationIcon();
+        }
+    }
     public string ServiceDisplayName { get => _serviceDisplayName; set => SetWithSummary(ref _serviceDisplayName, value); }
     public string DesiredServiceState { get => _desiredServiceState; set => SetWithSummary(ref _desiredServiceState, value); }
     public string DesiredServiceStartupType { get => _desiredServiceStartupType; set => SetWithSummary(ref _desiredServiceStartupType, value); }
     public string PowerPlanGuid { get => _powerPlanGuid; set => SetWithSummary(ref _powerPlanGuid, value); }
     public string PowerPlanName { get => _powerPlanName; set => SetWithSummary(ref _powerPlanName, value); }
-    public string ScriptPath { get => _scriptPath; set => SetWithSummary(ref _scriptPath, value); }
+    public string ScriptPath
+    {
+        get => _scriptPath;
+        set
+        {
+            if (!SetProperty(ref _scriptPath, value)) return;
+            OnPropertyChanged(nameof(Summary));
+            OnPropertyChanged(nameof(ActionFallbackIcon));
+        }
+    }
     public string ScriptType { get => _scriptType; set => SetProperty(ref _scriptType, value); }
     public string DisplayDeviceName { get => _displayDeviceName; set => SetValidationProperty(ref _displayDeviceName, value); }
     public string DisplayDeviceId { get => _displayDeviceId; set => SetProperty(ref _displayDeviceId, value); }
@@ -1492,7 +1581,7 @@ public sealed class ActionItemViewModel : ObservableObject
             {
                 if (ActionDefinitionJson.Deserialize(node) is { } action)
                 {
-                    var item = new ActionItemViewModel(action, _localizationService, depth);
+                    var item = new ActionItemViewModel(action, _localizationService, depth, _iconCache);
                     SubscribeNested(item);
                     target.Add(item);
                 }
@@ -1508,6 +1597,61 @@ public sealed class ActionItemViewModel : ObservableObject
             model.SortOrder = index;
             return ActionDefinitionJson.Serialize(model);
         }).ToArray());
+
+    private void RefreshApplicationIcon()
+    {
+        var sourceRequest = ActionIconSourceResolver.Capture(this);
+        var request = ++_iconLoadVersion;
+        ApplicationIcon = null;
+        _ = LoadApplicationIconAsync(sourceRequest, request);
+    }
+
+    internal static ActionIconAsset GetFallbackIconAsset(string type, string? scriptPath = null) => type switch
+    {
+        ActionTypeIds.AudioConfigure => ActionIconAsset.Audio,
+        ActionTypeIds.DisplayConfigure => ActionIconAsset.Display,
+        ActionTypeIds.DeviceSetState => ActionIconAsset.Device,
+        ActionTypeIds.Delay => ActionIconAsset.Delay,
+        ActionTypeIds.PowerSetPlan => ActionIconAsset.Power,
+        ActionTypeIds.ConditionIf => ActionIconAsset.Condition,
+        ActionTypeIds.ServiceSetState => ActionIconAsset.Service,
+        ActionTypeIds.ProcessConfigure or ActionTypeIds.WaitProcessStart or ActionTypeIds.WaitProcessExit or
+            ActionTypeIds.WaitWindow or ActionTypeIds.ProgramRun => ActionIconAsset.Process,
+        ActionTypeIds.ScriptRun => Path.GetExtension(scriptPath ?? string.Empty).ToLowerInvariant() switch
+        {
+            ".cmd" or ".bat" => ActionIconAsset.Command,
+            ".ps1" => ActionIconAsset.PowerShell,
+            _ => ActionIconAsset.Script
+        },
+        _ => ActionIconAsset.Fallback
+    };
+
+    private async Task LoadApplicationIconAsync(ActionIconSourceRequest sourceRequest, int request)
+    {
+        ImageSource? icon;
+        try
+        {
+            var sourcePath = await ActionIconSourceResolver.ResolveAsync(sourceRequest);
+            icon = sourcePath is null ? null : await _iconCache.GetSmallIconAsync(sourcePath);
+        }
+        catch { icon = null; }
+        if (request != _iconLoadVersion) return;
+
+        // The icon bytes are produced on a worker thread. The view model can also be
+        // constructed during a background catalog operation, so make the UI notification
+        // explicit instead of relying on the caller's synchronization context.
+        if (_uiDispatcher is { HasShutdownStarted: false, HasShutdownFinished: false } dispatcher &&
+            !dispatcher.CheckAccess())
+        {
+            await dispatcher.InvokeAsync(() =>
+            {
+                if (request == _iconLoadVersion) ApplicationIcon = icon;
+            });
+            return;
+        }
+
+        if (request == _iconLoadVersion) ApplicationIcon = icon;
+    }
 
     private static void SetString(JsonObject parameters, string propertyName, string? value)
     {
